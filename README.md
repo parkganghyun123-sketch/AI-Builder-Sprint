@@ -69,6 +69,21 @@
 
 ## 핵심 기능
 
+> **구현 상태를 반드시 확인하세요.** 아래 표가 실제 코드 기준입니다.
+> 표와 상세 설명이 다르면 **표가 맞습니다.**
+
+| # | 기능 | 상태 | 담당 | 위치 |
+|---|---|---|---|---|
+| 1 | 계약 조건 추출 (사진) | 📋 **미착수** | A | `backend/app/ai/` |
+| 2 | 법정 기준 검증 | 📋 **미착수** | B | `backend/app/validation/` |
+| 3 | 계약서 생성 + 전자서명 | ✅ **구현** | C | `backend/app/pdf/`, `signing/` |
+| 4 | 계약 비서 챗봇 | 📋 Day 5 조건부 | A·B·D | — |
+| 5 | 경로 B 직접 입력 폼 | 📋 Day 5 | D | — |
+| 6 | 문서 상태 전이·워터마크 | 🚧 부분 (`is_draft`만) | C | `backend/app/pdf/` |
+| 7 | 프론트엔드 | 📋 **미착수** | D | `web/` |
+
+**현재 동작하는 것**: PDF 생성 → 모두싸인 서명 요청 → 상태 조회 → 웹훅 수신
+
 ### 1. 계약 조건 입력
 
 **경로 A (주력)** — 계약서 사진에서 조건을 자동 추출해 카드로 보여줍니다. 잘못 읽힌 항목은 **사용자가 직접 수정**합니다.
@@ -249,29 +264,29 @@
 
 ## 기술 스택
 
-> **확정 전 — 팀 논의 필요.** 아래는 후보안입니다. 확정 후 이 섹션을 갱신합니다.
+> **확정** (2026-07-27) — Python 백엔드 + Next.js 프론트
 
-**후보 A: TypeScript 풀스택** (React 경험자 2명 이상일 때)
+| 영역 | 선택 | 담당 |
+|---|---|---|
+| 백엔드 | **FastAPI** (Python 3.10+) | B, C |
+| 스키마 | **Pydantic** — A↔B 인터페이스 고정 | A, B |
+| 검증 엔진 | 순수 Python 함수 + pytest | B |
+| AI 호출 | Upstage REST 직접 호출 (`httpx`) | A |
+| PDF 생성 | **WeasyPrint** (HTML 템플릿 → PDF) | C |
+| 전자서명 | 모두싸인 `POST /documents` + anchor | C |
+| DB | **PostgreSQL** (Supabase) | C |
+| 프론트 | **Next.js + Tailwind + shadcn/ui** | D |
+| 배포 | 백엔드 Railway · 프론트 Vercel | C |
 
-- Next.js (App Router) — 프론트 + API Routes
-- Tailwind CSS + shadcn/ui
-- zod — AI 추출 결과 스키마 검증
-- pdf-lib 또는 Puppeteer — 계약서 PDF 생성
+**Python을 택한 이유**
 
-**후보 B: Python 백엔드 + Next.js 프론트** (Python 숙련자 중심일 때)
+모두싸인 anchor 배치가 동작하려면 **한글 텍스트 레이어 + 폰트 임베딩된 PDF**가 필요합니다.
+WeasyPrint는 HTML을 쓰듯 만들면 되고 배포가 간단한 반면, TS 쪽은 Puppeteer(Chromium 바이너리가 무거워 서버리스 배포에서 막힘)나 pdf-lib(한글 폰트 수동 임베딩)로 손이 많이 갑니다.
+7일 중 하루를 폰트 문제로 날리는 리스크를 없애는 것이 결정 요인이었습니다.
 
-- FastAPI
-- Pydantic — 스키마 검증
-- WeasyPrint — PDF 생성
-- Next.js + Tailwind
+**포기한 것**: 프론트·백엔드 타입 공유. → **Pydantic 스키마를 단일 진실 공급원**으로 삼아 보완합니다.
 
-**공통**
-
-- 외부 API: Upstage (Document Parse / Information Extract / Solar), 모두싸인
-- DB: PostgreSQL
-- 배포: 프론트·백엔드 각 1개 (구체 서비스 미정)
-
-**사용하지 않기로 한 것**: 벡터DB·RAG(템플릿·규칙 기반이라 불필요), 모바일 네이티브, 마이크로서비스
+**사용하지 않기로 한 것**: 벡터DB·RAG(템플릿·규칙 기반이라 불필요), 모바일 네이티브, 마이크로서비스, Puppeteer
 
 ---
 
@@ -310,29 +325,56 @@
 
 ## 시작하기
 
-> 스택 확정 후 실제 명령어로 교체 예정
+### 1. 클론 및 환경 변수
 
 ```bash
-# 1. 클론
 git clone https://github.com/<팀-계정>/AI-Builder-Sprint.git
 cd AI-Builder-Sprint
-
-# 2. 의존성 설치
-# (스택 확정 후 작성)
-
-# 3. 환경 변수 설정
 cp .env.example .env
-# .env 파일에 API 키 입력
-
-# 4. 개발 서버 실행
-# (스택 확정 후 작성)
+# .env에 API 키 입력 (키는 팀 채널로 전달)
 ```
 
-### CLI 파이프라인 테스트 (Day 2 목표)
+### 2. 백엔드 실행
 
 ```bash
-# 계약서 사진 → 판정 결과 JSON
-# (구현 후 실제 명령어로 교체)
+cd backend
+python3 -m venv .venv && source .venv/bin/activate
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
+확인:
+
+- http://localhost:8000/health → `{"status":"ok","modusign":true,"upstage":true}`
+- http://localhost:8000/docs → API 문서
+
+### ⚠️ 자주 걸리는 함정 3가지
+
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `ModuleNotFoundError: fastapi` (venv 활성화 상태인데도) | zsh가 명령 경로를 캐싱해 시스템 python 실행 | `uvicorn` 대신 **`python -m uvicorn`** 사용. `hash -r`로 캐시 초기화 |
+| `환경변수를 설정하세요` | `export $(grep ... \| xargs)`가 값에 공백이 있으면 실패 | **`set -a; source .env; set +a`** 사용 |
+| `SSL: CERTIFICATE_VERIFY_FAILED` | macOS python.org 설치본에 루트 인증서 없음 | `/Applications/Python\ 3.10/Install\ Certificates.command` 실행 |
+
+`pip`도 같은 이유로 **`python -m pip`**를 권장합니다.
+
+### 3. 계약서 PDF 생성 테스트
+
+```bash
+cd backend && python make_test_pdf.py
+open ../spikes/sample_contract.pdf
+```
+
+가상 계약(시급 10,000원·주휴일 미지정)으로 표준근로계약서 PDF를 만듭니다.
+**한글이 깨지지 않았는지, `대표자`·`성명` 텍스트가 보이는지** 확인하세요.
+이 두 문구가 모두싸인 anchor 기준점입니다.
+
+### 4. 검사
+
+```bash
+cd backend
+python -m pytest -v        # 테스트 (B 담당 작성 중)
+ruff check .               # 린트
 ```
 
 ---
@@ -451,10 +493,20 @@ cp .env.example .env
 - 로그인 유무 (현재는 없이 진행 가정)
 - 서비스명 최종 확정 ("페어사인"은 가안)
 
+**현재 구현의 한계 (숨기지 말 것)**
+
+- **저장소가 메모리 딕셔너리**(`app/routers/sign.py`의 `_store`)입니다.
+  서버를 재시작하면 계약 이력이 사라집니다. Supabase 연결은 Day 4 예정.
+- **웹훅 서명 검증이 없습니다.** `POST /webhooks/modusign`이 외부 요청을 검증 없이
+  수신합니다. `MODUSIGN_WEBHOOK_SECRET`은 정의만 되어 있고 사용되지 않습니다.
+- PDF 템플릿이 **macOS 시스템 폰트**에 의존합니다. 리눅스 배포 시 한글이 깨지므로
+  Day 4 배포 전 폰트 번들이 필요합니다.
+
 **기술 검증 필요**
 
 - Information Extract의 실제 계약서 추출 정확도
-- 모두싸인 API 샌드박스 사용 가능 여부 → **실패 시 자체 서명 캔버스로 폴백**
+- ~~모두싸인 API 사용 가능 여부~~ → ✅ **승인 완료, 인증 성공** (2026-07-27)
+- 모두싸인 anchor 서명란 위치 (`SIGN_OFFSET_X` 실측 조정 필요)
 - 공공데이터포털에 사용 가능한 API 존재 여부 → **없으면 법정 기준값을 상수로 내장**
 
 **사용자 검증 필요**

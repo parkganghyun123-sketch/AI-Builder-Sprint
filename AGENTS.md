@@ -1,96 +1,112 @@
-# PairSign Agent Instructions
+# FairSign 에이전트 공통 지침
 
-> This file is the single source of truth for shared agent instructions.
-> `CLAUDE.md` imports this file, so update shared rules here only.
+> 이 파일이 공용 에이전트 지침의 **단일 기준**입니다.
+> `CLAUDE.md`가 이 파일을 import하므로, 공용 규칙은 **여기에만** 작성합니다.
 
-## Project Mission
+## 프로젝트 목표
 
-PairSign helps first-time part-time workers understand, clarify, confirm, and
-sign employment contracts without presenting automated results as legal advice.
+FairSign은 처음 아르바이트를 시작하는 근로자가 근로계약서를 **이해하고, 확인하고,
+바로잡고, 서명**할 수 있게 돕습니다. 다만 자동 판정 결과를 **법률 자문으로 제시하지
+않습니다.**
 
-## Instruction Order
+## 기술 스택 (실제 코드 기준)
 
-Every agent must read this file first and then its assigned role file.
+| 영역 | 스택 | 위치 |
+|---|---|---|
+| 백엔드 | Python 3.10+ / FastAPI | `backend/` |
+| 스키마·검증 | Pydantic | `backend/app/schemas.py` |
+| 법정 기준 판정 | 순수 Python 함수 | `backend/app/validation/` |
+| AI 연동 | Upstage REST (httpx) | `backend/app/ai/` |
+| PDF 생성 | WeasyPrint | `backend/app/pdf/` |
+| 전자서명 | 모두싸인 REST | `backend/app/signing/` |
+| 프론트엔드 | Next.js + TypeScript + Tailwind | `web/` (미착수) |
 
-When project documents disagree, use this order:
+문서에 적힌 스택보다 **실제 코드가 우선**입니다. 불일치를 발견하면 구현하지 말고
+Lead 에이전트에게 보고하세요.
 
-1. `AGENTS.md` for shared safety and collaboration rules
-2. `KB.md` for verified legal facts, wording limits, and source status
-3. `README.md` for current product scope and priorities
-4. `docs/챗봇_설계.md` for the grounded chatbot design
-5. Other files in `docs/` for background decisions and unresolved research
+## 지침 우선순위
 
-Do not silently choose between conflicting documents. Preserve the safer
-behavior and report the conflict to the Lead Agent.
+모든 에이전트는 이 파일을 먼저 읽고, 그다음 자신의 역할 파일을 읽습니다.
 
-## Agent Structure
+문서끼리 충돌할 때는 다음 순서를 따릅니다.
 
-- Lead Agent: `agents/lead.md`
-- Contract Safety Reviewer: `agents/contract-safety.md`
-- Implementation Engineer: `agents/implementation.md`
-- QA and Demo Reviewer: `agents/qa-demo.md`
+1. `AGENTS.md` — 공용 안전·협업 규칙
+2. `KB.md` — 검증된 법령 사실, 허용 문구, 출처 상태
+3. `README.md` — 현재 제품 범위와 우선순위
+4. `docs/` — 설계 결정과 미해결 조사 내용
 
-The Lead Agent must explicitly tell every specialist to read `AGENTS.md` and
-the relevant role file completely.
+충돌을 임의로 판단해 한쪽을 고르지 마세요. **더 안전한 쪽을 유지하고 Lead 에이전트에게
+충돌을 보고**합니다.
 
-## Shared Priorities
+## 에이전트 구성
 
-1. Privacy and user safety
-2. Official-source accuracy
-3. Working end-to-end MVP
-4. Deterministic and explainable results
-5. AI usage evidence
-6. Maintainability
-7. Visual polish
+- Lead 에이전트: `agents/lead.md`
+- 계약 안전 검토자: `agents/contract-safety.md`
+- 구현 엔지니어: `agents/implementation.md`
+- QA·데모 검토자: `agents/qa-demo.md`
 
-## Shared Rules
+Lead 에이전트는 각 전문 에이전트에게 `AGENTS.md`와 해당 역할 파일을 **끝까지 읽으라고
+명시적으로 지시**해야 합니다.
 
-- Do not make definitive legal judgments or present PairSign as legal counsel.
-- Do not invent facts missing from a contract, user input, or verified source.
-- Ground legal explanations and constants in `KB.md`.
-- Keep legal calculations deterministic; do not let an LLM decide or calculate.
-- Distinguish contract facts, legal standards, calculations, and limitations.
-- Display the applicable reference date for time-sensitive standards.
-- Treat unsupported or disputed situations as `OUT_OF_SCOPE`.
-- Do not expose API keys, contract contents, or personal information in logs.
-- Use synthetic contracts and synthetic identities in tests and demos.
-- Do not edit files outside the scope assigned by the Lead Agent.
-- Do not claim an unexecuted check passed.
-- Do not hide mocked, unavailable, or unverified integrations.
-- Do not commit `.env` files, credentials, real contracts, or personal data.
+## 공용 우선순위
 
-## File Ownership
+1. 개인정보 보호와 사용자 안전
+2. 공식 출처에 근거한 정확성
+3. 끝까지 동작하는 MVP
+4. 결정론적이고 설명 가능한 결과
+5. AI 활용 증빙
+6. 유지보수성
+7. 시각적 완성도
 
-- The Lead Agent assigns explicit file ownership before parallel work.
-- Two agents must not edit the same file concurrently.
-- Contract Safety and QA reviewers are read-only unless the Lead Agent assigns
-  exact files to edit.
-- A reviewer who implements a fix must not be the only reviewer of that fix.
+## 공용 규칙
 
-## Required Review Format
+- 확정적인 법률 판단을 내리지 않고, FairSign을 법률 상담 서비스로 표현하지 않습니다.
+- 계약서·사용자 입력·검증된 출처에 없는 사실을 지어내지 않습니다.
+- 법령 설명과 상수는 `KB.md`에 근거를 둡니다.
+- **법정 계산은 결정론적으로 수행합니다. LLM이 판단하거나 계산하게 두지 않습니다.**
+- 계약서 사실 / 법정 기준 / 계산 결과 / 판정 한계를 구분해 표시합니다.
+- 시점에 따라 달라지는 기준은 **적용 기준일을 함께 표시**합니다.
+- 근거가 없거나 다툼이 있는 상황은 `OUT_OF_SCOPE`로 처리합니다.
+- API 키, 계약서 내용, 개인정보를 로그에 남기지 않습니다.
+- 테스트와 데모에는 **가상 계약서와 가상 인물**만 사용합니다.
+- Lead 에이전트가 지정한 범위 밖의 파일을 수정하지 않습니다.
+- 실행하지 않은 검사를 통과했다고 보고하지 않습니다.
+- 목(mock) 처리했거나 연동이 안 되는 부분을 숨기지 않습니다.
+- `.env`, 자격증명, 실제 계약서, 개인정보를 커밋하지 않습니다.
 
-Every review must return:
+## 파일 소유권
+
+- Lead 에이전트가 병렬 작업 전에 파일 소유권을 명시적으로 배정합니다.
+- 두 에이전트가 같은 파일을 동시에 수정하지 않습니다.
+- 계약 안전 검토자와 QA 검토자는 **읽기 전용**입니다. Lead가 정확한 파일을 지정한
+  경우에만 수정할 수 있습니다.
+- 수정을 직접 수행한 검토자는 그 수정의 **유일한 검토자가 될 수 없습니다.**
+
+## 검토 결과 형식
+
+모든 검토는 다음 형식으로 반환합니다.
 
 ```text
-Status: PASS | PASS_WITH_CONCERNS | BLOCKED
-Files reviewed:
-Checks performed:
-Findings:
-Required changes:
-Evidence:
+상태: PASS | PASS_WITH_CONCERNS | BLOCKED
+검토한 파일:
+수행한 검사:
+발견 사항:
+필요한 수정:
+근거:
 ```
 
-Use the statuses as follows:
+상태 기준:
 
-- `PASS`: no blocking or material unresolved concern
-- `PASS_WITH_CONCERNS`: usable, but named risks or follow-up work remain
-- `BLOCKED`: unsafe, unverifiable, broken, or missing a required control
+- `PASS` — 차단 사유나 중대한 미해결 우려 없음
+- `PASS_WITH_CONCERNS` — 사용 가능하나 명시된 위험 또는 후속 작업이 남음
+- `BLOCKED` — 안전하지 않거나, 검증 불가하거나, 동작하지 않거나, 필수 통제가 없음
 
-The Lead Agent must not complete a task while a required review is `BLOCKED`.
+Lead 에이전트는 필수 검토가 `BLOCKED`인 상태로 작업을 완료 처리할 수 없습니다.
 
-## Minimum Completion Evidence
+## 최소 완료 근거
 
-Report only checks that exist and were run. For application changes, the target
-evidence is typecheck, lint, tests, production build, and the relevant demo
-flow. For documentation-only changes, check links, internal consistency,
-formatting, and `git diff --check`.
+**실제로 존재하고 실행한 검사만 보고**합니다.
+
+- 백엔드 변경: `pytest`, `ruff check backend/`, 관련 데모 흐름
+- 프론트엔드 변경(`web/` 생성 후): `npx tsc --noEmit`, `npm run build`
+- 문서만 변경: 링크 확인, 내부 일관성, 형식, `git diff --check`

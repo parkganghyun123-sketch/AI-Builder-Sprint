@@ -1,285 +1,301 @@
-# PairSign Verified Knowledge Base
+# FairSign 검증 지식베이스
 
-> Engineering knowledge base for deterministic checks and grounded wording.
-> This document is not legal advice.
+> 결정론적 판정과 근거 있는 문구를 위한 엔지니어링 지식베이스입니다.
+> **이 문서는 법률 자문이 아닙니다.**
 
-## 1. Scope and Reference Date
+## 1. 범위와 기준일
 
-- Last reviewed: **2026-07-27**
-- Jurisdiction: Republic of Korea
-- Primary audience: first-time and young part-time workers
-- Product scope: contract facts, selected statutory thresholds, deterministic
-  calculations, missing-clause checks, and grounded explanations
-- Out of scope: definitive legal conclusions, dispute strategy, eligibility
-  that depends on unverified real-world facts, and general legal counseling
+- 최종 검토일: **2026-07-27**
+- 적용 법역: 대한민국
+- 주요 사용자: 처음 아르바이트를 시작하는 청년 근로자
+- 제품 범위: 계약서 사실, 선별된 법정 기준, 결정론적 계산, 누락 항목 확인,
+  근거 있는 설명
+- 범위 밖: 확정적 법률 결론, 분쟁 전략, 검증되지 않은 현실 사실에 좌우되는 자격 판단,
+  일반 법률 상담
 
-Time-sensitive values must store an effective period and source. Before using
-this file after its review date, re-check every rule affected by a new law,
-enforcement decree, official notice, or administrative interpretation.
+시점에 따라 달라지는 값은 **적용 기간과 출처를 함께 저장**해야 합니다.
+검토일 이후에 이 파일을 사용할 때는, 새로운 법률·시행령·고시·행정해석의 영향을 받는
+모든 규칙을 다시 확인하세요.
 
-## 2. Source Policy
+## 2. 출처 정책
 
-Use sources in this order:
+다음 순서로 출처를 사용합니다.
 
 1. 국가법령정보센터 (`law.go.kr`)
-2. 고용노동부 and 고용노동부 고객상담센터 (`moel.go.kr`)
+2. 고용노동부 및 고용노동부 고객상담센터 (`moel.go.kr`)
 3. 최저임금위원회 (`minimumwage.go.kr`)
-4. Other government or public-agency material
+4. 그 밖의 정부·공공기관 자료
 
-News, blogs, search summaries, model knowledge, and user statements are not
-authoritative legal sources. They may identify research questions but must not
-create production constants or conclusions.
+뉴스, 블로그, 검색 요약, 모델의 기억, 사용자 진술은 **권위 있는 법령 출처가 아닙니다.**
+조사할 질문을 찾는 데는 쓸 수 있지만, 이것만으로 운영 상수나 결론을 만들면 안 됩니다.
 
-Each production rule must be traceable to:
+운영 규칙 하나하나는 다음을 추적할 수 있어야 합니다.
 
-- a `source_id` from the registry below,
-- an `effective_from` date,
-- an optional `effective_to` date,
-- the input values used,
-- the formula or comparison performed, and
-- a limitation message when the available facts are incomplete.
+- 아래 출처 목록의 `source_id`
+- `effective_from` (적용 시작일)
+- 필요 시 `effective_to` (적용 종료일)
+- 사용한 입력값
+- 수행한 계산식 또는 비교
+- 사실이 불완전할 때 표시할 한계 문구
 
-## 3. Verified Standards
+## 3. 검증된 기준
 
-### KB-MW-2026: 2026 minimum wage
+### KB-MW-2026: 2026년 최저임금
 
-- Effective period: 2026-01-01 through 2026-12-31
-- Hourly minimum wage: **10,320 KRW**
-- Reference daily amount: **82,560 KRW** for 8 hours
-- Reference monthly amount: **2,156,880 KRW** for 209 hours
-- Source: `SRC-MINWAGE-2026`
+- 적용 기간: 2026-01-01 ~ 2026-12-31
+- 시간급 최저임금: **10,320원**
+- 참고 일급: 8시간 기준 **82,560원**
+- 참고 월급: 209시간 기준 **2,156,880원**
+- 출처: `SRC-MINWAGE-2026`
 
-Implementation boundary:
+**구현 경계**
 
-- Compare wages only after the wage basis and included items are known.
-- Do not describe the monthly reference amount as every worker's expected pay.
-- Display “2026년 적용 기준” with the result.
+- 임금 기준과 산입 항목이 확인된 뒤에만 비교합니다.
+- 참고 월급액을 **모든 근로자의 예상 급여인 것처럼 설명하지 않습니다.**
+- 결과와 함께 "2026년 적용 기준"을 표시합니다.
+- 월급·일급으로 기재된 계약은 시급 환산 방식이 소정근로시간 산정에 따라 달라지므로,
+  MVP에서는 **`UNKNOWN`으로 처리**합니다.
 
-Safe wording:
+**허용 문구**
 
-> 계약서에서 확인된 시급은 {contract_hourly_wage}원입니다. 이를 2026년
-> 적용 최저임금 시급 10,320원과 비교한 결과입니다.
+> 계약서에서 확인된 시급은 {contract_hourly_wage}원입니다.
+> 이를 2026년 적용 최저임금 시급 10,320원과 비교한 결과입니다.
 
-### KB-CONTRACT-TERMS: written contract terms
+### KB-CONTRACT-TERMS: 근로계약서 필수 기재사항
 
-근로기준법 제17조 requires the employer to state the following when entering
-into an employment contract:
+근로기준법 제17조는 근로계약 체결 시 사용자가 다음을 명시하도록 규정합니다.
 
-1. wages,
-2. contractual working hours,
-3. holidays under Article 55,
-4. annual paid leave under Article 60, and
-5. other working conditions prescribed by enforcement decree.
+1. 임금
+2. 소정근로시간
+3. 제55조에 따른 휴일
+4. 제60조에 따른 연차 유급휴가
+5. 그 밖에 대통령령으로 정하는 근로조건
 
-The Act also requires a written document containing the statutory written
-items, including wage components, calculation and payment method, contractual
-hours, holidays, and annual paid leave, to be delivered to the worker.
+또한 임금의 구성항목·계산방법·지급방법, 소정근로시간, 휴일, 연차 유급휴가를 포함한
+법정 서면 기재사항을 담은 **서면을 근로자에게 교부**하도록 규정합니다.
 
-- Source: `SRC-LSA-17`
-- Supporting standard-form source: `SRC-MOEL-CONTRACT-FORMS`
+- 출처: `SRC-LSA-17`
+- 표준서식 출처: `SRC-MOEL-CONTRACT-FORMS`
 
-Implementation boundary:
+**구현 경계**
 
-- A missing-clause result means “not found in the confirmed input,” not that a
-  legal violation has been conclusively established.
-- Standard-form comparison must record which form and version was used.
+- 항목 누락 결과는 "**확인된 입력에서 찾지 못했다**"는 뜻이며,
+  법 위반이 확정되었다는 뜻이 아닙니다.
+- 표준서식 대조 시 **어떤 서식의 어느 판본을 썼는지 기록**해야 합니다.
+  (현재 사용 서식: 고용노동부 표준근로계약서 — 기간의 정함이 있는 경우)
 
-Safe wording:
+**허용 문구**
 
-> 확인된 계약 내용에서는 {field_name} 항목을 찾지 못했습니다. 원본 문서와
-> 고용노동부 표준근로계약서를 함께 확인해 주세요.
+> 확인된 계약 내용에서는 {field_name} 항목을 찾지 못했습니다.
+> 원본 문서와 고용노동부 표준근로계약서를 함께 확인해 주세요.
 
-### KB-BREAK-2026-07: break time
+### KB-BREAK-2026-07: 휴게시간
 
-As of 2026-07-27, 근로기준법 제54조 states:
+2026-07-27 기준 근로기준법 제54조는 다음과 같습니다.
 
-- 4 hours of work: at least 30 minutes of break
-- 8 hours of work: at least 1 hour of break
-- the break is provided during working hours
-- the worker may use the break freely
+- 근로시간 4시간인 경우: 30분 이상 휴게
+- 근로시간 8시간인 경우: 1시간 이상 휴게
+- 휴게시간은 근로시간 도중에 부여
+- 근로자는 휴게시간을 자유롭게 이용할 수 있음
 
-- Source: `SRC-LSA-54-CURRENT`
+- 출처: `SRC-LSA-54-CURRENT`
 
-Known future change:
+**향후 개정 (시행 전 — 적용 금지)**
 
-- An amendment announced for 2026-12-10 adds a limited exception for a
-  four-hour work period when the worker explicitly requests not to use the
-  break.
-- This future rule must not be activated before its effective date.
-- Source: `SRC-LSA-54-FUTURE`
+- **시행일: 2026-12-10** (2026-07-27 확인)
+- 내용: 근로시간이 **정확히 4시간**인 경우로서, **근로자가 휴게시간을 이용하지 않겠다고
+  명시적으로 요청**한 때에는 휴게시간을 부여하지 않을 수 있음
+- 이 규칙은 **시행일 전에 활성화하면 안 됩니다.**
+- 사용자가 일방적으로 휴게시간을 생략하는 것을 허용하는 규정이 아닙니다.
+- 출처: `SRC-LSA-54-FUTURE`
 
-Implementation boundary:
+> ℹ️ 이전 판본에서 출처 URL의 `efYd=20260820` 파라미터 때문에 시행일이 2026-08-20으로
+> 오인될 소지가 있었습니다. 해당 값은 **동일 개정법률 내 다른 조항의 시행일**이며,
+> 제54조 단서의 시행일은 **2026-12-10**입니다. (시간 단위 연차는 2027-06-10 시행)
 
-- Do not infer that time described as a break was freely usable.
-- If start time, end time, or break duration is missing, return unknown.
+**구현 경계**
 
-### KB-WEEKLY-HOLIDAY-TIME: weekly-holiday time threshold
+- 휴게로 기재된 시간이 **자유롭게 이용 가능했는지는 추론하지 않습니다.**
+- 시작 시각, 종료 시각, 휴게시간 중 하나라도 없으면 `UNKNOWN`을 반환합니다.
 
-근로기준법 제18조제3항 states that Articles 55 and 60 do not apply to a
-part-time worker whose average contractual weekly working hours over four
-weeks, or the shorter employment period, are below 15 hours.
+### KB-WEEKLY-HOLIDAY-TIME: 주휴 시간 요건
 
-- Source: `SRC-LSA-18`
+근로기준법 제18조제3항은 4주를 평균하여 1주 소정근로시간이 15시간 미만인 단시간
+근로자에게는 제55조(주휴일)와 제60조(연차)를 적용하지 않는다고 규정합니다.
 
-Product conclusion:
+- 출처: `SRC-LSA-18`
 
-- PairSign may determine only whether the **contractual-time threshold** is met
-  when the confirmed contract contains enough schedule information.
-- PairSign must not conclude that the worker will receive a weekly-holiday
-  allowance solely because the threshold is met.
-- Attendance on contractual workdays and other real-world facts are not
-  established by the contract alone.
+**제품 결론**
 
-Safe wording:
+- FairSign은 확인된 계약에 일정 정보가 충분할 때, **시간 요건 충족 여부만** 판정할 수
+  있습니다.
+- **시간 요건이 충족되었다는 이유만으로 주휴수당을 받게 된다고 결론 내리면 안 됩니다.**
+- 소정근로일 개근 여부 등 현실의 사실관계는 계약서만으로 확인되지 않습니다.
 
-> 계약상 4주 평균 주 소정근로시간이 {weekly_hours}시간이므로 주휴 관련
-> 시간 요건을 {result}합니다. 실제 적용 여부는 계약서만으로 확인되지 않는
-> 사실관계에 따라 달라질 수 있습니다.
+**허용 문구**
 
-### KB-EXTRA-WORK: additional, night, and holiday work
+> 계약상 4주 평균 주 소정근로시간이 {weekly_hours}시간이므로 주휴 관련 시간 요건을
+> {result}합니다. 실제 적용 여부는 계약서만으로 확인되지 않는 사실관계에 따라
+> 달라질 수 있습니다.
 
-근로기준법 제56조 contains premium-pay rules for overtime, night work, and
-holiday work. Night work is work between 22:00 and 06:00. The Act's scope and
-exceptions, including establishment size, can affect which provisions apply.
+### KB-EXTRA-WORK: 연장·야간·휴일근로
 
-- Sources: `SRC-LSA-11`, `SRC-LSA-56`, `SRC-MOEL-UNDER-5`
+근로기준법 제56조는 연장근로, 야간근로, 휴일근로에 대한 가산임금을 규정합니다.
+야간근로는 22:00부터 06:00까지의 근로입니다. 상시 근로자 수 등 적용 범위와 예외에 따라
+어느 규정이 적용되는지 달라질 수 있습니다.
 
-MVP boundary:
+- 출처: `SRC-LSA-11`, `SRC-LSA-56`, `SRC-MOEL-UNDER-5`
 
-- A contract alone does not prove actual additional work.
-- Do not calculate or conclude additional-work premium entitlement unless the
-  required facts and the applicable rule set have been explicitly verified.
-- Questions involving substituted shifts, swapped workdays, absence,
-  retrospective schedule changes, employer responsibility, or disputed
-  attendance are `OUT_OF_SCOPE`.
+**MVP 경계**
 
-Required facts for any future supported calculation include:
+- 계약서만으로는 실제 추가 근로를 증명할 수 없습니다.
+- 필요한 사실과 적용 규칙이 명시적으로 검증되기 전에는 가산임금 지급 자격을
+  **계산하거나 결론 내리지 않습니다.**
+- 대타 근무, 근무일 교환, 결근, 사후 근무표 변경, 사용자 귀책, 다툼이 있는 출근 관련
+  질문은 **`OUT_OF_SCOPE`** 입니다.
 
-- confirmed contractual schedule,
-- actual start, end, and freely usable break time,
-- calendar date and whether the time falls between 22:00 and 06:00,
-- the applicable holiday status,
-- establishment-size applicability,
-- relevant agreement or approved schedule change, and
-- the rule version effective on the work date.
+향후 지원하려면 다음 사실이 모두 필요합니다.
 
-Safe MVP response:
+- 확인된 계약상 근무 일정
+- 실제 시업·종업 시각과 자유롭게 이용한 휴게시간
+- 해당 날짜와 22:00~06:00 해당 여부
+- 적용되는 휴일 여부
+- 상시 근로자 수에 따른 적용 여부
+- 관련 합의 또는 승인된 근무표 변경
+- 근로일에 유효했던 규칙 판본
 
-> 이 질문은 계약서만으로 판단할 수 없습니다. 실제 근무기록과 사업장 적용
-> 조건 등 추가 사실이 필요합니다. 고용노동부 고객상담센터 1350 또는
-> 전문가에게 확인해 주세요.
+**MVP 안전 응답**
 
-## 4. Grounded Chatbot Policy
+> 이 질문은 계약서만으로 판단할 수 없습니다. 실제 근무기록과 사업장 적용 조건 등
+> 추가 사실이 필요합니다. 고용노동부 고객상담센터 1350 또는 전문가에게 확인해 주세요.
 
-Supported intents:
+## 4. 근거 기반 챗봇 정책
 
-| Intent | Allowed source |
+**지원 의도**
+
+| 의도 | 허용 출처 |
 |---|---|
-| `FIELD_LOOKUP` | User-confirmed contract JSON |
-| `CALCULATION` | Deterministic rule-engine output |
-| `MISSING_CLAUSE` | Versioned standard-form comparison |
-| `LEGAL_STANDARD` | Verified, effective `KB.md` entry |
-| `OUT_OF_SCOPE` | Fixed refusal and official guidance |
+| `FIELD_LOOKUP` | 사용자가 확인한 계약 JSON |
+| `CALCULATION` | 결정론적 규칙 엔진 출력 |
+| `MISSING_CLAUSE` | 판본이 명시된 표준서식 대조 |
+| `LEGAL_STANDARD` | 검증되고 시행 중인 `KB.md` 항목 |
+| `OUT_OF_SCOPE` | 고정 거절 문구와 공식 상담 안내 |
 
-Rules:
+**규칙**
 
-- The LLM may classify a question or rewrite already assembled content.
-- The LLM must not calculate, decide, add a fact, or change a number.
-- Do not send the full raw contract to the answer-rewriting model.
-- If classification is ambiguous, ask the user to select a supported category.
-- If a generated answer contains an unsupported fact or number, discard it and
-  use a deterministic template.
-- Every substantive answer card must show the contract source when applicable,
-  legal source and reference date, calculation inputs and formula, limitation,
-  and next action.
+- LLM은 **질문을 분류하거나, 이미 조립된 내용을 다듬는** 역할만 합니다.
+- **LLM은 계산하거나, 판단하거나, 사실을 추가하거나, 숫자를 바꾸면 안 됩니다.**
+- 문장을 다듬는 모델에 계약서 원문 전체를 넘기지 않습니다.
+- 분류가 모호하면 사용자에게 지원 범주를 고르게 합니다.
+- 생성된 답변에 근거 없는 사실이나 숫자가 있으면 **폐기하고 결정론적 템플릿을 사용**합니다.
+- 실질적인 답변 카드에는 해당하는 경우 계약서 근거, 법령 출처와 기준일, 계산 입력값과
+  계산식, 한계, 다음 행동을 표시합니다.
 
-Fixed out-of-scope wording:
+**고정 거절 문구**
 
-> 이 질문은 계약서만으로 판단할 수 없습니다. 개별 상황에 따라 답이 달라질
-> 수 있어 고용노동부 고객상담센터 1350 또는 전문가에게 확인해 주세요.
-> 대신 계약서에 적힌 급여·근무시간, 예상 금액 계산, 빠진 항목, 확인된 법정
-> 기준에 대해서는 안내할 수 있습니다.
+> 이 질문은 계약서만으로 판단할 수 없습니다. 개별 상황에 따라 답이 달라질 수 있어
+> 고용노동부 고객상담센터 1350 또는 전문가에게 확인해 주세요.
+> 대신 계약서에 적힌 급여·근무시간, 예상 금액 계산, 빠진 항목, 확인된 법정 기준에
+> 대해서는 안내할 수 있습니다.
 
-## 5. Document Status and Neutral Wording
+## 5. 문서 상태와 중립적 문구
 
-An employee-entered draft must never appear to be an executed contract.
+**근로자가 혼자 입력한 초안이 체결된 계약서처럼 보이면 절대 안 됩니다.**
 
-| Status | Required label | Required control |
+| 상태 | 필수 레이블 | 필수 통제 |
 |---|---|---|
-| `DRAFT` | 작성 중 | Not described as sent or agreed |
-| `CONFIRMATION_REQUESTED` | 근로조건 확인 요청서 | “확인 전 초안” watermark |
-| `TERMS_CONFIRMED` | 조건 확인됨·서명 전 | Must not say executed |
-| `EXECUTED` | 체결 완료 | Requires verified signature-completion state |
+| 작성 중 | 작성 중 | 발송됨·합의됨으로 표현 금지 |
+| 확인 요청됨 | 근로조건 확인 요청서 | **"확인 전 초안" 워터마크 필수** |
+| 조건 확인됨 | 조건 확인됨 · 서명 전 | 체결되었다고 표현 금지 |
+| 체결 완료 | 체결 완료 | 서명 완료 상태가 검증된 경우에만 |
 
-Employer-facing wording must be neutral:
+### 구현 매핑
+
+`backend/app/schemas.py`의 `DocumentStatus`가 **런타임 기준**이며, 위 표와 다음과 같이
+대응합니다. 나머지 값은 모두싸인 제공자 전용 상태입니다.
+
+| 코드 값 | KB 상태 | 화면 레이블 | 워터마크 |
+|---|---|---|---|
+| `DRAFTING` | 작성 중 | 작성 중 | — |
+| `REVIEW_REQUESTED` | 확인 요청됨 | 근로조건 확인 요청서 | **필수** |
+| `TERMS_CONFIRMED` | 조건 확인됨 | 조건 확인됨 · 서명 전 | — |
+| `COMPLETED` | 체결 완료 | 체결 완료 | — |
+| `ON_PROCESSING` | (제공자 전용) | 처리 중 | — |
+| `ON_GOING` | (제공자 전용) | 서명 진행 중 | — |
+| `ABORTED` | (제공자 전용) | 중단됨 | — |
+| `PROCESSING_FAILED` | (제공자 전용) | 처리 실패 | — |
+
+> 제공자 전용 상태는 모두싸인 응답값과 1:1로 대응시켜 상태 동기화를 단순화한
+> 것입니다. 이 값들을 "체결 완료"로 표시하면 안 됩니다.
+
+**사업주에게 보이는 문구는 중립적이어야 합니다.**
 
 > 알바생이 입력한 내용입니다. 사실과 다르면 수정해 주세요.
 
-Do not accuse an employer of illegality or intent. Describe only the confirmed
-contract fact, comparison result, missing information, and available next step.
+사업주를 위법하다고 하거나 고의를 단정하지 마세요. 확인된 계약 사실, 비교 결과,
+빠진 정보, 다음에 할 수 있는 일만 설명합니다.
 
-## 6. Privacy and Data Handling
+## 6. 개인정보와 데이터 처리
 
-Current MVP policy:
+**현재 MVP 정책**
 
-- Use synthetic documents and identities in tests, fixtures, screenshots, and
-  demos.
-- Do not collect a resident registration number or address in the MVP unless a
-  separately reviewed integration makes it strictly necessary.
-- Collect contact information only for an explicit delivery or signature step.
-- Mask contact information after use in the UI.
-- Do not log raw contract text, images, names, contact details, provider
-  payloads containing personal data, API keys, or webhook secrets.
-- Do not claim automatic deletion until retention behavior is implemented and
-  verified.
+- 테스트, 픽스처, 스크린샷, 데모에는 **가상 문서와 가상 인물**만 사용합니다.
+- 별도로 검토된 연동이 반드시 필요로 하지 않는 한, MVP에서 **주민등록번호와 주소를
+  수집하지 않습니다.**
+- 연락처는 명시적인 발송 또는 서명 단계에만 수집합니다.
+- 사용 후에는 UI에서 연락처를 마스킹합니다.
+- 계약서 원문, 이미지, 이름, 연락처, 개인정보가 담긴 제공자 응답, API 키, 웹훅 시크릿을
+  **로그에 남기지 않습니다.**
+- 보관·삭제 동작이 구현되고 검증되기 전까지 **자동 삭제를 주장하지 않습니다.**
 
-Unresolved:
+**미해결**
 
-- final contract-image retention duration,
-- deletion-job implementation and evidence,
-- Modusign sandbox availability and identity requirements,
-- electronic delivery and retention requirements.
+- 계약서 이미지 최종 보관 기간
+- 삭제 작업 구현과 증빙
+- 모두싸인 서명 시 본인확인 요구사항 (주민등록번호 요구 여부)
+- 전자적 교부와 보존 요건
+- 웹훅 서명 검증 방식 (`MODUSIGN_WEBHOOK_SECRET` 현재 미사용)
 
-Until resolved, mark these items `UNVERIFIED` and do not advertise them as
-working guarantees.
+해결되기 전까지 위 항목은 `UNVERIFIED`로 표시하고, **동작하는 보장인 것처럼 홍보하지
+않습니다.**
 
-## 7. Known Unknowns and Prohibited Conclusions
+## 7. 확인되지 않은 사항과 금지된 결론
 
-The following must not become deterministic production rules without an
-official-source update and Contract Safety review:
+다음은 공식 출처 확인과 계약 안전 검토를 거치기 전에는 **결정론적 운영 규칙이 될 수
+없습니다.**
 
-- substituted shifts or swapped workdays and weekly-holiday attendance,
-- whether a specific user can file or win a complaint,
-- whether a dismissal is unfair,
-- establishment-size classification inferred from casual user wording,
-- electronic-signature legal-effect conclusions,
-- Modusign identity or resident-number requirements,
-- unimplemented image deletion or document-retention guarantees.
+- 대타 근무·근무일 교환과 주휴 개근 판정
+- 특정 사용자가 신고할 수 있는지, 이길 수 있는지
+- 부당해고 여부
+- 사용자의 대략적인 말에서 추론한 상시 근로자 수 분류
+- 전자서명의 법적 효력에 관한 결론
+- 모두싸인의 본인확인·주민등록번호 요구 여부
+- 구현되지 않은 이미지 삭제나 문서 보관 보장
 
-## 8. Source Registry
+## 8. 출처 목록
 
-| ID | Official source | Used for |
+| ID | 공식 출처 | 사용처 |
 |---|---|---|
-| `SRC-MINWAGE-2026` | [최저임금위원회 2026년 적용 최저임금](https://www.minimumwage.go.kr/minWage/policy/decisionMain.do) | 2026 minimum wage and reference amounts |
-| `SRC-LSA-FULL` | [국가법령정보센터 근로기준법](https://www.law.go.kr/LSW/lsInfoP.do?lsId=001872) | Current act and cross-checking |
-| `SRC-LSA-17` | [근로기준법 제17조](https://law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1014516221) | Contract terms and written delivery |
-| `SRC-LSA-18` | [근로기준법 제18조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1027161153) | Part-time 15-hour threshold |
-| `SRC-LSA-54-CURRENT` | [근로기준법 제54조 현행 조문](https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1032123587) | Current break rule |
-| `SRC-LSA-54-FUTURE` | [근로기준법 2026-12-10 시행 예정 조문](https://www.law.go.kr/LSW/lsInfoP.do?ancNo=21373&ancYd=20260219&efYd=20260820&lsiSeq=283457) | Future break-rule change |
-| `SRC-LSA-11` | [근로기준법 제11조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1029727821) | General scope by establishment size |
-| `SRC-LSA-56` | [근로기준법 제56조](https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1025589869) | Overtime, night, and holiday premiums |
-| `SRC-MOEL-UNDER-5` | [고용노동부 1350의 5인 미만 적용 안내](https://1350.moel.go.kr/rtmview.do?id=1000000868) | Provisions generally not applied under five employees |
-| `SRC-MOEL-CONTRACT-FORMS` | [고용노동부 표준근로계약서 및 임금명세서 서식](https://www.moel.go.kr/policy/policydata/view.do?bbs_seq=20230700845) | Official form families |
-| `SRC-MOEL-CONTRACT-GUIDE` | [고용노동부 근로계약서 안내](https://moel.go.kr/mainpop2.do) | Written contract and official guidance |
+| `SRC-MINWAGE-2026` | [최저임금위원회 2026년 적용 최저임금](https://www.minimumwage.go.kr/minWage/policy/decisionMain.do) | 2026년 최저임금과 참고 금액 |
+| `SRC-LSA-FULL` | [국가법령정보센터 근로기준법](https://www.law.go.kr/LSW/lsInfoP.do?lsId=001872) | 현행 법률과 교차 확인 |
+| `SRC-LSA-17` | [근로기준법 제17조](https://law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1014516221) | 필수 기재사항과 서면 교부 |
+| `SRC-LSA-18` | [근로기준법 제18조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1027161153) | 단시간근로자 15시간 기준 |
+| `SRC-LSA-54-CURRENT` | [근로기준법 제54조 현행](https://www.law.go.kr/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1032123587) | 현행 휴게시간 규칙 |
+| `SRC-LSA-54-FUTURE` | [근로기준법 일부개정 (제54조 단서, 2026-12-10 시행)](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=283457) | 향후 휴게시간 예외 — **시행 전** |
+| `SRC-LSA-11` | [근로기준법 제11조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1029727821) | 상시 근로자 수에 따른 적용 범위 |
+| `SRC-LSA-56` | [근로기준법 제56조](https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1025589869) | 연장·야간·휴일근로 가산 |
+| `SRC-MOEL-UNDER-5` | [고용노동부 1350 — 5인 미만 적용 안내](https://1350.moel.go.kr/rtmview.do?id=1000000868) | 5인 미만 사업장 미적용 규정 |
+| `SRC-MOEL-CONTRACT-FORMS` | [고용노동부 표준근로계약서 서식](https://www.moel.go.kr/policy/policydata/view.do?bbs_seq=20230700845) | 표준서식 계열 |
+| `SRC-MOEL-WEEKLY-HOLIDAY` | [고용노동부 고객상담센터 — 주휴수당 지급기준](https://1350.moel.go.kr/rtmview.do?id=1000059852) | 주휴수당 3요건 |
 
-## 9. Update Checklist
+## 9. 갱신 체크리스트
 
-When changing a rule or visible legal explanation:
+규칙이나 사용자에게 보이는 법령 설명을 바꿀 때는 다음을 수행합니다.
 
-1. Open and verify the official source.
-2. Record the review date and effective period.
-3. Update the source registry and deterministic constant.
-4. Add or update boundary-value tests.
-5. Update user-facing wording and its limitation.
-6. Request Contract Safety review.
-7. Re-run chatbot `OUT_OF_SCOPE` and unsupported-number tests.
+1. 공식 출처를 직접 열어 확인합니다.
+2. 검토일과 적용 기간을 기록합니다.
+3. 출처 목록과 결정론적 상수를 갱신합니다.
+4. 경계값 테스트를 추가하거나 갱신합니다.
+5. 사용자에게 보이는 문구와 한계 문구를 갱신합니다.
+6. 계약 안전 검토를 요청합니다.
+7. 챗봇 `OUT_OF_SCOPE` 테스트와 근거 없는 숫자 테스트를 다시 실행합니다.

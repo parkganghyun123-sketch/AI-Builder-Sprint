@@ -1,8 +1,8 @@
-# PairSign Claude Code Instructions
+# FairSign Claude Code 지침
 
 @AGENTS.md
 
 <!--
-Shared agent instructions are maintained only in AGENTS.md.
-Do not duplicate or redefine shared rules in this file.
+공용 에이전트 지침은 AGENTS.md에서만 관리합니다.
+이 파일에 공용 규칙을 중복해서 적거나 재정의하지 마세요.
 -->
