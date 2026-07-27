@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<style>
+  /* ⚠️ 폰트 임베딩 필수
+     모두싸인 anchor는 PDF 텍스트 레이어를 검색한다.
+     폰트가 깨지면 anchor 텍스트를 못 찾아 400 에러가 난다.
+     배포(Linux) 시 시스템 폰트에 의존하지 말고 폰트 파일을 번들할 것. */
+  @page {
+    size: A4;
+    margin: 20mm 22mm;
+  }
+  body {
+    font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 10pt;
+    line-height: 2.0;
+    color: #000;
+  }
+
+  /* 제목 — 실제 양식은 테두리 박스 안에 표기 */
+  .title-box {
+    border: 0.8pt solid #000;
+    text-align: center;
+    font-size: 12pt;
+    font-weight: 700;
+    padding: 2mm 0;
+    width: 58mm;
+    margin: 0 auto 8mm auto;
+  }
+
+  .preamble { margin-bottom: 5mm; line-height: 2.2; }
+
+  /* 기입란 밑줄 */
+  .b {
+    display: inline-block;
+    border-bottom: 0.5pt solid #000;
+    text-align: center;
+    padding: 0 1mm;
+    min-width: 30mm;
+  }
+  .b-xs { min-width: 9mm; }
+  .b-sm { min-width: 16mm; }
+  .b-lg { min-width: 55mm; }
+  .b-xl { min-width: 88mm; }
+
+  .item { margin-bottom: 1mm; }
+  .item > .label { font-weight: 400; }
+  .sub { padding-left: 5mm; }
+  .sub2 { padding-left: 10mm; }
+  .note { font-size: 8.5pt; padding-left: 5mm; }
+
+  /* 체크 표기 ( ○ ) / (   ) */
+  .chk { display: inline-block; min-width: 7mm; text-align: center; }
+
+  .date-line {
+    text-align: center;
+    margin: 10mm 0 8mm 0;
+  }
+  .date-line .b { min-width: 14mm; }
+
+  /* ============================================================
+     서명란 — 실제 양식의 "(서명)" 표기를 그대로 유지한다.
+
+     모두싸인 anchor는 '대표자' / '성명' 을 기준점으로 쓴다.
+     ("(서명)"은 문서에 2번 등장해 참여자 구분이 불가능하므로 사용 불가)
+     시각적 자간은 letter-spacing으로 처리하여
+     텍스트 레이어에는 '대표자', '성명' 이 깨끗하게 남도록 한다.
+
+     ⚠️ app/signing/modusign.py 의 ANCHOR_EMPLOYER / ANCHOR_WORKER 와
+        반드시 일치해야 한다.
+     ============================================================ */
+  .sign-block { page-break-inside: avoid; margin-bottom: 4mm; }
+  .sign-block .row { margin-bottom: 0.5mm; }
+  .party { display: inline-block; width: 18mm; vertical-align: top; }
+  .field { display: inline-block; width: 20mm; }
+  .spaced { letter-spacing: 3px; }
+
+  {% if is_draft %}
+  body::before {
+    content: "확인 전 초안";
+    position: fixed;
+    top: 44%; left: 50%;
+    transform: translate(-50%, -50%) rotate(-32deg);
+    font-size: 58pt; font-weight: 700;
+    color: rgba(214, 90, 30, 0.11);
+    z-index: 1000;
+  }
+  {% endif %}
+</style>
+</head>
+<body>
+
+<div class="title-box">표준근로계약서</div>
+
+{% if is_draft %}
+<div class="note" style="text-align:center; margin:-4mm 0 5mm 0;">
+  ※ 본 문서는 근로자가 입력한 <strong>확인 전 초안</strong>이며 계약 효력이 없습니다.
+</div>
+{% endif %}
+
+<div class="preamble">
+  <span class="b b-lg">{{ employer_business_name }}</span>
+  (이하 “사업주”라 함)과(와)
+  <span class="b">{{ worker_name }}</span>
+  (이하 “근로자”라 함)은 다음과 같이 근로계약을 체결한다.
+</div>
+
+<div class="item">
+  1. 근로계약기간 :
+  <span class="b b-sm">{{ start_y }}</span> 년
+  <span class="b b-xs">{{ start_m }}</span> 월
+  <span class="b b-xs">{{ start_d }}</span> 일부터
+  <span class="b b-sm">{{ end_y }}</span> 년
+  <span class="b b-xs">{{ end_m }}</span> 월
+  <span class="b b-xs">{{ end_d }}</span> 일까지
+</div>
+<div class="note">※ 근로계약기간을 정하지 않는 경우에는 “근로개시일”만 기재</div>
+
+<div class="item">
+  2. 근 무 장 소 : <span class="b b-xl">{{ workplace }}</span>
+</div>
+
+<div class="item">
+  3. 업무의 내용 : <span class="b b-xl">{{ job_description }}</span>
+</div>
+
+<div class="item">
+  4. 소정근로시간 :
+  <span class="b b-xs">{{ work_start_h }}</span> 시
+  <span class="b b-xs">{{ work_start_m }}</span> 분부터
+  <span class="b b-xs">{{ work_end_h }}</span> 시
+  <span class="b b-xs">{{ work_end_m }}</span> 분까지
+  (휴게시간 :
+  <span class="b b-xs">{{ break_start_h }}</span> 시
+  <span class="b b-xs">{{ break_start_m }}</span> 분 ~
+  <span class="b b-xs">{{ break_end_h }}</span> 시
+  <span class="b b-xs">{{ break_end_m }}</span> 분)
+</div>
+
+<div class="item">
+  5. 근무일/휴일 : 매주 <span class="b b-xs">{{ work_days_per_week }}</span> 일(또는 매일단위)근무,
+  주휴일 매주 <span class="b b-xs">{{ weekly_holiday_day }}</span> 요일
+</div>
+
+<div class="item">6. 임 금</div>
+<div class="sub">
+  - 월(일, 시간)급 : <span class="b b-lg">{{ wage_amount_formatted }}</span> 원<br>
+  - 상여금 : 있음 (<span class="chk">{{ '○' if has_bonus else '' }}</span>)
+    <span class="b">{{ bonus_amount }}</span> 원,
+    없음 (<span class="chk">{{ '' if has_bonus else '○' }}</span>)<br>
+  - 기타급여(제수당 등) : 있음 (<span class="chk">{{ '○' if other_allowance else '' }}</span>),
+    없음 (<span class="chk">{{ '' if other_allowance else '○' }}</span>)
+  <div class="sub2">
+    · <span class="b">{{ other_allowance }}</span> 원,
+      <span class="b">&nbsp;</span> 원<br>
+    · <span class="b">&nbsp;</span> 원,
+      <span class="b">&nbsp;</span> 원
+  </div>
+  - 임금지급일 : 매월(매주 또는 매일) <span class="b b-xs">{{ payday }}</span> 일(휴일의 경우는 전일 지급)<br>
+  - 지급방법 : 근로자에게 직접지급 (<span class="chk">{{ '○' if pay_direct else '' }}</span>),
+    근로자 명의 예금통장에 입금 (<span class="chk">{{ '○' if not pay_direct else '' }}</span>)
+</div>
+
+<div class="item">7. 연차유급휴가</div>
+<div class="sub">- 연차유급휴가는 근로기준법에서 정하는 바에 따라 부여함</div>
+
+<div class="item">8. 근로계약서 교부</div>
+<div class="sub">
+  - 사업주는 근로계약을 체결함과 동시에 본 계약서를 사본하여 근로자의
+  교부요구와 관계없이 근로자에게 교부함(근로기준법 제17조 이행)
+</div>
+
+<div class="item">9. 기 타</div>
+<div class="sub">- 이 계약에 정함이 없는 사항은 근로기준법령에 의함</div>
+
+{% if verification_note %}
+<div class="note" style="margin-top:4mm; border-left:2pt solid #bbb; padding:1mm 0 1mm 3mm;">
+  {{ verification_note }}
+</div>
+{% endif %}
+
+<div class="date-line">
+  <span class="b">{{ signed_year }}</span> 년
+  <span class="b">{{ signed_month }}</span> 월
+  <span class="b">{{ signed_day }}</span> 일
+</div>
+
+<div class="sign-block">
+  <span class="party">(사업주)</span>
+  <span style="display:inline-block;">
+    <div class="row">
+      <span class="field">사업체명 :</span>
+      <span class="b">{{ employer_business_name }}</span>
+      &nbsp;&nbsp;(전화 : <span class="b b-sm">{{ employer_phone }}</span>)
+    </div>
+    <div class="row">
+      <span class="field">주 &nbsp; 소 :</span>
+      <span class="b b-lg">{{ employer_address }}</span>
+    </div>
+    <div class="row">
+      <span class="field spaced">대표자</span> :
+      <span class="b">{{ employer_name }}</span>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)
+    </div>
+  </span>
+</div>
+
+<div class="sign-block">
+  <span class="party">(근로자)</span>
+  <span style="display:inline-block;">
+    <div class="row">
+      <span class="field">주 &nbsp; 소 :</span>
+      <span class="b b-lg">{{ worker_address }}</span>
+    </div>
+    <div class="row">
+      <span class="field">연 락 처 :</span>
+      <span class="b">{{ worker_contact }}</span>
+    </div>
+    <div class="row">
+      <span class="field spaced">성명</span> :
+      <span class="b">{{ worker_name }}</span>
+      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)
+    </div>
+  </span>
+</div>
+
+</body>
+</html>
