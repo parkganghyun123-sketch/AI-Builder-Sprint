@@ -1,5 +1,8 @@
 # PairSign Agent Instructions
 
+> This file is the single source of truth for shared agent instructions.
+> `CLAUDE.md` imports this file, so update shared rules here only.
+
 ## Project Mission
 
 PairSign helps first-time part-time workers understand, clarify, confirm, and
