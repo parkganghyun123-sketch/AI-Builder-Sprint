@@ -25,17 +25,35 @@ from datetime import datetime
 
 BASE_URL = "https://api.modusign.co.kr"
 
-# backend/app/signing/modusign.py 와 반드시 동일해야 한다
+# ============================================================
+# anchor / offset 은 backend 에서 그대로 가져온다.
 #
-# anchor는 서명이 들어갈 위치 "바로 옆"에 두어야 정확하다.
-# 멀리 떨어진 텍스트에서 offset으로 밀면 오차가 크게 벌어진다.
-ANCHOR_EMPLOYER = "(사업주 서명)"
-ANCHOR_WORKER = "(근로자 서명)"
+# 예전에는 이 파일에 값을 복사해 두었는데, backend 값과 어긋나
+# "스파이크로 보낼 때와 API로 보낼 때 서명 위치가 다른" 문제가 있었다.
+# (spike 0.10/-0.012  vs  backend -0.05/-0.72)
+# 복사본을 없애서 어긋날 수 없게 한다.
+# ============================================================
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+try:
+    from app.signing.anchors import (  # noqa: E402
+        ANCHOR_EMPLOYER,
+        ANCHOR_WORKER,
+        SIGN_BOX_H,
+        SIGN_BOX_W,
+        SIGN_OFFSET_X as _DEFAULT_OFFSET_X,
+        SIGN_OFFSET_Y as _DEFAULT_OFFSET_Y,
+    )
+except ImportError as e:
+    sys.exit(
+        f"backend 상수를 불러오지 못했습니다: {e}\n"
+        "  프로젝트 루트에서 실행하세요:  cd ~/AI-Builder-Sprint"
+    )
 
-# 위치 미세조정 — 환경변수로 덮어쓸 수 있다 (반복 테스트용)
-#   SIGN_OFFSET_X=0.12 SIGN_OFFSET_Y=-0.02 python3 spikes/modusign_spike.py send
-SIGN_OFFSET_X = float(os.environ.get("SIGN_OFFSET_X", 0.10))
-SIGN_OFFSET_Y = float(os.environ.get("SIGN_OFFSET_Y", -0.012))
+# 위치 미세조정 — 환경변수로만 덮어쓴다 (반복 테스트용)
+#   SIGN_OFFSET_X=-0.03 python3 spikes/modusign_spike.py send
+# 값이 확정되면 backend/app/signing/modusign.py 에 반영할 것.
+SIGN_OFFSET_X = float(os.environ.get("SIGN_OFFSET_X", _DEFAULT_OFFSET_X))
+SIGN_OFFSET_Y = float(os.environ.get("SIGN_OFFSET_Y", _DEFAULT_OFFSET_Y))
 
 EMAIL = os.environ.get("MODUSIGN_EMAIL", "")
 API_KEY = os.environ.get("MODUSIGN_API_KEY", "")
@@ -143,7 +161,7 @@ def _signature_field(anchor_text: str) -> dict:
                 "offset": {"x": SIGN_OFFSET_X, "y": SIGN_OFFSET_Y},
             }
         },
-        "size": {"width": 0.14, "height": 0.045},
+        "size": {"width": SIGN_BOX_W, "height": SIGN_BOX_H},
     }
 
 

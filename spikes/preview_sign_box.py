@@ -28,13 +28,28 @@ PDF_PATH = os.environ.get("TEST_PDF", "spikes/sample_contract.pdf")
 OUT_PATH = "spikes/preview.png"
 DPI = 100
 
-ANCHOR_EMPLOYER = "(사업주 서명)"
-ANCHOR_WORKER = "(근로자 서명)"
+# 값의 출처는 backend 한 곳뿐이다. 여기에 복사해두지 않는다.
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+try:
+    from app.signing.anchors import (  # noqa: E402
+        ANCHOR_EMPLOYER,
+        ANCHOR_WORKER,
+        MODUSIGN_Y_DRIFT,
+        SIGN_BOX_H,
+        SIGN_BOX_W,
+        SIGN_OFFSET_X,
+        SIGN_OFFSET_Y,
+    )
+except ImportError as e:
+    sys.exit(
+        f"backend 상수를 불러오지 못했습니다: {e}\n"
+        "  프로젝트 루트에서 실행하세요:  cd ~/AI-Builder-Sprint"
+    )
 
-OFFSET_X = float(os.environ.get("SIGN_OFFSET_X", 0.10))
-OFFSET_Y = float(os.environ.get("SIGN_OFFSET_Y", -0.012))
-BOX_W = float(os.environ.get("SIGN_BOX_W", 0.14))
-BOX_H = float(os.environ.get("SIGN_BOX_H", 0.045))
+OFFSET_X = float(os.environ.get("SIGN_OFFSET_X", SIGN_OFFSET_X))
+OFFSET_Y = float(os.environ.get("SIGN_OFFSET_Y", SIGN_OFFSET_Y))
+BOX_W = float(os.environ.get("SIGN_BOX_W", SIGN_BOX_W))
+BOX_H = float(os.environ.get("SIGN_BOX_H", SIGN_BOX_H))
 
 # anchor의 어느 지점을 기준으로 offset을 더할지
 #   topleft  : anchor 좌상단   (기본 가정)
@@ -121,7 +136,10 @@ def main() -> None:
 
         base_x = ax0 if ORIGIN == "topleft" else ax1
         bx0 = base_x + OFFSET_X * pw
-        by0 = ay0 + OFFSET_Y * ph
+        # 모두싸인은 anchor 세로 좌표를 우리와 다르게 잡아
+        # 실측상 페이지 높이의 23%만큼 아래로 민다. 그 편차를 더해
+        # "실제로 놓일 자리"를 그린다. (원인 미규명 — anchors.py 참고)
+        by0 = ay0 + (OFFSET_Y + MODUSIGN_Y_DRIFT) * ph
         bx1 = bx0 + BOX_W * pw
         by1 = by0 + BOX_H * ph
 

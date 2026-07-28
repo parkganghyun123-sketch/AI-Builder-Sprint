@@ -15,21 +15,16 @@ from app.schemas import DocumentStatus
 BASE_URL = "https://api.modusign.co.kr"
 
 # PDF 템플릿에 반드시 포함되어야 하는 anchor 텍스트
-#
-# 설계 원칙 2가지:
-#   1. 참여자별로 유일해야 한다.
-#      표준양식 원본은 "(서명)"으로만 표기하지만, 같은 텍스트가 2번 나오면
-#      모두싸인이 매칭 개수만큼 필드를 만들어 근로자·사업주를 구분할 수 없다.
-#   2. 서명이 들어갈 위치 "바로 옆"에 있어야 한다.
-#      멀리 떨어진 텍스트(예: '성명')에서 offset으로 밀면 오차가 크게 벌어진다.
-#      실측 결과 250px 이상 어긋났다.
-ANCHOR_EMPLOYER = "(사업주 서명)"
-ANCHOR_WORKER = "(근로자 서명)"
+from app.signing.anchors import ANCHOR_EMPLOYER, ANCHOR_WORKER  # noqa: E402,F401
 
-# anchor 텍스트 오른쪽에 서명란을 놓는다. 문서 너비·높이 대비 비율.
-# PDF 레이아웃을 바꾸면 함께 조정할 것.
-SIGN_OFFSET_X = -0.05
-SIGN_OFFSET_Y = -0.72
+# 값의 출처는 anchors.py 한 곳이다. 여기에 복사해두지 말 것.
+# (재수출은 기존 import 경로를 깨지 않기 위한 것)
+from app.signing.anchors import (  # noqa: E402,F401
+    SIGN_BOX_H,
+    SIGN_BOX_W,
+    SIGN_OFFSET_X,
+    SIGN_OFFSET_Y,
+)
 
 
 class ModusignError(Exception):
@@ -56,7 +51,7 @@ def _signature_field(anchor_text: str) -> dict:
                 "offset": {"x": SIGN_OFFSET_X, "y": SIGN_OFFSET_Y},
             }
         },
-        "size": {"width": 0.14, "height": 0.045},
+        "size": {"width": SIGN_BOX_W, "height": SIGN_BOX_H},
     }
 
 
