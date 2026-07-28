@@ -76,6 +76,14 @@
   .field { display: inline-block; width: 20mm; }
   .spaced { letter-spacing: 3px; }
 
+  /* 서명 anchor 라벨
+     모두싸인 서명 박스가 이 위에 겹치므로 톤을 낮추되,
+     서명 전에도 어디에 서명하는지 알 수 있게 가독성은 유지한다. */
+  .sign-anchor {
+    color: #7a7a7a;
+    font-size: 9pt;
+  }
+
   {% if is_draft %}
   body::before {
     content: "확인 전 초안";
@@ -201,7 +209,7 @@
     <div class="row">
       <span class="field spaced">대표자</span> :
       <span class="b">{{ employer_name }}</span>
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="sign-anchor">(사업주 서명)</span>
     </div>
   </span>
 </div>
@@ -220,7 +228,7 @@
     <div class="row">
       <span class="field spaced">성명</span> :
       <span class="b">{{ worker_name }}</span>
-      &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;(서명)
+      &nbsp;&nbsp;&nbsp;&nbsp;<span class="sign-anchor">(근로자 서명)</span>
     </div>
   </span>
 </div>
