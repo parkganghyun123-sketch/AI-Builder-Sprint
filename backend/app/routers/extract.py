@@ -10,8 +10,10 @@
 import logging
 from typing import Annotated
 
+import httpx
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from app.ai.document_parse import DocumentParseError
 from app.ai.extract import ExtractError, extract_contract_terms
 from app.schemas import ContractTerms
 
@@ -28,6 +30,11 @@ async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
 
     try:
         return await extract_contract_terms(file_bytes, file.filename or "contract")
-    except ExtractError as e:
-        log.error("추출 실패: %s", e)
-        raise HTTPException(status_code=502, detail=f"추출 실패: {e}") from e
+    except (ExtractError, DocumentParseError, httpx.HTTPError) as error:
+        log.error("계약서 추출 실패: error_type=%s", type(error).__name__)
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "계약서 추출 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+            ),
+        ) from None

@@ -12,11 +12,11 @@ import hmac
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 from app.pdf.generator import render_contract_pdf
-from app.schemas import ContractTerms, DocumentStatus, EntryPath
+from app.schemas import ContractTerms, DocumentStatus, EntryPath, ExtractedField
 from app.signing import modusign
 
 log = logging.getLogger(__name__)
@@ -24,6 +24,18 @@ router = APIRouter()
 
 # 임시 저장소 — DB 연결 전까지 사용
 _store: dict[str, dict] = {}
+
+
+def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
+    """서명 요청서에 불필요한 전화·주소·연락처를 보존하지 않는다."""
+    return terms.model_copy(
+        update={
+            "employer_phone": ExtractedField(),
+            "employer_address": ExtractedField(),
+            "worker_address": ExtractedField(),
+            "worker_contact": ExtractedField(),
+        }
+    )
 
 
 class SignRequestBody(BaseModel):
@@ -47,11 +59,11 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
     계약 조건을 받아 PDF를 만들고 서명 요청을 보낸다.
     근로자 → 사업주 순서로 서명한다.
     """
-    # 경로 B(구두계약)는 근로자가 혼자 입력한 것이므로 초안 표시가 필요하다.
-    # 다만 서명 단계까지 왔다면 양측이 조건을 확인한 것으로 보고 초안 표시를 뗀다.
-    pdf = render_contract_pdf(body.terms, is_draft=False)
+    # 폼 제출이나 발송만으로 양쪽의 조건 확인 또는 체결 완료를 추정하지 않는다.
+    terms = _minimize_contact_fields(body.terms)
+    pdf = render_contract_pdf(terms, is_draft=True)
 
-    title = f"근로계약서_{body.worker_name}_{body.employer_name}"
+    title = "근로조건 확인 요청서"
 
     try:
         result = await modusign.request_signature(
@@ -63,9 +75,11 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
             employer_email=body.employer_email,
         )
     except modusign.ModusignError as e:
-        log.error("모두싸인 서명 요청 실패: %s", e)
-        # anchor 텍스트 미발견이 가장 흔한 원인
-        raise HTTPException(status_code=502, detail=f"서명 요청 실패: {e}") from e
+        log.error("모두싸인 서명 요청 실패: error_type=%s", type(e).__name__)
+        raise HTTPException(
+            status_code=502,
+            detail="서명 요청 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+        ) from e
 
     doc_id = result["id"]
     status = modusign.to_document_status(result["status"])
@@ -74,7 +88,6 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
         "status": status,
         "signed": 0,
         "total": 2,  # 근로자 + 사업주
-        "terms": body.terms.model_dump(),
         "entry_path": body.entry_path,
         "title": title,
     }
@@ -82,7 +95,10 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
     return SignResponseBody(
         document_id=doc_id,
         status=status,
-        message="서명 요청을 보냈습니다. 근로자부터 서명합니다.",
+        message=(
+            "확인 전 초안 요청서를 서명 절차에 보냈습니다. "
+            "체결 완료 여부는 제공자 상태를 다시 확인한 뒤 표시합니다."
+        ),
     )
 
 
@@ -114,8 +130,13 @@ async def reconcile(document_id: str) -> dict:
     # 재배포로 저장소가 빈 뒤에는 동기화가 도는지 로그로 확인할 수 없었다.
     log.info(
         "문서 %s 동기화: %s (%s/%s 서명)%s",
-        document_id, status, signed, total,
-        "" if record is not None else "  [저장소에 없음 — 재배포로 유실됐거나 외부 문서]",
+        document_id,
+        status,
+        signed,
+        total,
+        ""
+        if record is not None
+        else "  [저장소에 없음 — 재배포로 유실됐거나 외부 문서]",
     )
 
     if record is not None:
@@ -150,7 +171,15 @@ async def get_status(document_id: str) -> dict:
     try:
         return await reconcile(document_id)
     except modusign.ModusignError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+        log.error(
+            "서명 상태 조회 실패: document=%s error_type=%s",
+            document_id,
+            type(e).__name__,
+        )
+        raise HTTPException(
+            status_code=502,
+            detail="서명 상태 조회 서비스를 사용할 수 없습니다.",
+        ) from e
 
 
 # 웹훅 이벤트 → 문서 상태 (API 조회가 실패했을 때의 대비책)
@@ -169,6 +198,19 @@ EVENT_TO_STATUS: dict[str, DocumentStatus] = {
     "document_request_canceled": DocumentStatus.ABORTED,
     "document_signing_canceled": DocumentStatus.ON_GOING,  # 서명만 취소, 요청은 유지
 }
+
+
+class WebhookEvent(BaseModel):
+    type: str | None = None
+
+
+class WebhookDocument(BaseModel):
+    id: str | None = None
+
+
+class WebhookPayload(BaseModel):
+    event: WebhookEvent | None = None
+    document: WebhookDocument | None = None
 
 
 def _check_token(token: str | None) -> None:
@@ -208,15 +250,23 @@ async def webhook(request: Request, token: str | None = None) -> dict:
     """
     _check_token(token)
 
-    payload = await request.json()
+    try:
+        payload = WebhookPayload.model_validate(await request.json())
+    except (ValueError, ValidationError):
+        log.warning("webhook 페이로드를 검증하지 못함")
+        return {"received": True}
 
-    event_type = (payload.get("event") or {}).get("type")
-    doc_id = (payload.get("document") or {}).get("id")
+    event_type = payload.event.type if payload.event else None
+    doc_id = payload.document.id if payload.document else None
 
     log.info("모두싸인 webhook: event=%s document=%s", event_type, doc_id)
 
     if not doc_id or not event_type:
-        log.warning("webhook 페이로드 형식이 예상과 다름: %s", payload)
+        log.warning(
+            "webhook 필수 식별자 누락: event=%s document=%s",
+            event_type,
+            doc_id,
+        )
         return {"received": True}
 
     if doc_id not in _store:
@@ -230,8 +280,12 @@ async def webhook(request: Request, token: str | None = None) -> dict:
         # API가 일시적으로 죽은 경우. 이벤트 타입으로 근사치라도 반영해두고,
         # 다음 이벤트나 상태 조회 때 reconcile()이 정확한 값으로 덮어쓴다.
         fallback = EVENT_TO_STATUS.get(event_type)
-        log.warning("문서 %s 동기화 실패(%s). 이벤트로 임시 반영: %s",
-                    doc_id, e, fallback)
+        log.warning(
+            "문서 %s 동기화 실패(error_type=%s). 이벤트로 임시 반영: %s",
+            doc_id,
+            type(e).__name__,
+            fallback,
+        )
         if fallback is not None:
             _store[doc_id]["status"] = fallback
 

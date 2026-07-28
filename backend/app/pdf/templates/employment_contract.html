@@ -103,11 +103,14 @@
 </head>
 <body>
 
-<div class="title-box">표준근로계약서</div>
+<div class="title-box">
+  {% if is_draft %}근로조건 확인 요청서{% else %}표준근로계약서{% endif %}
+</div>
 
 {% if is_draft %}
 <div class="note" style="text-align:center; margin:-4mm 0 5mm 0;">
-  ※ 본 문서는 근로자가 입력한 <strong>확인 전 초안</strong>이며 계약 효력이 없습니다.
+  ※ 본 문서는 사용자가 입력·확인한 <strong>확인 전 초안</strong>입니다.
+  아직 서명 제공자의 체결 완료 상태가 확인되지 않았습니다.
 </div>
 {% endif %}
 
@@ -115,7 +118,12 @@
   <span class="b b-lg">{{ employer_business_name }}</span>
   (이하 “사업주”라 함)과(와)
   <span class="b">{{ worker_name }}</span>
-  (이하 “근로자”라 함)은 다음과 같이 근로계약을 체결한다.
+  (이하 “근로자”라 함)은
+  {% if is_draft %}
+  다음 근로조건의 확인을 요청한다.
+  {% else %}
+  다음과 같이 근로계약을 체결한다.
+  {% endif %}
 </div>
 
 <div class="item">

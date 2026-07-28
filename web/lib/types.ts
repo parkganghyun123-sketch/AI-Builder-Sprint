@@ -163,3 +163,11 @@ export interface ViolationBlocked {
   problems: string[];
   hint: string;
 }
+
+export interface SignStatusResponse {
+  document_id: string;
+  status: DocumentStatus;
+  signed: number;
+  total: number;
+  download_url: string | null;
+}

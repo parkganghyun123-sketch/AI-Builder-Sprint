@@ -42,20 +42,35 @@ async def parse_document(
       - result["content"]["markdown"]  마크다운 (표 구조 보존)
       - result["elements"]             레이아웃 요소 배열 (문단·표·제목 등)
     """
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        res = await client.post(
-            BASE_URL,
-            headers=_auth_header(),
-            data={
-                "model": "document-parse",
-                "mode": mode,
-                "output_formats": '["text", "markdown"]',
-                "ocr": "auto",
-            },
-            files={"document": (filename, file_bytes)},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(
+                BASE_URL,
+                headers=_auth_header(),
+                data={
+                    "model": "document-parse",
+                    "mode": mode,
+                    "output_formats": '["text", "markdown"]',
+                    "ocr": "auto",
+                },
+                files={"document": (filename, file_bytes)},
+            )
+    except DocumentParseError:
+        raise
+    except httpx.HTTPError:
+        # httpx 원본 예외에는 요청 URL 등 외부 요청 정보가 포함될 수 있다.
+        raise DocumentParseError("Upstage Document Parse 요청 실패") from None
 
     if res.status_code >= 400:
-        raise DocumentParseError(f"HTTP {res.status_code}: {res.text}")
+        # 응답 본문에는 계약서 원문이나 제공자 진단 정보가 포함될 수 있다.
+        raise DocumentParseError("Upstage Document Parse 요청 실패")
 
-    return res.json()
+    try:
+        payload = res.json()
+    except ValueError:
+        # JSON 디코더의 원본 메시지에는 응답 본문 일부가 포함될 수 있다.
+        raise DocumentParseError("Upstage Document Parse 응답 검증 실패") from None
+
+    if not isinstance(payload, dict):
+        raise DocumentParseError("Upstage Document Parse 응답 검증 실패")
+    return payload

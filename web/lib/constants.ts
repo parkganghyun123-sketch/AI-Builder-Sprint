@@ -30,26 +30,26 @@ export const CHECK_STATUS_META: Record<
 > = {
   OK: {
     icon: "✅",
-    label: "정상",
-    chip: "bg-emerald-50 text-emerald-700",
-    ring: "border-emerald-100",
+    label: "기준 충족",
+    chip: "bg-emerald-100 text-emerald-900",
+    ring: "border-emerald-300",
   },
   VIOLATION: {
     icon: "⚠️",
-    label: "위반",
-    chip: "bg-amber-50 text-amber-700",
-    ring: "border-amber-200",
+    label: "기준보다 낮음",
+    chip: "bg-red-100 text-red-900",
+    ring: "border-red-300",
   },
   MISSING: {
     icon: "❓",
-    label: "누락",
-    chip: "bg-amber-50 text-amber-700",
-    ring: "border-amber-200",
+    label: "계약서에서 찾지 못함",
+    chip: "bg-amber-100 text-amber-900",
+    ring: "border-amber-300",
   },
   UNKNOWN: {
     icon: "🔍",
-    label: "판정 불가",
-    chip: "bg-slate-100 text-ink-muted",
+    label: "정보 부족",
+    chip: "bg-slate-200 text-slate-900",
     ring: "border-slate-200",
   },
 };
@@ -92,17 +92,18 @@ export const DOCUMENT_STATUS_META: Record<
     watermark: false,
   },
   REVIEW_REQUESTED: {
-    title: "확인 요청됨",
+    title: "근로조건 확인 요청서",
     icon: "📨",
-    message: "내가 입력한 내용입니다. 사장님 확인 전이며 계약 효력이 없습니다.",
-    className: "bg-amber-50 text-amber-700 border-amber-200",
+    message:
+      "내가 입력한 내용입니다. 사장님 확인 전이며, 체결 완료 상태가 확인되지 않았습니다.",
+    className: "bg-amber-50 text-amber-900 border-amber-300",
     watermark: true,
   },
   TERMS_CONFIRMED: {
-    title: "조건 확인됨",
+    title: "조건 확인됨 · 서명 전",
     icon: "🤝",
-    message: "양쪽이 내용을 확인했습니다. 서명 전입니다.",
-    className: "bg-sky-50 text-sky-700 border-sky-200",
+    message: "확인한 조건으로 서명을 요청하기 전 단계입니다.",
+    className: "bg-sky-50 text-sky-900 border-sky-300",
     watermark: false,
   },
   ON_PROCESSING: {
@@ -122,8 +123,8 @@ export const DOCUMENT_STATUS_META: Record<
   COMPLETED: {
     title: "체결 완료",
     icon: "✅",
-    message: "양쪽이 서명한 계약서입니다.",
-    className: "bg-emerald-50 text-emerald-700 border-emerald-200",
+    message: "서명 제공자의 체결 완료 상태가 확인되었습니다.",
+    className: "bg-emerald-50 text-emerald-900 border-emerald-300",
     watermark: false,
   },
   ABORTED: {
@@ -136,8 +137,8 @@ export const DOCUMENT_STATUS_META: Record<
   PROCESSING_FAILED: {
     title: "처리 실패",
     icon: "⚠️",
-    message: "서명 처리에 실패했습니다. 다시 시도해주세요.",
-    className: "bg-red-50 text-red-700 border-red-200",
+    message: "서명 처리에 실패했습니다. 다시 시도해 주세요.",
+    className: "bg-red-50 text-red-900 border-red-300",
     watermark: false,
   },
 };
