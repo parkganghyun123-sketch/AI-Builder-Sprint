@@ -14,7 +14,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import contracts, sign
+from app.routers import contracts, extract, sign
 
 logging.basicConfig(level=logging.INFO)
 
@@ -63,16 +63,5 @@ async def health_pdf() -> Response:
 
 
 app.include_router(contracts.router, tags=["contracts"])
+app.include_router(extract.router, tags=["ai"])
 app.include_router(sign.router, tags=["signing"])
-
-# ------------------------------------------------------------------
-# 담당자별 라우터 자리. 각자 파일을 만들어 아래에 추가한다.
-#
-#   A → app/routers/extract.py    POST /contracts/extract   (사진 → 조건)
-#   B → app/routers/validate.py   POST /contracts/validate  (조건 → 판정)
-#   C → app/routers/sign.py       ✅ 완료
-#
-# 예시:
-#   from app.routers import extract
-#   app.include_router(extract.router, tags=["ai"])
-# ------------------------------------------------------------------

@@ -1,0 +1,31 @@
+{
+  "id": "iex-jZpTWa2AJtMGyQLW",
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"contract_start\":\"2026년 8월 1 일\",\"contract_end\":\"2027년 1월 31 일\",\"workplace\":\"부산광역시 금정구 장전동 카페 000\",\"job_description\":\"음료 제조 및 매장 관리\",\"work_start_time\":\"09:00\",\"work_end_time\":\"16:00\",\"break_start_time\":\"12:00\",\"break_end_time\":\"12:30\",\"work_days_per_week\":\"3\",\"weekly_holiday_day\":\"\" ,\"wage_type\":\"HOURLY\",\"wage_amount\":\"10000\",\"has_bonus\":\"없음\",\"other_allowance\":\"없음\",\"payday\":\"매월 10일\",\"payment_method\":\"근로자 명의 예금통장에 입금\",\"employer_business_name\":\"카페 000\",\"employer_phone\":\"051-000-0000\",\"employer_address\":\"부산광역시 금정구 장전동 00-0\",\"employer_name\":\"박정호\",\"worker_address\":\"부산광역시 금정구 구서동 00-0\",\"worker_contact\":\"010-0000-0000\",\"worker_name\":\"김하늘\"}",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "type": "function",
+            "function": {
+              "name": "additional_values",
+              "arguments": "{\"contract_start\":{\"_value\":\"2026년 8월 1 일\",\"confidence\":\"high\"},\"contract_end\":{\"_value\":\"2027년 1월 31 일\",\"confidence\":\"high\"},\"workplace\":{\"_value\":\"부산광역시 금정구 장전동 카페 000\",\"confidence\":\"high\"},\"job_description\":{\"_value\":\"음료 제조 및 매장 관리\",\"confidence\":\"high\"},\"work_start_time\":{\"_value\":\"09:00\",\"confidence\":\"high\"},\"work_end_time\":{\"_value\":\"16:00\",\"confidence\":\"high\"},\"break_start_time\":{\"_value\":\"12:00\",\"confidence\":\"high\"},\"break_end_time\":{\"_value\":\"12:30\",\"confidence\":\"high\"},\"work_days_per_week\":{\"_value\":\"3\",\"confidence\":\"high\"},\"weekly_holiday_day\":{\"_value\":\"\",\"confidence\":\"low\"},\"wage_type\":{\"_value\":\"HOURLY\",\"confidence\":\"high\"},\"wage_amount\":{\"_value\":\"10000\",\"confidence\":\"low\"},\"has_bonus\":{\"_value\":\"없음\",\"confidence\":\"high\"},\"other_allowance\":{\"_value\":\"없음\",\"confidence\":\"high\"},\"payday\":{\"_value\":\"매월 10일\",\"confidence\":\"high\"},\"payment_method\":{\"_value\":\"근로자 명의 예금통장에 입금\",\"confidence\":\"high\"},\"employer_business_name\":{\"_value\":\"카페 000\",\"confidence\":\"high\"},\"employer_phone\":{\"_value\":\"051-000-0000\",\"confidence\":\"high\"},\"employer_address\":{\"_value\":\"부산광역시 금정구 장전동 00-0\",\"confidence\":\"high\"},\"employer_name\":{\"_value\":\"박정호\",\"confidence\":\"high\"},\"worker_address\":{\"_value\":\"부산광역시 금정구 구서동 00-0\",\"confidence\":\"high\"},\"worker_contact\":{\"_value\":\"010-0000-0000\",\"confidence\":\"high\"},\"worker_name\":{\"_value\":\"김하늘\",\"confidence\":\"high\"}}"
+            }
+          }
+        ]
+      },
+      "confidence_score": "{\"contract_start\": 0.991, \"contract_end\": 0.9771, \"workplace\": 0.9904, \"job_description\": 0.9936, \"work_start_time\": 0.9891, \"work_end_time\": 0.988, \"break_start_time\": 0.9915, \"break_end_time\": 0.9899, \"work_days_per_week\": 0.9841, \"weekly_holiday_day\": 0.5745, \"wage_type\": 0.9852, \"wage_amount\": 0.9661, \"has_bonus\": 0.9977, \"other_allowance\": 0.9978, \"payday\": 0.9911, \"payment_method\": 0.9943, \"employer_business_name\": 0.9934, \"employer_phone\": 0.9979, \"employer_address\": 0.9931, \"employer_name\": 0.9976, \"worker_address\": 0.9931, \"worker_contact\": 0.9979, \"worker_name\": 0.9981}"
+    }
+  ],
+  "created": 1785237682,
+  "model": "information-extract-260610",
+  "object": "chat.completion",
+  "usage": {
+    "prompt_tokens": 4830,
+    "completion_tokens": 250,
+    "total_tokens": 5080
+  }
+}
