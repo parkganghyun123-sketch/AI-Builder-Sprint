@@ -179,3 +179,90 @@ class TestCallInformationExtract:
         with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake)):
             with pytest.raises(ExtractError):
                 await call_information_extract(b"fake-bytes", "image/png")
+
+
+# ============================================================
+# 근거 문장(source_text) 매칭 — 실측에서 드러난 오류들
+#
+# 아래 4가지는 spikes/fixtures/contract_01_*.json 으로 확인된 실제 실패다.
+# 근거 문장은 화면에서 "왜 이렇게 읽었는지" 사용자에게 보여주는 값이라
+# 틀린 줄을 붙이면 없느니만 못하다.
+# ============================================================
+
+CONTRACT_TEXT = """1. 근로계약기간 : 2026년 8월 1 일 부터 2027년 1월 31 일 까지
+2. 근 무 장 소 : 부산광역시 금정구 장전동 카페 000
+4. 소정근로시간 : 09시 00분부터 16시 00분까지 (휴게시간 : 12시 00분 ~ 12시 30분)
+5. 근무일/휴일 : 매주 3일 근무, 주휴일 매주 ( ) 요일
+- 시간(일, 월)급 : 시간급 금 10,000원
+- 상여금 : 없음
+- 기타급여(제수당 등) : 없음
+- 임금지급일 : 매월 10일 (휴일의 경우는 전일 지급)
+(사업주) 사업체명 : 카페 000 전화 : 051-000-0000
+주 소 : 부산광역시 금정구 장전동 00-0
+(근로자) 주 소 : 부산광역시 금정구 구서동 00-0"""
+
+
+class TestSourceTextMatching:
+    def test_short_number_does_not_match_wrong_line(self):
+        """'3'이 '2027년 1월 31 일'의 3에 걸려 계약기간이 근거로 붙던 문제."""
+        assert (
+            _find_source_text(CONTRACT_TEXT, "3", "work_days_per_week")
+            == "5. 근무일/휴일 : 매주 3일 근무, 주휴일 매주 ( ) 요일"
+        )
+
+    def test_short_value_without_keyword_gives_up(self):
+        """키워드로 못 좁히면 틀린 줄을 주느니 근거 없음을 택한다."""
+        assert _find_source_text(CONTRACT_TEXT, "3", None) is None
+
+    def test_normalized_amount_matches_original_notation(self):
+        """모델이 '10,000원'을 '10000'으로 정규화해 매칭이 깨지던 문제."""
+        assert (
+            _find_source_text(CONTRACT_TEXT, "10000", "wage_amount")
+            == "- 시간(일, 월)급 : 시간급 금 10,000원"
+        )
+
+    def test_normalized_time_matches_original_notation(self):
+        """'12시 30분' → '12:30' 정규화."""
+        assert "휴게시간" in _find_source_text(
+            CONTRACT_TEXT, "12:30", "break_end_time"
+        )
+
+    def test_same_value_in_two_fields_picks_right_line(self):
+        """'없음'이 상여금·제수당 양쪽에 있어 첫 줄이 이기던 문제."""
+        assert _find_source_text(CONTRACT_TEXT, "없음", "has_bonus") == "- 상여금 : 없음"
+        assert (
+            _find_source_text(CONTRACT_TEXT, "없음", "other_allowance")
+            == "- 기타급여(제수당 등) : 없음"
+        )
+
+    def test_hangul_value_does_not_match_by_digits_alone(self):
+        """주소('...00-0', 숫자 000)가 '카페 000'에 걸리던 오탐."""
+        assert (
+            _find_source_text(
+                CONTRACT_TEXT, "부산광역시 금정구 구서동 00-0", "worker_address"
+            )
+            == "(근로자) 주 소 : 부산광역시 금정구 구서동 00-0"
+        )
+
+    def test_code_value_matches_korean_notation(self):
+        """wage_type은 'HOURLY' 코드라 원문에 그대로 없다."""
+        assert (
+            _find_source_text(CONTRACT_TEXT, "HOURLY", "wage_type")
+            == "- 시간(일, 월)급 : 시간급 금 10,000원"
+        )
+
+
+class TestConfidenceScore:
+    def test_numeric_score_beats_categorical_grade(self):
+        """등급 low / 점수 0.9661 인 wage_amount 가 LOW로 뜨던 문제."""
+        assert _confidence_from_upstage("low", True, 0.9661) == Confidence.HIGH
+
+    def test_low_numeric_score_is_low(self):
+        assert _confidence_from_upstage("high", True, 0.5745) == Confidence.LOW
+
+    def test_falls_back_to_grade_without_score(self):
+        assert _confidence_from_upstage("high", True, None) == Confidence.HIGH
+        assert _confidence_from_upstage("low", True, None) == Confidence.LOW
+
+    def test_missing_value_is_not_found_even_with_high_score(self):
+        assert _confidence_from_upstage("high", False, 0.99) == Confidence.NOT_FOUND
