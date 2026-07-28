@@ -28,6 +28,22 @@ class Settings(BaseSettings):
     # 인프라
     database_url: str = ""
 
+    # 프론트 도메인. 쉼표로 여러 개.
+    #   CORS_ORIGINS=https://fairsign.vercel.app,https://www.fairsign.kr
+    #
+    # ⚠️ 비워두면 로컬 개발용 기본값만 허용한다.
+    #    프론트를 배포한 뒤 이 값을 안 넣으면 브라우저가 모든 요청을 막는다.
+    cors_origins: str = ""
+
+    @property
+    def allowed_origins(self) -> list[str]:
+        extra = [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        return [
+            "http://localhost:3000",  # Next.js 개발 서버
+            "http://127.0.0.1:3000",
+            *extra,
+        ]
+
     @property
     def modusign_configured(self) -> bool:
         return bool(self.modusign_email and self.modusign_api_key)

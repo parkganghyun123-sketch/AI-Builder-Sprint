@@ -28,20 +28,29 @@ app = FastAPI(title="FairSign API", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # 배포 시 프론트 도메인 추가
+    allow_origins=settings.allowed_origins,  # CORS_ORIGINS 환경변수로 추가
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+log = logging.getLogger(__name__)
+log.info("CORS 허용 도메인: %s", settings.allowed_origins)
+
 
 @app.get("/health")
 async def health() -> dict:
-    """배포 확인용. 각 연동의 설정 여부를 함께 보여준다."""
+    """
+    배포 확인용. 각 연동의 설정 여부를 함께 보여준다.
+
+    프론트를 붙이기 전에 이걸 먼저 확인할 것.
+    upstage가 false면 /contracts/extract 가 502로 죽는다.
+    """
     return {
         "status": "ok",
         "modusign": settings.modusign_configured,
         "upstage": bool(settings.upstage_api_key),
+        "cors_origins": settings.allowed_origins,
     }
 
 
