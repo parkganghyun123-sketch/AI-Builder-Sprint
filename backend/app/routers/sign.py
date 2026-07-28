@@ -108,13 +108,23 @@ async def reconcile(document_id: str) -> dict:
     total = len(doc.get("participants", []))
 
     record = _store.get(document_id)
+
+    # 조회 자체를 항상 남긴다.
+    # 예전에는 "저장소에 있고 + 상태가 바뀐" 경우에만 찍어서,
+    # 재배포로 저장소가 빈 뒤에는 동기화가 도는지 로그로 확인할 수 없었다.
+    log.info(
+        "문서 %s 동기화: %s (%s/%s 서명)%s",
+        document_id, status, signed, total,
+        "" if record is not None else "  [저장소에 없음 — 재배포로 유실됐거나 외부 문서]",
+    )
+
     if record is not None:
         before = record.get("status")
         record["status"] = status
         record["signed"] = signed
         record["total"] = total
         if before != status:
-            log.info("문서 %s 상태 갱신: %s → %s", document_id, before, status)
+            log.info("문서 %s 상태 변경: %s → %s", document_id, before, status)
 
     return {
         "document_id": document_id,
@@ -215,9 +225,7 @@ async def webhook(request: Request, token: str | None = None) -> dict:
         return {"received": True}
 
     try:
-        result = await reconcile(doc_id)
-        log.info("문서 %s 동기화 완료: %s (%s/%s 서명)",
-                 doc_id, result["status"], result["signed"], result["total"])
+        await reconcile(doc_id)  # 로그는 reconcile 안에서 남긴다
     except modusign.ModusignError as e:
         # API가 일시적으로 죽은 경우. 이벤트 타입으로 근사치라도 반영해두고,
         # 다음 이벤트나 상태 조회 때 reconcile()이 정확한 값으로 덮어쓴다.
