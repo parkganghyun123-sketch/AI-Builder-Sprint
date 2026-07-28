@@ -10,11 +10,11 @@
 
 import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import sign
+from app.routers import contracts, sign
 
 logging.basicConfig(level=logging.INFO)
 
@@ -39,6 +39,30 @@ async def health() -> dict:
     }
 
 
+@app.get("/health/pdf")
+async def health_pdf() -> Response:
+    """
+    배포 환경 PDF 진단.
+
+    리눅스 서버에는 한글 폰트가 기본 탑재되지 않아, 로컬에서는 멀쩡하던
+    계약서가 서버에서만 □□□로 깨지는 사고가 잦다.
+    배포 후 이 주소를 브라우저로 열어 한글이 정상인지 눈으로 확인한다.
+    """
+    from app.pdf.generator import render_contract_pdf
+    from make_test_pdf import SAMPLE
+
+    pdf = render_contract_pdf(
+        SAMPLE,
+        verification_note="※ 배포 환경 폰트 진단용 문서입니다. 한글이 깨지지 않았는지 확인하세요.",
+    )
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'inline; filename="font_check.pdf"'},
+    )
+
+
+app.include_router(contracts.router, tags=["contracts"])
 app.include_router(sign.router, tags=["signing"])
 
 # ------------------------------------------------------------------

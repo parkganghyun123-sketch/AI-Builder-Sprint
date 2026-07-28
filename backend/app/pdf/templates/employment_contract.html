@@ -12,7 +12,11 @@
     margin: 20mm 22mm;
   }
   body {
-    font-family: "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    /* macOS(로컬) → Linux(배포) 순서.
+       Debian의 fonts-noto-cjk 패밀리명은 "Noto Sans CJK KR" 이다.
+       이 이름이 빠지면 서버에서 한글이 □□□로 나온다. */
+    font-family: "Apple SD Gothic Neo", "Noto Sans CJK KR", "Noto Sans KR",
+                 "Malgun Gothic", sans-serif;
     font-size: 10pt;
     line-height: 2.0;
     color: #000;
