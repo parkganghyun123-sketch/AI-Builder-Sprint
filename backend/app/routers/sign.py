@@ -70,6 +70,8 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
 
     _store[doc_id] = {
         "status": status,
+        "signed": 0,
+        "total": 2,  # 근로자 + 사업주
         "terms": body.terms.model_dump(),
         "entry_path": body.entry_path,
         "title": title,
@@ -82,28 +84,40 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
     )
 
 
-@router.get("/contracts/{document_id}/status")
-async def get_status(document_id: str) -> dict:
+async def reconcile(document_id: str) -> dict:
     """
-    문서 상태 조회.
-    Webhook이 안 붙은 동안에는 프론트가 이걸 폴링한다.
-    """
-    try:
-        doc = await modusign.get_document(document_id)
-    except modusign.ModusignError as e:
-        raise HTTPException(status_code=502, detail=str(e)) from e
+    모두싸인 API를 조회해 우리 상태를 실제와 맞춘다.
 
+    ⚠️ 상태를 쓰는 곳은 이 함수 하나뿐이다.
+
+    웹훅 이벤트를 그대로 믿지 않는 이유:
+      모두싸인 웹훅은 한 번 쏘고 마는 방식이라 재배포·크래시·네트워크 순단
+      중에 도착한 이벤트는 그대로 유실된다. 실제로 컨테이너 재시작 중에
+      document_started 를 놓친 사례가 있었다. 이벤트를 상태의 근거로 쓰면
+      한 번 놓친 순간 영구히 틀어지고, 메모리 저장소라 복구 경로도 없다.
+
+      대신 웹훅은 "지금 확인해보라"는 신호로만 쓰고 실제 값은 API에서 읽는다.
+      이러면 이벤트를 놓쳐도 다음 이벤트나 폴링 시점에 자동으로 복구된다.
+    """
+    doc = await modusign.get_document(document_id)
     status = modusign.to_document_status(doc["status"])
-    if document_id in _store:
-        _store[document_id]["status"] = status
 
-    signed_count = len(doc.get("signings", []))
+    signed = len(doc.get("signings", []))
     total = len(doc.get("participants", []))
+
+    record = _store.get(document_id)
+    if record is not None:
+        before = record.get("status")
+        record["status"] = status
+        record["signed"] = signed
+        record["total"] = total
+        if before != status:
+            log.info("문서 %s 상태 갱신: %s → %s", document_id, before, status)
 
     return {
         "document_id": document_id,
         "status": status,
-        "signed": signed_count,
+        "signed": signed,
         "total": total,
         # 다운로드 링크는 유효시간 10분이므로 저장하지 말고 그때그때 조회할 것
         "download_url": (
@@ -114,12 +128,27 @@ async def get_status(document_id: str) -> dict:
     }
 
 
-# 모두싸인 웹훅 이벤트 → 우리 문서 상태
+@router.get("/contracts/{document_id}/status")
+async def get_status(document_id: str) -> dict:
+    """
+    문서 상태 조회.
+
+    웹훅이 유실됐더라도 이 조회 한 번으로 상태가 복구된다.
+    """
+    try:
+        return await reconcile(document_id)
+    except modusign.ModusignError as e:
+        raise HTTPException(status_code=502, detail=str(e)) from e
+
+
+# 웹훅 이벤트 → 문서 상태 (API 조회가 실패했을 때의 대비책)
 #
 # ⚠️ 웹훅 페이로드에는 status 필드가 없다. 실제 수신 구조:
 #      {"event": {"type": "document_started"},
 #       "document": {"id": "...", "requester": {...}}}
-#    따라서 이벤트 타입으로 상태를 결정해야 한다.
+#
+# 평상시에는 reconcile()이 API에서 실제 상태를 읽으므로 이 표를 쓰지 않는다.
+# 모두싸인 API가 일시적으로 죽었을 때만 근사치로 쓴다.
 EVENT_TO_STATUS: dict[str, DocumentStatus] = {
     "document_started": DocumentStatus.ON_GOING,
     "document_signed": DocumentStatus.ON_GOING,  # 중간 서명자
@@ -138,6 +167,9 @@ async def webhook(request: Request) -> dict:
     설정 위치: 모두싸인 설정 → Webhook
     구독 이벤트는 EVENT_TO_STATUS의 6가지만 켠다.
 
+    이벤트 내용은 상태의 근거로 쓰지 않는다. "확인해보라"는 신호로만 받고,
+    실제 상태는 reconcile()이 API에서 읽는다. 이유는 reconcile() 주석 참고.
+
     TODO: 서명 검증(MODUSIGN_WEBHOOK_SECRET) 추가 — 검증 방식 확인 필요
     """
     payload = await request.json()
@@ -151,22 +183,26 @@ async def webhook(request: Request) -> dict:
         log.warning("webhook 페이로드 형식이 예상과 다름: %s", payload)
         return {"received": True}
 
-    status = EVENT_TO_STATUS.get(event_type)
-    if status is None:
-        # 구독하지 않기로 한 이벤트(내용 수정 등)가 들어온 경우
-        log.info("처리 대상이 아닌 이벤트: %s", event_type)
+    if doc_id not in _store:
+        # 스파이크 스크립트로 보낸 문서 등, 우리가 만들지 않은 건 조회하지 않는다
+        log.info("저장소에 없는 문서: %s (event=%s)", doc_id, event_type)
         return {"received": True}
 
-    record = _store.get(doc_id)
-    if record is None:
-        # 스파이크 스크립트로 보낸 문서 등, 우리 저장소에 없는 건 무시
-        log.info("저장소에 없는 문서: %s (상태 %s)", doc_id, status)
-        return {"received": True}
+    try:
+        result = await reconcile(doc_id)
+        log.info("문서 %s 동기화 완료: %s (%s/%s 서명)",
+                 doc_id, result["status"], result["signed"], result["total"])
+    except modusign.ModusignError as e:
+        # API가 일시적으로 죽은 경우. 이벤트 타입으로 근사치라도 반영해두고,
+        # 다음 이벤트나 상태 조회 때 reconcile()이 정확한 값으로 덮어쓴다.
+        fallback = EVENT_TO_STATUS.get(event_type)
+        log.warning("문서 %s 동기화 실패(%s). 이벤트로 임시 반영: %s",
+                    doc_id, e, fallback)
+        if fallback is not None:
+            _store[doc_id]["status"] = fallback
 
-    before = record["status"]
-    record["status"] = status
-    log.info("문서 %s 상태 갱신: %s → %s", doc_id, before, status)
-
+    # 모두싸인은 2xx를 기대한다. 여기서 500을 내면 웹훅이 실패로 집계되고
+    # 반복되면 자동 비활성화될 수 있으므로, 실패해도 200을 준다.
     return {"received": True}
 
 
