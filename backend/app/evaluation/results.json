@@ -1,0 +1,1314 @@
+{
+  "results": {
+    "contract_01": {
+      "note": "기본 시나리오 (spikes/fixtures/contract_01.png와 동일 계약)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1 일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 1월 31일",
+          "actual": "2027년 1월 31 일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "부산광역시 금정구 장전동 카페 000",
+          "actual": "부산광역시 금정구 장전동 카페 000",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "음료 제조 및 매장 관리",
+          "actual": "음료 제조 및 매장 관리",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "09:00",
+          "actual": "09:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "16:00",
+          "actual": "16:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "12:00",
+          "actual": "12:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "12:30",
+          "actual": "12:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "3",
+          "actual": "3",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10000",
+          "actual": "10000",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 10일",
+          "actual": "매월 10일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "카페 000",
+          "actual": "카페 000",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "051-000-0000",
+          "actual": "051-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "부산광역시 금정구 장전동 00-0",
+          "actual": "부산광역시 금정구 장전동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "박정호",
+          "actual": "박정호",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "부산광역시 금정구 구서동 00-0",
+          "actual": "부산광역시 금정구 구서동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-0000-0000",
+          "actual": "010-0000-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "김하늘",
+          "actual": "김하늘",
+          "correct": true
+        }
+      }
+    },
+    "contract_02": {
+      "note": "편의점, 주휴일 명시, 심야 근무 시각",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 9월 1일",
+          "actual": "2026년 9월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 2월 28일",
+          "actual": "2027년 2월 28일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "서울특별시 마포구 합정동 편의점 무지개",
+          "actual": "서울특별시 마포구 합정동 편의점 무지개",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "매장 판매 및 재고 관리",
+          "actual": "매장 판매 및 재고 관리",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "22:00",
+          "actual": "22:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "06:00",
+          "actual": "06:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "02:00",
+          "actual": "02:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "02:30",
+          "actual": "02:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "5",
+          "actual": "5",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "일요일",
+          "actual": "일요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10320",
+          "actual": "10320",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": "야간수당 별도 지급",
+          "actual": "야간수당 별도 지급",
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 25일",
+          "actual": "매월 25일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "편의점 무지개 합정점",
+          "actual": "편의점 무지개 합정점",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "02-000-0000",
+          "actual": "02-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "서울특별시 마포구 합정동 00-0",
+          "actual": "서울특별시 마포구 합정동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "이가을",
+          "actual": "이가을",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "서울특별시 마포구 서교동 00-0",
+          "actual": "서울특별시 마포구 서교동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-1111-0000",
+          "actual": "010-1111-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "최은서",
+          "actual": "최은서",
+          "correct": true
+        }
+      }
+    },
+    "contract_03": {
+      "note": "월급제 (wage_type 분류 확인용)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 15일",
+          "actual": "2026년 8월 15일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 8월 14일",
+          "actual": "2027년 8월 14일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "대전광역시 유성구 궁동 분식집 대박",
+          "actual": "대전광역시 유성구 궁동 분식집 대박",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "주방 보조 및 홀 서빙",
+          "actual": "주방 보조 및 홀 서빙",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "11:00",
+          "actual": "11:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "20:00",
+          "actual": "20:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "15:00",
+          "actual": "15:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "16:00",
+          "actual": "16:00",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "5",
+          "actual": "5",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "화요일",
+          "actual": "화요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "MONTHLY",
+          "actual": "MONTHLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "1900000",
+          "actual": "1900000",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "있음",
+          "actual": "있음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": "명절 상여금 별도",
+          "actual": "명절 상여금 별도",
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 말일",
+          "actual": "매월 말일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자에게 직접지급",
+          "actual": "근로자에게 직접지급",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "분식집 대박",
+          "actual": "분식집 대박",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "042-000-0000",
+          "actual": "042-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "대전광역시 유성구 궁동 00-0",
+          "actual": "대전광역시 유성구 궁동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "정하람",
+          "actual": "정하람",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "대전광역시 유성구 어은동 00-0",
+          "actual": "대전광역시 유성구 어은동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-2222-0000",
+          "actual": "010-2222-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "강산들",
+          "actual": "강산들",
+          "correct": true
+        }
+      }
+    },
+    "contract_04": {
+      "note": "주말 근무, 짧은 근무일수",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 10월 1일",
+          "actual": "2026년 10월 1 일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2026년 12월 31일",
+          "actual": "2026년 12월 31일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "인천광역시 연수구 송도동 스터디카페 라이트",
+          "actual": "인천광역시 연수구 송도동 스터디카페 라이트",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "카페 음료 제조 및 좌석 관리",
+          "actual": "카페 음료 제조 및 좌석 관리",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "13:00",
+          "actual": "13:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "19:00",
+          "actual": "19:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "16:00",
+          "actual": "16:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "16:30",
+          "actual": "16:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "2",
+          "actual": "2",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10500",
+          "actual": "10500",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 5일",
+          "actual": "매월 5일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "스터디카페 라이트",
+          "actual": "스터디카페 라이트",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "032-000-0000",
+          "actual": "032-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "인천광역시 연수구 송도동 00-0",
+          "actual": "인천광역시 연수구 송도동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "윤봄",
+          "actual": "윤봄",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "인천광역시 연수구 동춘동 00-0",
+          "actual": "인천광역시 연수구 동춘동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-3333-0000",
+          "actual": "010-3333-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "이도담",
+          "actual": "이도담",
+          "correct": true
+        }
+      }
+    },
+    "contract_05": {
+      "note": "일급제, 상여금·기타급여 모두 기재",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2026년 9월 30일",
+          "actual": "2026년 9월 30일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "광주광역시 서구 치평동 피시방 별빛",
+          "actual": "광주광역시 서구 치평동 피시방 별빛",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "카운터 응대 및 매장 청소",
+          "actual": "카운터 응대 및 매장 청소",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "10:00",
+          "actual": "10:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "18:00",
+          "actual": "18:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "13:00",
+          "actual": "13:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "14:00",
+          "actual": "14:00",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "4",
+          "actual": "4",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "목요일",
+          "actual": "목요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "DAILY",
+          "actual": "DAILY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "70000",
+          "actual": "70000",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "있음",
+          "actual": "있음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": "교통비 월 5만원",
+          "actual": "교통비 월 5만원",
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 10일",
+          "actual": "매월 10일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "피시방 별빛",
+          "actual": "피시방 별빛",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "062-000-0000",
+          "actual": "062-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "광주광역시 서구 치평동 00-0",
+          "actual": "광주광역시 서구 치평동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "최바다",
+          "actual": "최바다",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "광주광역시 서구 상무동 00-0",
+          "actual": "광주광역시 서구 상무동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-4444-0000",
+          "actual": "010-4444-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "정우주",
+          "actual": "정우주",
+          "correct": true
+        }
+      }
+    },
+    "contract_06": {
+      "note": "위반: 최저임금 미만 시급 (콤마 포함 금액 표기)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 1월 31일",
+          "actual": "2027년 1월 31일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "울산광역시 남구 삼산동 카페 오늘",
+          "actual": "울산광역시 남구 삼산동 카페 오늘",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "음료 제조",
+          "actual": "음료 제조",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "09:00",
+          "actual": "09:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "15:00",
+          "actual": "15:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "12:00",
+          "actual": "12:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "12:30",
+          "actual": "12:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "5",
+          "actual": "5",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "월요일",
+          "actual": "월요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "9500",
+          "actual": "9500",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 10일",
+          "actual": "매월 10일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "카페 오늘",
+          "actual": "카페 오늘",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "052-000-0000",
+          "actual": "052-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "울산광역시 남구 삼산동 00-0",
+          "actual": "울산광역시 남구 삼산동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "강산",
+          "actual": "강산",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "울산광역시 남구 신정동 00-0",
+          "actual": "울산광역시 남구 신정동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-5555-0000",
+          "actual": "010-5555-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "윤슬",
+          "actual": "윤슬",
+          "correct": true
+        }
+      }
+    },
+    "contract_07": {
+      "note": "위반: 주휴일 칸 공란 (모델이 요일을 지어내지 않는지 확인)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 7월 31일",
+          "actual": "2027년 7월 31 일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "경기도 수원시 영통구 매탄동 편의점 새벽",
+          "actual": "경기도 수원시 영통구 매탄동 편의점 새벽",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "매장 판매",
+          "actual": "매장 판매",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "07:00",
+          "actual": "07:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "13:00",
+          "actual": "13:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "10:00",
+          "actual": "10:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "10:30",
+          "actual": "10:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "4",
+          "actual": "4",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10320",
+          "actual": "10320",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 15일",
+          "actual": "매월 15일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "편의점 새벽 매탄점",
+          "actual": "편의점 새벽 매탄점",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "031-000-0000",
+          "actual": "031-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "경기도 수원시 영통구 매탄동 00-0",
+          "actual": "경기도 수원시 영통구 매탄동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "정하늘",
+          "actual": "정하늘",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "경기도 수원시 영통구 원천동 00-0",
+          "actual": "경기도 수원시 영통구 원천동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-6666-0000",
+          "actual": "010-6666-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "한소리",
+          "actual": "한소리",
+          "correct": true
+        }
+      }
+    },
+    "contract_08": {
+      "note": "위반: 휴게시간 항목 자체가 계약서에 없음",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1 일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 1월 31일",
+          "actual": "2027년 1월 31 일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "강원특별자치도 춘천시 효자동 분식집 청춘",
+          "actual": "강원특별자치도 춘천시 효자동 분식집 청춘",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "주방 보조",
+          "actual": "주방 보조",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "10:00",
+          "actual": "10:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "14:00",
+          "actual": "14:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "3",
+          "actual": "3",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "수요일",
+          "actual": "수요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10320",
+          "actual": "10320",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 10일",
+          "actual": "매월 10일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "분식집 청춘",
+          "actual": "분식집 청춘",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "033-000-0000",
+          "actual": "033-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "강원특별자치도 춘천시 효자동 00-0",
+          "actual": "강원특별자치도 춘천시 효자동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "임가온",
+          "actual": "임가온",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "강원특별자치도 춘천시 후평동 00-0",
+          "actual": "강원특별자치도 춘천시 후평동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-7777-0000",
+          "actual": "010-7777-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "서지안",
+          "actual": "서지안",
+          "correct": true
+        }
+      }
+    },
+    "contract_09": {
+      "note": "위반: 8시간 근무에 휴게 30분만 기재 (시간 자체는 정확히 읽혀야 함)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2027년 7월 31일",
+          "actual": "2027년 7월 31 일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "충청남도 천안시 서북구 불당동 카페 하루",
+          "actual": "충청남도 천안시 서북구 불당동 카페 하루",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "음료 제조 및 서빙",
+          "actual": "음료 제조 및 서빙",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "09:00",
+          "actual": "09:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "18:00",
+          "actual": "18:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "13:00",
+          "actual": "13:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "13:30",
+          "actual": "13:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "5",
+          "actual": "5",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": "금요일",
+          "actual": "금요일",
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "HOURLY",
+          "actual": "HOURLY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "10320",
+          "actual": "10320",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 20일",
+          "actual": "매월 20일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "카페 하루",
+          "actual": "카페 하루",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": "041-000-0000",
+          "actual": "041-000-0000",
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "충청남도 천안시 서북구 불당동 00-0",
+          "actual": "충청남도 천안시 서북구 불당동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "노을",
+          "actual": "노을",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "충청남도 천안시 서북구 쌍용동 00-0",
+          "actual": "충청남도 천안시 서북구 쌍용동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-8888-0000",
+          "actual": "010-8888-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "배가람",
+          "actual": "배가람",
+          "correct": true
+        }
+      }
+    },
+    "contract_10": {
+      "note": "일급제 + 사업주 전화번호 미기재 (선택 필드 NOT_FOUND 확인)",
+      "fields": {
+        "contract_start": {
+          "expected": "2026년 8월 1일",
+          "actual": "2026년 8월 1일",
+          "correct": true
+        },
+        "contract_end": {
+          "expected": "2026년 10월 31일",
+          "actual": "2026년 10월 31 일",
+          "correct": true
+        },
+        "workplace": {
+          "expected": "전라북도 전주시 완산구 효자동 서점 책방골목",
+          "actual": "전라북도 전주시 완산구 효자동 서점 책방골목",
+          "correct": true
+        },
+        "job_description": {
+          "expected": "매장 정리 및 손님 응대",
+          "actual": "매장 정리 및 손님 응대",
+          "correct": true
+        },
+        "work_start_time": {
+          "expected": "12:00",
+          "actual": "12:00",
+          "correct": true
+        },
+        "work_end_time": {
+          "expected": "17:00",
+          "actual": "17:00",
+          "correct": true
+        },
+        "break_start_time": {
+          "expected": "14:00",
+          "actual": "14:00",
+          "correct": true
+        },
+        "break_end_time": {
+          "expected": "14:30",
+          "actual": "14:30",
+          "correct": true
+        },
+        "work_days_per_week": {
+          "expected": "3",
+          "actual": "3",
+          "correct": true
+        },
+        "weekly_holiday_day": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "wage_type": {
+          "expected": "DAILY",
+          "actual": "DAILY",
+          "correct": true
+        },
+        "wage_amount": {
+          "expected": "45000",
+          "actual": "45000",
+          "correct": true
+        },
+        "has_bonus": {
+          "expected": "없음",
+          "actual": "없음",
+          "correct": true
+        },
+        "other_allowance": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "payday": {
+          "expected": "매월 10일",
+          "actual": "매월 10일",
+          "correct": true
+        },
+        "payment_method": {
+          "expected": "근로자 명의 예금통장에 입금",
+          "actual": "근로자 명의 예금통장에 입금",
+          "correct": true
+        },
+        "employer_business_name": {
+          "expected": "서점 책방골목",
+          "actual": "서점 책방골목",
+          "correct": true
+        },
+        "employer_phone": {
+          "expected": null,
+          "actual": null,
+          "correct": true
+        },
+        "employer_address": {
+          "expected": "전라북도 전주시 완산구 효자동 00-0",
+          "actual": "전라북도 전주시 완산구 효자동 00-0",
+          "correct": true
+        },
+        "employer_name": {
+          "expected": "송이든",
+          "actual": "송이든",
+          "correct": true
+        },
+        "worker_address": {
+          "expected": "전라북도 전주시 완산구 서신동 00-0",
+          "actual": "전라북도 전주시 완산구 서신동 00-0",
+          "correct": true
+        },
+        "worker_contact": {
+          "expected": "010-9999-0000",
+          "actual": "010-9999-0000",
+          "correct": true
+        },
+        "worker_name": {
+          "expected": "문가을",
+          "actual": "문가을",
+          "correct": true
+        }
+      }
+    }
+  },
+  "summary": {
+    "per_field": {
+      "contract_start": {
+        "correct": 10,
+        "total": 10
+      },
+      "contract_end": {
+        "correct": 10,
+        "total": 10
+      },
+      "workplace": {
+        "correct": 10,
+        "total": 10
+      },
+      "job_description": {
+        "correct": 10,
+        "total": 10
+      },
+      "work_start_time": {
+        "correct": 10,
+        "total": 10
+      },
+      "work_end_time": {
+        "correct": 10,
+        "total": 10
+      },
+      "break_start_time": {
+        "correct": 10,
+        "total": 10
+      },
+      "break_end_time": {
+        "correct": 10,
+        "total": 10
+      },
+      "work_days_per_week": {
+        "correct": 10,
+        "total": 10
+      },
+      "weekly_holiday_day": {
+        "correct": 10,
+        "total": 10
+      },
+      "wage_type": {
+        "correct": 10,
+        "total": 10
+      },
+      "wage_amount": {
+        "correct": 10,
+        "total": 10
+      },
+      "has_bonus": {
+        "correct": 10,
+        "total": 10
+      },
+      "other_allowance": {
+        "correct": 10,
+        "total": 10
+      },
+      "payday": {
+        "correct": 10,
+        "total": 10
+      },
+      "payment_method": {
+        "correct": 10,
+        "total": 10
+      },
+      "employer_business_name": {
+        "correct": 10,
+        "total": 10
+      },
+      "employer_phone": {
+        "correct": 10,
+        "total": 10
+      },
+      "employer_address": {
+        "correct": 10,
+        "total": 10
+      },
+      "employer_name": {
+        "correct": 10,
+        "total": 10
+      },
+      "worker_address": {
+        "correct": 10,
+        "total": 10
+      },
+      "worker_contact": {
+        "correct": 10,
+        "total": 10
+      },
+      "worker_name": {
+        "correct": 10,
+        "total": 10
+      }
+    },
+    "overall": {
+      "correct": 230,
+      "total": 230
+    },
+    "core_fields": {
+      "correct": 40,
+      "total": 40,
+      "fields": [
+        "wage_amount",
+        "work_start_time",
+        "break_start_time",
+        "contract_start"
+      ]
+    }
+  }
+}
