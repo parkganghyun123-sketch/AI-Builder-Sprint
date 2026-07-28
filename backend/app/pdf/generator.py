@@ -10,6 +10,7 @@
   WeasyPrint는 이 세 가지를 모두 만족한다.
 """
 
+import re
 from datetime import date
 from pathlib import Path
 
@@ -66,6 +67,32 @@ def _split_time(value) -> tuple[str, str]:
     return h, (m or "00")
 
 
+def _money(value) -> str:
+    """
+    금액 → 천단위 콤마 문자열.
+
+    사용자가 '2,100,000', '210만원', 시급 '10030원' 등 다양하게 넣는다.
+    숫자로 못 바꾸는 값이 와도 PDF 생성을 중단시키지 않고 원문을 그대로 싣는다.
+    (계약서 생성 실패보다, 사람이 보고 고칠 수 있게 표시하는 편이 안전하다)
+    """
+    if value is None or value == "":
+        return ""
+
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return f"{int(value):,}"
+
+    s = str(value).strip()
+    # '2,100,000원' → '2100000'
+    digits = re.sub(r"[^\d]", "", s)
+
+    # 숫자만 남기고 원문에 숫자 외 글자가 섞였는지 확인
+    if digits and re.fullmatch(r"[\d,\s원]*", s):
+        return f"{int(digits):,}"
+
+    # '210만원' 같은 표현이나 알 수 없는 값은 원문 유지
+    return s
+
+
 def render_contract_pdf(
     terms: ContractTerms,
     *,
@@ -79,7 +106,6 @@ def render_contract_pdf(
     근로자가 혼자 입력한 문서(경로 B)는 반드시 True로 호출할 것.
     """
     today = date.today()
-    amount = _v(terms.wage_amount, 0)
 
     start_y, start_m, start_d = _split_date(_v(terms.contract_start))
     end_y, end_m, end_d = _split_date(_v(terms.contract_end))
@@ -106,7 +132,7 @@ def render_contract_pdf(
         "work_days_per_week": _v(terms.work_days_per_week),
         "weekly_holiday_day": _v(terms.weekly_holiday_day),
         # 6. 임금
-        "wage_amount_formatted": f"{int(amount):,}" if amount else "",
+        "wage_amount_formatted": _money(_v(terms.wage_amount)),
         "has_bonus": bool(_v(terms.has_bonus, False)),
         "bonus_amount": "",
         "other_allowance": _v(terms.other_allowance),

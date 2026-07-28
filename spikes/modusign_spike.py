@@ -21,6 +21,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from datetime import datetime
 
 BASE_URL = "https://api.modusign.co.kr"
 
@@ -156,8 +157,14 @@ def send_signature_request() -> None:
     worker_email = os.environ.get("TEST_WORKER_EMAIL", EMAIL)
     owner_email = os.environ.get("TEST_OWNER_EMAIL", EMAIL)
 
+    # ⚠️ 제목에 반드시 시각을 넣는다.
+    #    제목이 매번 같으면 메일함에서 이전 테스트 메일과 구분이 안 되고,
+    #    이미 서명을 마친 옛 문서를 열어보게 된다.
+    stamp = datetime.now().strftime("%m%d-%H%M%S")
+    title = f"[테스트 {stamp}] 근로계약서_김하늘"
+
     payload = {
-        "title": "[테스트] 근로계약서_김하늘",
+        "title": title,
         "file": {"base64": pdf_b64, "extension": "pdf"},
         "participants": [
             {
@@ -176,6 +183,7 @@ def send_signature_request() -> None:
     }
 
     print(f"PDF: {PDF_PATH}")
+    print(f"제목: {title}")
     print(f"1순위 서명(근로자): {worker_email}")
     print(f"2순위 서명(사업주): {owner_email}")
     print("\n발송 중...")
@@ -186,7 +194,8 @@ def send_signature_request() -> None:
     print(f"   문서 ID : {result['id']}")
     print(f"   상태    : {result['status']}")
     print("\n다음:")
-    print("  1. 메일함에서 서명 요청 확인 → 서명")
+    print(f"  1. 메일함에서 제목이 '{title}' 인 메일을 여세요.")
+    print("     ⚠️ 제목의 시각이 위와 다르면 이전 테스트 메일입니다. 열지 마세요.")
     print("  2. 서명란이 '(서명)' 자리에 정확히 있는지 확인")
     print(f"  3. python3 spikes/modusign_spike.py status {result['id']}")
 
@@ -214,10 +223,30 @@ def check_status(document_id: str) -> None:
 
 # ------------------------------------------------------------ main
 
+def list_documents() -> None:
+    """
+    최근 문서를 최신순으로 보여준다.
+    메일함의 어떤 메일이 방금 보낸 것인지 대조할 때 쓴다.
+    """
+    result = request("GET", "/documents?offset=0&limit=10")
+    docs = result.get("documents") or result.get("data") or []
+
+    if not docs:
+        print("문서가 없습니다.")
+        return
+
+    print(f"최근 문서 {len(docs)}건 (최신순)\n")
+    for i, d in enumerate(docs, 1):
+        mark = "← 최신" if i == 1 else ""
+        print(f"  {i:2}. {d.get('title', '?')}")
+        print(f"      {d.get('status', '?'):<16} {d.get('id', '?')} {mark}")
+
+
 COMMANDS = {
     "auth": lambda: check_auth(),
     "check": lambda: check_pdf(),
     "send": lambda: send_signature_request(),
+    "list": lambda: list_documents(),
 }
 
 if __name__ == "__main__":
