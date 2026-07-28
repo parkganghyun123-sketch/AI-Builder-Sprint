@@ -18,6 +18,12 @@ from app.routers import contracts, extract, sign
 
 logging.basicConfig(level=logging.INFO)
 
+# WeasyPrint가 PDF를 만들 때마다 fontTools가 글리프 목록을 통째로 쏟아낸다.
+# 계약서 한 장에 수백 줄이 나와서 정작 봐야 할 로그가 묻힌다.
+# 이 라이브러리들은 경고 이상만 남긴다.
+for _noisy in ("fontTools", "weasyprint", "PIL", "httpx", "httpcore"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
 app = FastAPI(title="FairSign API", version="0.1.0")
 
 app.add_middleware(

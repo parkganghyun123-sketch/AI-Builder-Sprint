@@ -10,9 +10,15 @@
     → 이 파일로 modusign_spike.py send 를 돌린다.
 """
 
+import logging
 from pathlib import Path
 
-from app.pdf.generator import render_contract_pdf, verify_anchors
+# WeasyPrint가 PDF를 만들 때마다 fontTools가 글리프 목록을 수백 줄 쏟아낸다.
+# import 전에 눌러둔다.
+for _noisy in ("fontTools", "weasyprint", "PIL"):
+    logging.getLogger(_noisy).setLevel(logging.WARNING)
+
+from app.pdf.generator import render_contract_pdf, verify_anchors  # noqa: E402
 from app.schemas import Confidence, ContractTerms, ExtractedField, WageType
 
 
