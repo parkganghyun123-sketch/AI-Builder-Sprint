@@ -291,3 +291,33 @@ class TestConfidenceScore:
 
     def test_missing_value_is_not_found_even_with_high_score(self):
         assert _confidence_from_upstage("high", False, 0.99) == Confidence.NOT_FOUND
+
+
+class TestWhitespaceNormalization:
+    """
+    같은 사진을 두 번 넣어도 모델이 공백을 다르게 돌려준다(실행마다 변동).
+      1차: '2026년 8월 1 일'  → 근거 찾음
+      2차: '2026년 8월 1일'   → 근거 못 찾음
+    공백을 무시하고 비교해 두 경우 모두 잡는다.
+    """
+
+    def test_squeezed_date_still_matches(self):
+        assert (
+            _find_source_text(CONTRACT_TEXT, "2026년 8월 1일", "contract_start")
+            == "1. 근로계약기간 : 2026년 8월 1 일 부터 2027년 1월 31 일 까지"
+        )
+
+    def test_original_spacing_still_matches(self):
+        assert (
+            _find_source_text(CONTRACT_TEXT, "2026년 8월 1 일", "contract_start")
+            == "1. 근로계약기간 : 2026년 8월 1 일 부터 2027년 1월 31 일 까지"
+        )
+
+    def test_whitespace_rule_does_not_break_address_disambiguation(self):
+        """공백 무시가 주소 오탐을 되살리지 않는지 확인."""
+        assert (
+            _find_source_text(
+                CONTRACT_TEXT, "부산광역시 금정구 구서동 00-0", "worker_address"
+            )
+            == "(근로자) 주 소 : 부산광역시 금정구 구서동 00-0"
+        )

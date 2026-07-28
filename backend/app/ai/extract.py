@@ -198,6 +198,11 @@ def _digits(s: str) -> str:
     return "".join(ch for ch in s if ch.isdigit())
 
 
+def _squeeze(s: str) -> str:
+    """공백 전부 제거. '2026년 8월 1 일' → '2026년8월1일'"""
+    return "".join(s.split())
+
+
 def _line_matches(line: str, needle: str) -> bool:
     """
     한 줄이 값을 담고 있는지 판단.
@@ -209,6 +214,12 @@ def _line_matches(line: str, needle: str) -> bool:
     숫자만 남겨 비교하면 두 경우 모두 잡힌다.
     """
     if needle in line:
+        return True
+
+    # 공백만 다른 경우. 모델이 '2026년 8월 1 일' 을 '2026년 8월 1일' 로
+    # 정규화해 돌려주는 일이 있다(같은 사진에서도 실행마다 달라진다).
+    # 공백을 지우고 비교하면 잡힌다.
+    if _squeeze(needle) in _squeeze(line):
         return True
 
     # 숫자 대조는 값이 순수 숫자·기호일 때만 쓴다.
