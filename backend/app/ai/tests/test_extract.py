@@ -16,6 +16,7 @@ from app.ai.extract import (
     ExtractError,
     _confidence_from_upstage,
     _find_source_text,
+    _normalize_extracted_value,
     build_contract_terms,
     build_extraction_schema,
     call_information_extract,
@@ -102,6 +103,30 @@ class TestConfidenceMapping:
     def test_missing_value_is_not_found_regardless_of_confidence(self):
         assert _confidence_from_upstage("high", False) == Confidence.NOT_FOUND
         assert _confidence_from_upstage(None, False) == Confidence.NOT_FOUND
+
+
+class TestNormalizeExtractedValue:
+    """
+    평가셋(app/evaluation/)을 실제 API로 돌려서 발견한 실제 결함 재현.
+    빈 칸 옆 라벨의 콜론만 값으로 뽑거나(':'), 못 찾음을 텍스트 'null'로
+    흘리는 경우(': null')가 실제로 관측되어 정규화가 필요했다.
+    """
+
+    def test_colon_only_becomes_none(self):
+        assert _normalize_extracted_value(":") is None
+
+    def test_null_token_with_leading_punctuation_becomes_none(self):
+        assert _normalize_extracted_value(": null") is None
+
+    def test_blank_string_becomes_none(self):
+        assert _normalize_extracted_value("   ") is None
+
+    def test_meaningful_negative_value_is_kept(self):
+        """'없음'은 실제 의미 있는 값이다 (플레이스홀더가 아님)."""
+        assert _normalize_extracted_value("없음") == "없음"
+
+    def test_non_string_value_passes_through(self):
+        assert _normalize_extracted_value(None) is None
 
 
 class TestFindSourceText:

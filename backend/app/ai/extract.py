@@ -106,6 +106,29 @@ def build_extraction_schema() -> dict:
     }
 
 
+_PUNCTUATION_ONLY = re.compile(r"^[\W_]+$")
+_LEADING_PUNCTUATION = re.compile(r"^[\W_]+")
+_NULL_TOKENS = {"null", "none", "n/a", "na"}
+
+
+def _normalize_extracted_value(value):
+    """
+    모델이 '못 찾음'을 JSON null 대신 텍스트로 흘리는 경우가 실제로 관측된다
+    (예: 빈 칸 옆 라벨의 ':' 만 값으로 뽑거나, ': null' 처럼 문자열로 반환).
+    구두점뿐이거나 'null' 류 플레이스홀더면 NOT_FOUND로 취급한다.
+    '없음'처럼 실제 의미가 있는 값은 건드리지 않는다.
+    """
+    if not isinstance(value, str):
+        return value
+    stripped = value.strip()
+    if not stripped or _PUNCTUATION_ONLY.match(stripped):
+        return None
+    core = _LEADING_PUNCTUATION.sub("", stripped).strip()
+    if core.lower() in _NULL_TOKENS:
+        return None
+    return value
+
+
 # confidence_score(0~1)가 이 값 이상이면 HIGH.
 #
 # 응답에는 등급 문자열('high'/'low')과 숫자 점수가 함께 오는데 둘이 어긋난다.
@@ -344,9 +367,7 @@ def build_contract_terms(
 
     fields: dict[str, ExtractedField] = {}
     for name in FIELD_DESCRIPTIONS:
-        value = values.get(name)
-        if isinstance(value, str) and not value.strip():
-            value = None  # 모델이 빈 문자열로 "없음"을 표현하는 경우가 있다
+        value = _normalize_extracted_value(values.get(name))
         fields[name] = ExtractedField(
             value=value,
             confidence=_confidence_from_upstage(
