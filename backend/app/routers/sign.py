@@ -8,11 +8,13 @@
 ⚠️ 저장소는 아직 메모리다. DB 붙이면 store를 교체할 것.
 """
 
+import hmac
 import logging
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
+from app.config import settings
 from app.pdf.generator import render_contract_pdf
 from app.schemas import ContractTerms, DocumentStatus, EntryPath
 from app.signing import modusign
@@ -159,19 +161,43 @@ EVENT_TO_STATUS: dict[str, DocumentStatus] = {
 }
 
 
+def _check_token(token: str | None) -> None:
+    """
+    웹훅 호출자 확인.
+
+    모두싸인은 웹훅 서명(HMAC) 기능을 제공하지 않는다.
+    (워크스페이스 → Webhook 설정에 시크릿 항목이 없음)
+    그래서 URL 경로에 무작위 토큰을 넣어 URL 자체를 비밀로 삼는다.
+
+    토큰이 비어 있으면 검증을 건너뛴다 — 로컬 개발용.
+
+    ⚠️ 존재 자체를 숨기기 위해 401이 아니라 404를 낸다.
+    ⚠️ 타이밍 공격을 막기 위해 == 대신 compare_digest 를 쓴다.
+    """
+    expected = settings.webhook_path_token
+    if not expected:
+        return
+    if not token or not hmac.compare_digest(token, expected):
+        log.warning("웹훅 토큰 불일치 — 요청 거부")
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+@router.post("/webhooks/modusign/{token}")
 @router.post("/webhooks/modusign")
-async def webhook(request: Request) -> dict:
+async def webhook(request: Request, token: str | None = None) -> dict:
     """
     모두싸인 이벤트 수신.
 
-    설정 위치: 모두싸인 설정 → Webhook
+    설정 위치: 모두싸인 설정 → 워크스페이스 관리 → Webhook
     구독 이벤트는 EVENT_TO_STATUS의 6가지만 켠다.
 
     이벤트 내용은 상태의 근거로 쓰지 않는다. "확인해보라"는 신호로만 받고,
     실제 상태는 reconcile()이 API에서 읽는다. 이유는 reconcile() 주석 참고.
-
-    TODO: 서명 검증(MODUSIGN_WEBHOOK_SECRET) 추가 — 검증 방식 확인 필요
+    따라서 웹훅을 위조해도 상태를 조작할 수는 없고,
+    토큰은 엔드포인트 남용(쿼터 소모)을 막기 위한 것이다.
     """
+    _check_token(token)
+
     payload = await request.json()
 
     event_type = (payload.get("event") or {}).get("type")
@@ -206,10 +232,12 @@ async def webhook(request: Request) -> dict:
     return {"received": True}
 
 
+@router.get("/webhooks/modusign/{token}")
 @router.get("/webhooks/modusign")
-async def webhook_probe() -> dict:
+async def webhook_probe(token: str | None = None) -> dict:
     """
     모두싸인이 등록 시 URL 유효성을 GET으로 확인하는 경우가 있다.
     405가 뜨지 않도록 200을 돌려준다.
     """
+    _check_token(token)
     return {"status": "ok"}

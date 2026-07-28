@@ -11,7 +11,16 @@ class Settings(BaseSettings):
     # 모두싸인
     modusign_email: str = ""
     modusign_api_key: str = ""
-    modusign_webhook_secret: str = ""
+
+    # 웹훅 URL에 넣는 무작위 토큰.
+    #
+    # 모두싸인은 웹훅 서명(HMAC) 기능을 제공하지 않는다.
+    # (워크스페이스 → Webhook 설정에 시크릿 항목이 없음)
+    # 그래서 URL 자체를 비밀로 삼아 아무나 호출하지 못하게 한다.
+    #
+    # 값을 비워두면 검증하지 않는다 — 로컬 개발용.
+    #   생성: openssl rand -hex 16
+    webhook_path_token: str = ""
 
     # Upstage
     upstage_api_key: str = ""
