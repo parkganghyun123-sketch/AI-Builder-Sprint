@@ -1,0 +1,30 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  min-height: 100vh;
+  background-image: linear-gradient(#f0faff 0%, #ffffff 45%, #f8fdff 100%);
+  background-attachment: fixed;
+  color: #102a43;
+  font-family: Pretendard, Inter, "Noto Sans KR", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 브랜드 그라데이션 텍스트 */
+.text-gradient {
+  background-image: linear-gradient(to right, #22c7c7, #38bdf8);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
