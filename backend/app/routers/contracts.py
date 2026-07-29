@@ -2,6 +2,7 @@
 계약 검증·문서 생성 라우터 (C 담당)
 
   POST /contracts/validate       조건 → 법정 기준 판정
+  POST /contracts/message        판정 → 사장님께 보낼 문의 문구
   POST /contracts/preview        조건 → 계약서 PDF 미리보기
   POST /contracts/analyze-sign   조건 → 검증 → PDF → 서명 요청 (세로 흐름)
 
@@ -13,6 +14,8 @@ import logging
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from app.bridge.numbers import verify
+from app.bridge.templates import build_lines, build_message
 from app.pdf.generator import render_contract_pdf
 from app.schemas import (
     CheckStatus,
@@ -46,6 +49,49 @@ async def validate_terms(body: ValidateRequest) -> ValidationReport:
     AI 추출 직후 값을 그대로 넣으면 안 된다.
     """
     return validate(body.terms)
+
+
+# ============================================================
+# 1-2. "말 꺼내기" 문구
+# ============================================================
+
+
+class MessageResponse(BaseModel):
+    message: str | None = None
+    lines: list[str] = []
+    numbers_verified: bool = True
+
+
+@router.post("/contracts/message", response_model=MessageResponse)
+async def build_owner_message(body: ValidateRequest) -> MessageResponse:
+    """
+    판정 결과 → 사장님께 보낼 문의 메시지.
+
+    계약서가 최저임금 미달인 걸 아는 것과, 그걸 사장님에게 말하는 것은
+    다른 문제다. 이 엔드포인트는 후자를 돕는다.
+
+    ⚠️ 문구의 숫자는 전부 ValidationReport에서 꺼낸다. LLM을 쓰지 않는다.
+       반환 전 app.bridge.numbers 로 한 번 더 대조한다.
+       (LLM 버전을 얹더라도 이 검증은 그대로 통과해야 한다)
+
+    문제가 없으면 message는 null이다.
+    """
+    report = validate(body.terms)
+    message = build_message(report)
+
+    if message is None:
+        return MessageResponse(message=None, lines=[])
+
+    ok, unverified = verify(message, report, body.terms)
+    if not ok:
+        # 템플릿은 구조상 여기 올 수 없다. 오면 템플릿이 깨진 것이므로 로그를 남긴다.
+        log.error("문구에 근거 없는 숫자: %s", unverified)
+
+    return MessageResponse(
+        message=message,
+        lines=build_lines(report),
+        numbers_verified=ok,
+    )
 
 
 # ============================================================
