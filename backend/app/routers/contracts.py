@@ -128,13 +128,31 @@ async def build_owner_message(body: ValidateRequest) -> MessageResponse:
 # ============================================================
 
 
-def build_verification_note(report: ValidationReport) -> str:
+# 경로 B(근로자가 조건을 직접 입력)로 만들어진 문서에 붙이는 출처 표시.
+#
+# 서명할 문서에는 '확인 전 초안' 워터마크를 찍지 않는다(analyze_and_sign 주석 참고).
+# 대신 조건의 출처를 문장으로 밝혀, 사업주가 무엇에 서명하는지 알 수 있게 한다.
+MANUAL_ENTRY_NOTICE = (
+    "※ 본 문서의 근로조건은 근로자가 구두로 안내받은 내용을 직접 입력한 것입니다. "
+    "사실과 다른 부분이 있으면 서명 전에 수정을 요청해 주세요."
+)
+
+
+def build_verification_note(
+    report: ValidationReport,
+    entry_path: EntryPath = EntryPath.PHOTO,
+) -> str:
     """
     판정 결과를 계약서 하단에 넣을 한 문단으로 만든다.
 
     ⚠️ 여기서 새로운 사실이나 숫자를 만들지 않는다.
        CheckResult가 담고 있는 값만 옮긴다.
     """
+    prefix = (
+        f"{MANUAL_ENTRY_NOTICE}\n\n"
+        if entry_path == EntryPath.MANUAL
+        else ""
+    )
     problems = [
         c
         for c in report.checks
@@ -142,8 +160,8 @@ def build_verification_note(report: ValidationReport) -> str:
     ]
 
     if not problems:
-        return (
-            "※ 본 요청서는 FairSign에서 지원하는 2026년 법정 기준 항목을 "
+        return prefix + (
+            "※ 본 문서는 FairSign에서 지원하는 2026년 법정 기준 항목을 "
             "확인했으며, 확인된 범위에서 기준을 벗어나거나 누락된 항목이 "
             "발견되지 않았습니다. 법률 자문이 아닙니다."
         )
@@ -157,10 +175,10 @@ def build_verification_note(report: ValidationReport) -> str:
             evidence.append(f"안내: {check.detail}")
         lines.append(f"· {check.label}: {' / '.join(evidence) or '확인 필요'}")
 
-    return (
+    return prefix + (
         "※ FairSign 확인 결과(2026년 기준), 아래 항목은 지원하는 기본 기준을 "
         "벗어났거나 확인된 입력에서 찾지 못했거나 추가 확인이 필요합니다. "
-        "이 요청서는 해당 결과를 자동으로 수정하지 않습니다.\n"
+        "이 문서는 해당 결과를 자동으로 수정하지 않습니다.\n"
         + "\n".join(lines)
         + "\n법정 기준 자동 계산 결과이며 법률 자문이 아닙니다."
     )
@@ -323,12 +341,7 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
         )
 
     # 3단계 — 확인된 값으로 법정 기준 판정
-    #
-    # ⚠️ 여기서는 _minimize_contact_fields 를 쓰지 않는다.
-    #    판정 전용 경로(/contracts/validate)에서는 연락처를 비우는 게 맞지만,
-    #    이 함수는 실제 계약서 PDF를 만든다. 주소·연락처를 비우면
-    #    표준근로계약서의 당사자 항목이 빈 채로 체결된다.
-    terms = body.terms
+    terms = _minimize_contact_fields(body.terms)
     report = _validate_with_optional_birth_date(terms, body.worker_birth_date)
 
     if report.has_problem and not body.proceed_with_violations:
@@ -359,20 +372,27 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
 
     pdf = render_contract_pdf(
         terms,
-        # 경로 B(근로자가 혼자 입력)만 초안 워터마크를 찍는다.
+        # 서명할 문서에는 '확인 전 초안' 워터마크를 찍지 않는다.
         #
-        # 미리보기(/contracts/preview)와 같은 기준이다.
-        # 경로 A는 실제 계약서에서 읽은 조건이고, 사용자가 확인 관문을 통과했으며,
-        # 양측이 이 문서에 서명한다 — 서명이 곧 확인이다.
-        # 체결된 계약서에 '확인 전 초안' 워터마크가 남으면 안 된다.
-        is_draft=body.entry_path == EntryPath.MANUAL,
-        verification_note=build_verification_note(report),
+        # 워터마크의 원래 목적은 경로 B(근로자가 혼자 입력)에서
+        # 사장님이 그 문서를 이미 합의된 계약서로 오해하는 것을 막는 것이다.
+        # 그건 서명 전 단계(/contracts/preview)의 문제다.
+        #
+        # 이 문서는 양측이 읽고 서명한다 — 서명이 곧 확인이다.
+        # 체결된 문서에 '초안' 표기가 남으면
+        #   · 분쟁 시 "초안인 줄 알았다"는 주장의 빌미가 되고
+        #   · 근로기준법 제17조 교부 의무를 이행한 증거로도 약해진다
+        #
+        # 경로 B의 투명성은 워터마크가 아니라 검증 문단의 출처 표시로 확보한다.
+        is_draft=False,
+        verification_note=build_verification_note(report, body.entry_path),
     )
 
     try:
         result = await modusign.request_signature(
             pdf_bytes=pdf,
-            title="근로조건 확인 요청서",
+            # 이름을 넣지 않는다. 모두싸인 문서 목록·메일 제목에 노출된다.
+            title="근로계약서",
             worker_name=body.worker_name,
             worker_email=body.worker_email,
             employer_name=body.employer_name,

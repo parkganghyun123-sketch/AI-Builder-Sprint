@@ -19,6 +19,7 @@ sys.modules.setdefault("app.pdf.generator", pdf_generator_stub)
 
 from app.ai.document_parse import DocumentParseError  # noqa: E402
 from app.ai.extract import ExtractError  # noqa: E402
+from app.review.fields import build_review_items  # noqa: E402
 from app.routers import contracts, sign  # noqa: E402
 from app.routers import extract as extract_router  # noqa: E402
 from app.schemas import (  # noqa: E402
@@ -35,6 +36,22 @@ def _field(value=None, source_text: str | None = None) -> ExtractedField:
         confidence="NOT_FOUND" if value is None else "HIGH",
         source_text=source_text,
     )
+
+
+def _all_must_confirm(terms) -> list[str]:
+    """
+    확인 관문(app/review/)을 통과한 상태를 만든다.
+
+    임금·신원 항목은 AI 신뢰도와 무관하게 사용자 확인을 요구한다.
+    실측에서 '박강현' → '박강헌' 이 HIGH 로 나와, 신뢰도만으로는
+    막을 수 없다는 게 확인됐기 때문이다.
+    이 테스트들은 확인을 마친 뒤의 동작을 검증하므로 전부 확인 처리한다.
+    """
+    return [
+        item["field"]
+        for item in build_review_items(terms)
+        if item["priority"] == "high"
+    ]
 
 
 def _terms() -> ContractTerms:
@@ -214,12 +231,18 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
                 employer_email="employer@example.com",
                 worker_birth_date="2009-07-31",
                 entry_path="PHOTO",
+                confirmed_fields=_all_must_confirm(_terms()),
             )
         )
     )
 
-    assert captured["is_draft"] is True
-    assert captured["title"] == "근로조건 확인 요청서"
+    # 서명할 문서에는 '확인 전 초안' 워터마크를 찍지 않는다.
+    # 체결된 계약서에 '초안' 표기가 남으면 분쟁 시 빌미가 되고,
+    # 근로기준법 제17조 교부 의무를 이행한 증거로도 약해진다.
+    # 경로 B의 투명성은 검증 문단의 출처 표시로 확보한다.
+    assert captured["is_draft"] is False
+    # 제목에 이름을 넣지 않는다 — 모두싸인 문서 목록·메일 제목에 노출된다.
+    assert captured["title"] == "근로계약서"
     assert captured["terms"].worker_contact.value is None
     assert captured["worker_birth_date"] == "2009-07-31"
     assert "2009-07-31" not in captured["verification_note"]
@@ -276,6 +299,7 @@ def test_analyze_sign_pdf_note_preserves_minor_limits_with_mock_provider(
                 employer_email="employer@example.com",
                 entry_path="PHOTO",
                 proceed_with_violations=True,
+                confirmed_fields=_all_must_confirm(_minor_problem_terms()),
             )
         )
     )
@@ -319,6 +343,7 @@ def test_analyze_sign_409_preserves_minor_details_without_sending(
                         employer_name="가상 사업주",
                         employer_email="employer@example.com",
                         entry_path="PHOTO",
+                        confirmed_fields=_all_must_confirm(_minor_problem_terms()),
                     )
                 )
             )
@@ -370,6 +395,9 @@ def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None
         )
     )
 
+    # /contracts/sign 은 법정 기준 검증도 확인 관문도 거치지 않는 직접 경로다.
+    # 무엇에 서명하는지 보증할 수 없으므로 초안 표기를 유지한다.
+    # (검증·확인을 마치는 /contracts/analyze-sign 은 워터마크를 찍지 않는다)
     assert captured["is_draft"] is True
     assert captured["title"] == "근로조건 확인 요청서"
     assert "terms" not in sign._store[response.document_id]
