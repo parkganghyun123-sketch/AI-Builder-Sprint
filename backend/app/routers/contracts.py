@@ -192,6 +192,45 @@ class AnalyzeSignResponse(BaseModel):
     message: str
 
 
+def _name_conflicts(body: "AnalyzeSignRequest") -> list[dict]:
+    """
+    계약서에 적힌 이름과 서명 요청에 입력한 이름이 다른 경우를 찾는다.
+
+    ⚠️ 어느 쪽이 맞는지 코드는 모른다. 그래서 고르지 않는다.
+
+    실측에서 AI가 '박강현' 을 '박강헌' 으로 읽었지만, 반대로
+    사용자가 입력을 잘못했을 수도 있고, 종이에 정말 다른 이름이
+    적혀 있었을 수도 있다(사장님이 잘못 기재한 경우 등).
+
+    계약서는 종이에 무엇이 적혀 있었는지의 기록이다.
+    입력값으로 조용히 덮어쓰면 그 사실이 사라진다.
+    그래서 덮어쓰지 않고 사용자에게 되돌려 고르게 한다.
+    """
+    conflicts: list[dict] = []
+
+    pairs = (
+        ("worker_name", "근로자 성명", body.worker_name),
+        ("employer_name", "대표자", body.employer_name),
+    )
+    for field_name, label, typed in pairs:
+        typed = (typed or "").strip()
+        if not typed:
+            continue
+
+        on_paper = str(getattr(body.terms, field_name).value or "").strip()
+        if not on_paper or on_paper == typed:
+            continue
+
+        conflicts.append({
+            "field": field_name,
+            "label": label,
+            "on_contract": on_paper,   # 계약서에서 읽은 값
+            "typed": typed,            # 서명 요청에 입력한 값
+        })
+
+    return conflicts
+
+
 @router.post("/contracts/analyze-sign", response_model=AnalyzeSignResponse)
 async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
     """
@@ -222,8 +261,31 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
             },
         )
 
-    # 2단계 — 확인된 값으로 법정 기준 판정
-    report = validate(body.terms)
+    # 2단계 — 계약서의 이름과 입력한 이름이 다른가.
+    #
+    # 어느 쪽이 맞는지 코드는 판단할 수 없으므로 고르지 않고 되돌린다.
+    # 사용자가 계약서 값을 고치거나, 입력을 고쳐서 다시 보내야 한다.
+    conflicts = _name_conflicts(body)
+    if conflicts:
+        log.info("이름 불일치: %s", conflicts)
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "NAME_MISMATCH",
+                "message": "계약서에 적힌 이름과 입력한 이름이 다릅니다.",
+                "conflicts": conflicts,
+                "hint": (
+                    "어느 쪽이 맞는지 확인해 주세요. "
+                    "계약서를 잘못 읽었을 수도, 입력이 잘못됐을 수도, "
+                    "계약서에 실제로 다른 이름이 적혀 있을 수도 있습니다."
+                ),
+            },
+        )
+
+    terms = body.terms
+
+    # 3단계 — 확인된 값으로 법정 기준 판정
+    report = validate(terms)
 
     if report.has_problem and not body.proceed_with_violations:
         problems = [
@@ -241,7 +303,7 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
         )
 
     pdf = render_contract_pdf(
-        body.terms,
+        terms,
         is_draft=False,  # 서명 단계는 양측이 조건을 확인한 것으로 본다
         verification_note=build_verification_note(report),
     )

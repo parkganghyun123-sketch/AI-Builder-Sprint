@@ -52,6 +52,22 @@ IDENTITY_FIELDS = frozenset({
     "employer_business_name",
 })
 
+# 신뢰도와 무관하게 항상 확인받는 항목.
+#
+# ⚠️ 상식 검사(app/ai/extract.py)는 '말이 안 되는 값'만 잡는다.
+#    시급 0원은 잡히지만 10,000원을 16,000원으로 읽으면 못 잡는다.
+#    그럴듯한 금액이라 코드가 이상하다고 판단할 근거가 없고,
+#    그대로 두면 '최저임금 충족'으로 판정되어 위반이 통째로 숨는다.
+#
+#    임금은 이 서비스의 존재 이유다. 여기가 틀리면 나머지가 무의미하다.
+#    그래서 AI가 아무리 자신 있어 해도 사람에게 한 번 묻는다.
+#
+# 확인 항목을 늘리면 사용자가 대충 넘기게 되므로 최소로 유지할 것.
+ALWAYS_CONFIRM = IDENTITY_FIELDS | frozenset({
+    "wage_amount",
+    "wage_type",
+})
+
 # 사람이 읽을 항목 이름
 FIELD_LABELS: dict[str, str] = {
     "contract_start": "계약 시작일",
@@ -93,6 +109,8 @@ def review_reasons(name: str, field) -> list[str]:
         reasons.append("법정 기준 판정에 사용되는 항목입니다")
     if name in IDENTITY_FIELDS:
         reasons.append("계약서에 그대로 기재되는 항목입니다")
+    if name in ("wage_amount", "wage_type"):
+        reasons.append("숫자를 잘못 읽어도 코드가 알아낼 수 없어 직접 확인이 필요합니다")
 
     # 판정·신원 항목이 아니고 신뢰도도 정상이면 확인 불필요
     if name not in JUDGMENT_FIELDS and name not in IDENTITY_FIELDS:
@@ -124,7 +142,7 @@ def priority(name: str, field) -> str:
       여기까지 막으면 빈칸 많은 계약서에서 확인 요구가 쏟아져
       사용자가 아무 생각 없이 다 눌러버린다 — 관문이 무력해진다.
     """
-    if name in IDENTITY_FIELDS:
+    if name in ALWAYS_CONFIRM:
         return "high"
 
     if name in JUDGMENT_FIELDS and field.confidence == Confidence.LOW:

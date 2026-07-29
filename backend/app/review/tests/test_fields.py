@@ -12,6 +12,7 @@
 import pytest
 
 from app.review.fields import (
+    ALWAYS_CONFIRM,
     IDENTITY_FIELDS,
     JUDGMENT_FIELDS,
     build_review_items,
@@ -95,16 +96,22 @@ class TestJudgmentFields:
 
 
 class TestBlocking:
-    def test_measured_problem_fields_are_exactly_the_blockers(self):
-        """실측에서 문제였던 4개가 서명 차단 대상이어야 한다."""
+    def test_measured_problem_fields_are_all_blocked(self):
+        """실측에서 문제였던 항목이 전부 서명 차단 대상이어야 한다."""
         items = build_review_items(make_terms())
         high = {i["field"] for i in items if i["priority"] == "high"}
-        assert high == {
-            "wage_amount",              # 0000 (LOW)
-            "worker_name",              # 박강헌 (HIGH지만 신원)
+        assert {
+            "wage_amount",              # '0000' (LOW로 강등됨)
+            "worker_name",              # '박강헌' (HIGH지만 신원)
             "employer_business_name",   # 신원
             "employer_name",            # 신원
-        }
+        } <= high
+
+    def test_blockers_stay_manageable(self):
+        """확인 요구가 쏟아지면 사용자가 다 눌러버려 관문이 무력해진다."""
+        items = build_review_items(make_terms())
+        high = [i for i in items if i["priority"] == "high"]
+        assert len(high) <= 6, [i["field"] for i in high]
 
     def test_confirming_removes_from_blockers(self):
         terms = make_terms()
@@ -135,3 +142,29 @@ class TestReviewItemShape:
         for item in build_review_items(make_terms()):
             assert item["affects_judgment"] == (item["field"] in JUDGMENT_FIELDS)
             assert item["printed_on_contract"] == (item["field"] in IDENTITY_FIELDS)
+
+
+class TestAlwaysConfirmWage:
+    """
+    상식 검사는 '말이 안 되는 값'만 잡는다.
+    시급 0원은 잡히지만 10,000 → 16,000 은 못 잡는다.
+    그대로 두면 '최저임금 충족'으로 판정되어 위반이 숨는다.
+    """
+
+    def test_plausible_but_possibly_wrong_wage_still_needs_confirmation(self):
+        assert priority("wage_amount", f("16000", Confidence.HIGH)) == "high"
+
+    def test_wage_type_also_always_confirmed(self):
+        assert priority("wage_type", f("HOURLY", Confidence.HIGH)) == "high"
+
+    def test_wage_is_blocked_even_when_confidently_read(self):
+        terms = make_terms(
+            wage_amount=f("16000", Confidence.HIGH),
+            wage_type=f("HOURLY", Confidence.HIGH),
+        )
+        blocked = unconfirmed_high_priority(terms, set())
+        assert "임금 금액" in blocked
+
+    def test_always_confirm_stays_small(self):
+        """확인 항목이 많아지면 사용자가 대충 넘긴다. 최소로 유지한다."""
+        assert len(ALWAYS_CONFIRM) <= 6
