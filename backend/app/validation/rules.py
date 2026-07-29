@@ -46,6 +46,28 @@ def _is_missing(field: ExtractedField) -> bool:
     return isinstance(field.value, str) and not field.value.strip()
 
 
+def _is_unreliable(field: ExtractedField) -> bool:
+    """
+    이 값 하나로 '문제 없음'이라고 말해도 되는가?
+
+    ⚠️ 실측에서 드러난 위험:
+       계약서의 주휴일 칸이 '주휴일 매주 ( ) 요일' 로 비어 있는데
+       모델이 요일을 지어낸 적이 있다. confidence 는 LOW 였지만
+       값이 있다는 이유로 검증이 "주휴일 기재됨 = OK" 로 판정해
+       실제 위반이 가려졌다.
+
+       같은 사진을 두 번 넣었을 때 한 번은 문제 1건, 한 번은 2건이 나왔다.
+
+    그래서 원칙을 둔다:
+       **AI가 자신 없어 하는 값으로는 '문제 없음'이라고 말하지 않는다.**
+
+    누락(MISSING) 판정에는 이 함수를 쓰지 않는다.
+    값이 없다고 보수적으로 경고하는 건 안전한 방향이기 때문이다.
+    위험한 건 반대 방향 — 불확실한 값으로 안심시키는 것이다.
+    """
+    return _is_missing(field) or field.confidence == Confidence.LOW
+
+
 def _minimum_break_minutes(hours_per_day: float) -> int:
     for minimum_hours, minimum_minutes in BREAK_RULES:
         if hours_per_day >= minimum_hours:
@@ -189,6 +211,23 @@ def check_weekly_holiday(terms: ContractTerms) -> CheckResult:
                 "주휴 관련 시간 요건은 충족하지만 계약서에서 주휴일 요일을 "
                 "확인하지 못했습니다. 실제 지급은 소정근로일 개근 등 "
                 "계약서만으로 확인되지 않는 사실관계에 따라 달라질 수 있습니다."
+            ),
+        )
+
+    # 값은 있지만 AI가 자신 없어 하는 경우.
+    # 빈칸에 요일을 지어낸 사례가 있어 OK로 넘기지 않는다. (_is_unreliable 주석 참고)
+    if _is_unreliable(terms.weekly_holiday_day):
+        return CheckResult(
+            code="WEEKLY_HOLIDAY",
+            label="주휴 시간 요건·주휴일",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=WEEKLY_HOLIDAY_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=calculation,
+            detail=(
+                f"계약서에서 주휴일을 '{terms.weekly_holiday_day.value}'(으)로 읽었으나 "
+                "인식 신뢰도가 낮습니다. 계약서 원본에서 주휴일 요일을 직접 "
+                "확인해 주세요. 확인 전에는 기재 여부를 판정하지 않습니다."
             ),
         )
 

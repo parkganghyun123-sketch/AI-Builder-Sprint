@@ -98,8 +98,8 @@ def main() -> None:
 
     if not os.path.exists(image):
         sys.exit(f"사진이 없습니다: {image}")
-    if not EMAIL:
-        sys.exit("TEST_WORKER_EMAIL 또는 MODUSIGN_EMAIL 을 설정하세요.")
+    # 이메일은 3단계(서명 요청)에서만 필요하다.
+    # 추출·검증만 보려는 경우까지 막지 않는다.
 
     print(f"서버 : {base}")
     print(f"사진 : {image}\n")
@@ -141,6 +141,19 @@ def main() -> None:
     print(f"      누락(NOT_FOUND): {missing or '없음'}")
     print(f"      근거 문장 없음  : {no_source or '없음'}")
 
+    # LOW 항목은 값과 근거를 함께 보여준다.
+    #
+    # ⚠️ 여기서 "값은 있는데 근거 문장이 없는" 필드가 가장 위험하다.
+    #    계약서 원문에 없는 값을 모델이 만들어냈다는 신호다.
+    #    실제로 빈칸인 주휴일에 요일이 채워져 위반이 가려진 사례가 있었다.
+    for name in low:
+        field = terms[name]
+        src = field.get("source_text")
+        flag = "  ⚠️ 원문 근거 없음 — 지어냈을 가능성" if not src else ""
+        print(f"        · {name} = {field.get('value')!r}{flag}")
+        if src:
+            print(f"          근거: {src[:60]}")
+
     # ---------------------------------------------------- 2. 검증
     print("\n[2/3] POST /contracts/validate  (코드 판정 — AI 아님)")
     try:
@@ -168,6 +181,13 @@ def main() -> None:
 
     # ------------------------------------------- 3. 계약서 + 서명 요청
     print(f"\n[3/3] POST /contracts/analyze-sign  (문제 {len(problems)}건)")
+
+    if not EMAIL:
+        print("      ⏭  건너뜀 — 서명 요청에는 이메일이 필요합니다.")
+        print("         set -a; source .env; set +a")
+        print("\n✅ 추출 → 검증까지 정상 동작 확인")
+        return
+
     if problems and not force:
         print("      ⚠️ 위반·누락이 있어 서명 요청이 막힙니다 (409). 의도된 동작입니다.")
         print("         실제 서비스에서는 사용자가 조건을 고치거나 알고도 진행합니다.")

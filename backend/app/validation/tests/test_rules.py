@@ -312,3 +312,53 @@ def test_cli_reads_contract_json_and_prints_report(
     assert exit_code == 0
     assert output["checks"][0]["code"] == "MINIMUM_WAGE"
     assert output["checks"][0]["status"] == CheckStatus.OK.value
+
+
+# ============================================================
+# 낮은 신뢰도 값으로 '문제 없음'이라고 말하지 않기
+#
+# 실측에서 나온 위험이다. 계약서의 주휴일 칸이 비어 있는데
+# ('주휴일 매주 ( ) 요일') 모델이 요일을 지어냈고, confidence 는
+# LOW 였지만 값이 있다는 이유로 "주휴일 기재됨 = OK" 로 판정되어
+# 실제 위반이 가려졌다.
+#
+# 같은 사진 두 번 실행에서 문제 1건 / 2건으로 결과가 갈렸다.
+# ============================================================
+
+
+def _weekly_holiday_check(**overrides):
+    report = validate(terms(**overrides))
+    return next(c for c in report.checks if c.code == "WEEKLY_HOLIDAY")
+
+
+def test_low_confidence_weekly_holiday_is_not_ok() -> None:
+    """지어냈을 수 있는 값으로 안심시키지 않는다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.LOW)
+    )
+    assert check.status == CheckStatus.UNKNOWN
+
+
+def test_high_confidence_weekly_holiday_is_ok() -> None:
+    """확실한 값이면 정상 판정한다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.HIGH)
+    )
+    assert check.status == CheckStatus.OK
+
+
+def test_absent_weekly_holiday_is_still_missing() -> None:
+    """
+    값이 없으면 여전히 MISSING 이다.
+    보수적으로 경고하는 방향은 그대로 둔다 — 위험한 건 반대 방향이다.
+    """
+    check = _weekly_holiday_check(weekly_holiday_day=field(None))
+    assert check.status == CheckStatus.MISSING
+
+
+def test_low_confidence_detail_tells_user_to_verify() -> None:
+    """사용자가 원본을 확인하도록 안내해야 한다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.LOW)
+    )
+    assert "확인" in (check.detail or "")
