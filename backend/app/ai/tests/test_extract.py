@@ -9,6 +9,7 @@ spikes/extract_spike.py + spikes/fixtures/ 로 별도 확인했다.
 import json
 from unittest.mock import AsyncMock, patch
 
+import httpx
 import pytest
 
 from app.ai.extract import (
@@ -132,7 +133,10 @@ class TestNormalizeExtractedValue:
 class TestFindSourceText:
     def test_finds_line_containing_value(self):
         text = "1. 근로계약기간 : 2026년 8월 1일 부터\n2. 근무장소 : 서울"
-        assert _find_source_text(text, "2026년 8월 1일") == "1. 근로계약기간 : 2026년 8월 1일 부터"
+        assert (
+            _find_source_text(text, "2026년 8월 1일")
+            == "1. 근로계약기간 : 2026년 8월 1일 부터"
+        )
 
     def test_returns_none_when_not_found(self):
         assert _find_source_text("아무 내용", "존재하지 않는 값") is None
@@ -199,11 +203,29 @@ class TestCallInformationExtract:
         assert kwargs["headers"]["Authorization"] == "Bearer test-key"
 
     @pytest.mark.asyncio
-    async def test_http_error_raises_extract_error(self):
-        fake = FakeResponse(400, text="bad request")
+    async def test_http_error_does_not_include_private_response_body(self):
+        private_body = "가상 근로자 김하늘 private-person@example.com"
+        fake = FakeResponse(400, text=private_body)
         with patch("httpx.AsyncClient.post", new=AsyncMock(return_value=fake)):
-            with pytest.raises(ExtractError):
+            with pytest.raises(ExtractError) as caught:
                 await call_information_extract(b"fake-bytes", "image/png")
+
+        assert private_body not in str(caught.value)
+        assert caught.value.__cause__ is None
+
+    @pytest.mark.asyncio
+    async def test_httpx_error_does_not_include_original_message(self):
+        private_message = "가상 계약서 원문과 private-person@example.com"
+        upstream_error = httpx.ReadTimeout(private_message)
+        with patch(
+            "httpx.AsyncClient.post",
+            new=AsyncMock(side_effect=upstream_error),
+        ):
+            with pytest.raises(ExtractError) as caught:
+                await call_information_extract(b"fake-bytes", "image/png")
+
+        assert private_message not in str(caught.value)
+        assert caught.value.__cause__ is None
 
 
 # ============================================================
@@ -248,13 +270,13 @@ class TestSourceTextMatching:
 
     def test_normalized_time_matches_original_notation(self):
         """'12시 30분' → '12:30' 정규화."""
-        assert "휴게시간" in _find_source_text(
-            CONTRACT_TEXT, "12:30", "break_end_time"
-        )
+        assert "휴게시간" in _find_source_text(CONTRACT_TEXT, "12:30", "break_end_time")
 
     def test_same_value_in_two_fields_picks_right_line(self):
         """'없음'이 상여금·제수당 양쪽에 있어 첫 줄이 이기던 문제."""
-        assert _find_source_text(CONTRACT_TEXT, "없음", "has_bonus") == "- 상여금 : 없음"
+        assert (
+            _find_source_text(CONTRACT_TEXT, "없음", "has_bonus") == "- 상여금 : 없음"
+        )
         assert (
             _find_source_text(CONTRACT_TEXT, "없음", "other_allowance")
             == "- 기타급여(제수당 등) : 없음"

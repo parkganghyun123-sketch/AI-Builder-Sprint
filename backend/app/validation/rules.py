@@ -4,6 +4,7 @@
 """
 
 from collections.abc import Iterable
+from datetime import date
 from math import isfinite
 
 from app.schemas import (
@@ -20,6 +21,15 @@ from app.validation.constants import (
     BREAK_SOURCE_ID,
     MINIMUM_WAGE_2026,
     MINIMUM_WAGE_SOURCE_ID,
+    MINOR_AGE_LIMIT,
+    MINOR_DAILY_HOURS,
+    MINOR_EXT_DAILY_HOURS,
+    MINOR_EXT_WEEKLY_HOURS,
+    MINOR_NIGHT_END,
+    MINOR_NIGHT_SOURCE_ID,
+    MINOR_NIGHT_START,
+    MINOR_SOURCE_ID,
+    MINOR_WEEKLY_HOURS,
     STANDARD_YEAR,
     WEEKLY_HOLIDAY_MIN_HOURS,
     WEEKLY_HOLIDAY_SOURCE_ID,
@@ -28,13 +38,12 @@ from app.validation.constants import (
 MINIMUM_WAGE_BASIS = (
     f"최저임금법 · 2026년 적용 최저임금 고시 ({MINIMUM_WAGE_SOURCE_ID})"
 )
-WEEKLY_HOLIDAY_BASIS = (
-    f"근로기준법 제18조제3항·제55조 ({WEEKLY_HOLIDAY_SOURCE_ID})"
-)
+WEEKLY_HOLIDAY_BASIS = f"근로기준법 제18조제3항·제55조 ({WEEKLY_HOLIDAY_SOURCE_ID})"
 BREAK_TIME_BASIS = f"근로기준법 제54조 ({BREAK_SOURCE_ID})"
+MINOR_WORKING_HOURS_BASIS = f"근로기준법 제69조·2026-07-29 확인 ({MINOR_SOURCE_ID})"
+MINOR_NIGHT_WORK_BASIS = f"근로기준법 제70조·2026-07-29 확인 ({MINOR_NIGHT_SOURCE_ID})"
 REQUIRED_FIELDS_BASIS = (
-    "근로기준법 제17조·고용노동부 표준근로계약서 "
-    "(SRC-LSA-17, SRC-MOEL-CONTRACT-FORMS)"
+    "근로기준법 제17조·고용노동부 표준근로계약서 (SRC-LSA-17, SRC-MOEL-CONTRACT-FORMS)"
 )
 
 
@@ -99,6 +108,328 @@ def _safe_weekly_hours(terms: ContractTerms) -> float | None:
     return weekly_hours
 
 
+def _minor_context(
+    terms: ContractTerms,
+    birth_date: str | None,
+) -> tuple[date, int] | None:
+    """계약 시작일 기준 만 나이가 15세 이상 18세 미만이면 기준일과 나이를 반환한다.
+
+    시스템 현재 시각을 사용하지 않는다. 생년월일 또는 계약 시작일이 없거나 유효한
+    ISO 날짜가 아니면 정확한 적용 시점을 알 수 없어 검사를 생성하지 않는다.
+    """
+
+    if (
+        not isinstance(birth_date, str)
+        or not birth_date.strip()
+        or _is_missing(terms.contract_start)
+    ):
+        return None
+
+    try:
+        born = date.fromisoformat(birth_date.strip())
+        contract_start = date.fromisoformat(str(terms.contract_start.value).strip())
+    except (TypeError, ValueError):
+        return None
+
+    if contract_start.year != STANDARD_YEAR:
+        return None
+
+    age = (
+        contract_start.year
+        - born.year
+        - ((contract_start.month, contract_start.day) < (born.month, born.day))
+    )
+    if not 15 <= age < MINOR_AGE_LIMIT:
+        return None
+    return contract_start, age
+
+
+def _safe_time_minutes(value: str | int | None) -> int | None:
+    """기존 계약 시각 형식을 범위 검증해 자정부터의 분으로 바꾼다."""
+
+    if value is None:
+        return None
+    normalized = str(value).replace("시", ":").replace("분", "").replace(" ", "")
+    parts = normalized.split(":")
+    if len(parts) != 2:
+        return None
+    try:
+        hour, minute = (int(part) for part in parts)
+    except ValueError:
+        return None
+    if not 0 <= hour <= 23 or not 0 <= minute <= 59:
+        return None
+    return hour * 60 + minute
+
+
+def _overlaps(
+    start_a: int,
+    end_a: int,
+    start_b: int,
+    end_b: int,
+) -> bool:
+    return max(start_a, start_b) < min(end_a, end_b)
+
+
+def _minor_work_intervals(
+    terms: ContractTerms,
+) -> list[tuple[int, int]] | None:
+    """자정 넘김과 근무 중 휴게를 반영한 계약상 근로 구간을 반환한다.
+
+    휴게 시각이 없거나 해석할 수 없거나 근무 구간 밖이면 근로시간을 과소 계산하지
+    않도록 해당 휴게를 빼지 않는다.
+    """
+
+    if _is_missing(terms.work_start_time) or _is_missing(terms.work_end_time):
+        return None
+
+    shift_start = _safe_time_minutes(terms.work_start_time.value)
+    shift_end = _safe_time_minutes(terms.work_end_time.value)
+    if shift_start is None or shift_end is None or shift_start == shift_end:
+        return None
+    if shift_end < shift_start:
+        shift_end += 24 * 60
+
+    full_shift = [(shift_start, shift_end)]
+    if _is_missing(terms.break_start_time) or _is_missing(terms.break_end_time):
+        return full_shift
+
+    break_start = _safe_time_minutes(terms.break_start_time.value)
+    break_end = _safe_time_minutes(terms.break_end_time.value)
+    if break_start is None or break_end is None or break_start == break_end:
+        return full_shift
+
+    while break_start < shift_start:
+        break_start += 24 * 60
+    while break_end <= break_start:
+        break_end += 24 * 60
+
+    if not shift_start <= break_start < break_end <= shift_end:
+        return full_shift
+
+    return [
+        interval
+        for interval in (
+            (shift_start, break_start),
+            (break_end, shift_end),
+        )
+        if interval[0] < interval[1]
+    ]
+
+
+def _safe_minor_hours_per_day(terms: ContractTerms) -> float | None:
+    intervals = _minor_work_intervals(terms)
+    if intervals is None:
+        return None
+    hours = sum(end - start for start, end in intervals) / 60
+    if not isfinite(hours) or hours < 0:
+        return None
+    return hours
+
+
+def _safe_minor_weekly_hours(
+    terms: ContractTerms,
+    hours_per_day: float,
+) -> float | None:
+    if _is_missing(terms.work_days_per_week):
+        return None
+    try:
+        work_days = float(terms.work_days_per_week.value)
+        weekly_hours = work_days * hours_per_day
+    except (TypeError, ValueError):
+        return None
+    if not isfinite(work_days) or work_days <= 0:
+        return None
+    if not isfinite(weekly_hours) or weekly_hours < 0:
+        return None
+    return weekly_hours
+
+
+def _minor_age_limit_note(contract_start: date) -> str:
+    return (
+        f"만 나이는 계약 시작일 {contract_start.isoformat()} 기준입니다. "
+        "계약기간 중 만 18세 도달에 따른 시점별 변화는 반영하지 않았습니다."
+    )
+
+
+def check_minor_working_hours(
+    terms: ContractTerms,
+    birth_date: str | None,
+) -> CheckResult | None:
+    """15세 이상 18세 미만자의 계약상 1일·1주 근로시간을 비교한다."""
+
+    context = _minor_context(terms, birth_date)
+    if context is None:
+        return None
+    contract_start, age = context
+    context_text = f"계약 시작일 {contract_start.isoformat()} 기준 만 {age}세"
+
+    hours_per_day = _safe_minor_hours_per_day(terms)
+    if hours_per_day is None:
+        return CheckResult(
+            code="MINOR_WORKING_HOURS",
+            label="18세 미만 근로시간",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=MINOR_WORKING_HOURS_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=f"{context_text} · 1일 소정근로시간 정보 없음",
+            detail=(
+                "시업·종업 시각을 확인할 수 없어 근로시간 기준과 비교하지 못했습니다. "
+                f"{_minor_age_limit_note(contract_start)}"
+            ),
+        )
+
+    weekly_hours = _safe_minor_weekly_hours(terms, hours_per_day)
+    daily_over = hours_per_day > MINOR_DAILY_HOURS
+    weekly_over = weekly_hours is not None and weekly_hours > MINOR_WEEKLY_HOURS
+    daily_extended_limit = MINOR_DAILY_HOURS + MINOR_EXT_DAILY_HOURS
+    weekly_extended_limit = MINOR_WEEKLY_HOURS + MINOR_EXT_WEEKLY_HOURS
+
+    calculation_parts = [
+        context_text,
+        (
+            f"1일 {hours_per_day:g}시간 "
+            f"{'>' if daily_over else '≤'} 기본 {MINOR_DAILY_HOURS:g}시간"
+        ),
+    ]
+    if weekly_hours is not None:
+        calculation_parts.append(
+            f"1주 {weekly_hours:g}시간 "
+            f"{'>' if weekly_over else '≤'} 기본 {MINOR_WEEKLY_HOURS:g}시간"
+        )
+
+    if daily_over or weekly_over:
+        exceeds_extended_limit = hours_per_day > daily_extended_limit or (
+            weekly_hours is not None and weekly_hours > weekly_extended_limit
+        )
+        if exceeds_extended_limit:
+            detail = (
+                "확인된 근로시간이 기본 기준과 당사자 합의가 있을 때의 연장 한도"
+                f"(1일 총 {daily_extended_limit:g}시간, "
+                f"1주 총 {weekly_extended_limit:g}시간)도 초과합니다. "
+                "확인된 계약상 시간만 비교한 결과이며, "
+                f"{_minor_age_limit_note(contract_start)}"
+            )
+        else:
+            detail = (
+                "확인된 근로시간이 1일 7시간 또는 1주 35시간의 기본 기준을 "
+                "초과합니다. 당사자 합의 여부는 입력에서 확인되지 않았습니다. "
+                "합의가 있는 경우에도 1일 1시간, 1주 5시간 범위에서만 "
+                "연장할 수 있어 별도 확인이 필요합니다. "
+                f"{_minor_age_limit_note(contract_start)}"
+            )
+        return CheckResult(
+            code="MINOR_WORKING_HOURS",
+            label="18세 미만 근로시간",
+            status=CheckStatus.VIOLATION,
+            legal_basis=MINOR_WORKING_HOURS_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=" · ".join(calculation_parts),
+            detail=detail,
+        )
+
+    if weekly_hours is None:
+        return CheckResult(
+            code="MINOR_WORKING_HOURS",
+            label="18세 미만 근로시간",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=MINOR_WORKING_HOURS_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=" · ".join([*calculation_parts, "주 근무일 수 정보 없음"]),
+            detail=(
+                "1일 기준은 초과하지 않지만 주 근무일 수를 확인할 수 없어 "
+                "1주 기준은 비교하지 못했습니다. "
+                f"{_minor_age_limit_note(contract_start)}"
+            ),
+        )
+
+    return CheckResult(
+        code="MINOR_WORKING_HOURS",
+        label="18세 미만 근로시간",
+        status=CheckStatus.OK,
+        legal_basis=MINOR_WORKING_HOURS_BASIS,
+        standard_year=STANDARD_YEAR,
+        calculation=" · ".join(calculation_parts),
+        detail=(
+            "확인된 계약상 근로시간이 1일 7시간과 1주 35시간의 기본 기준을 "
+            f"초과하지 않습니다. {_minor_age_limit_note(contract_start)}"
+        ),
+    )
+
+
+def check_minor_night_work(
+    terms: ContractTerms,
+    birth_date: str | None,
+) -> CheckResult | None:
+    """15세 이상 18세 미만자의 계약 시각과 22:00~06:00 겹침을 확인한다."""
+
+    context = _minor_context(terms, birth_date)
+    if context is None:
+        return None
+    contract_start, age = context
+    context_text = f"계약 시작일 {contract_start.isoformat()} 기준 만 {age}세"
+
+    work_intervals = _minor_work_intervals(terms)
+    if work_intervals is None:
+        return CheckResult(
+            code="MINOR_NIGHT_WORK",
+            label="18세 미만 야간근로",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=MINOR_NIGHT_WORK_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=f"{context_text} · 근무 시각 정보 없음",
+            detail=(
+                "시업·종업 시각을 해석할 수 없어 22:00~06:00 시간대와의 "
+                f"겹침을 확인하지 못했습니다. {_minor_age_limit_note(contract_start)}"
+            ),
+        )
+
+    night_start = _safe_time_minutes(MINOR_NIGHT_START)
+    night_end = _safe_time_minutes(MINOR_NIGHT_END)
+    assert night_start is not None and night_end is not None
+    overlaps_night = any(
+        _overlaps(start, end, 0, night_end)
+        or _overlaps(start, end, night_start, 24 * 60 + night_end)
+        for start, end in work_intervals
+    )
+
+    work_range = f"{terms.work_start_time.value}~{terms.work_end_time.value}"
+    if overlaps_night:
+        return CheckResult(
+            code="MINOR_NIGHT_WORK",
+            label="18세 미만 야간근로",
+            status=CheckStatus.VIOLATION,
+            legal_basis=MINOR_NIGHT_WORK_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=(
+                f"{context_text} · 근무 {work_range}(기재된 휴게시간 제외)와 "
+                f"야간 {MINOR_NIGHT_START}~{MINOR_NIGHT_END} 시간대가 겹침"
+            ),
+            detail=(
+                "확인된 계약상 근무 시각이 18세 미만자의 야간근로 제한 "
+                "시간대와 겹칩니다. 18세 미만자 본인의 동의와 "
+                "고용노동부장관 인가 등 예외 요건은 입력만으로 확인되지 "
+                f"않았습니다. {_minor_age_limit_note(contract_start)}"
+            ),
+        )
+
+    return CheckResult(
+        code="MINOR_NIGHT_WORK",
+        label="18세 미만 야간근로",
+        status=CheckStatus.OK,
+        legal_basis=MINOR_NIGHT_WORK_BASIS,
+        standard_year=STANDARD_YEAR,
+        calculation=(
+            f"{context_text} · 근무 {work_range}(기재된 휴게시간 제외)와 "
+            f"야간 {MINOR_NIGHT_START}~{MINOR_NIGHT_END} 시간대가 겹치지 않음"
+        ),
+        detail=(
+            "확인된 계약상 근무 시각만 비교한 결과입니다. "
+            f"{_minor_age_limit_note(contract_start)}"
+        ),
+    )
+
+
 def check_minimum_wage(terms: ContractTerms) -> CheckResult:
     """시간급으로 확인된 계약만 2026년 최저임금과 비교한다."""
 
@@ -138,8 +469,7 @@ def check_minimum_wage(terms: ContractTerms) -> CheckResult:
             legal_basis=MINIMUM_WAGE_BASIS,
             standard_year=STANDARD_YEAR,
             calculation=(
-                f"시급 {hourly_wage:,}원 < "
-                f"2026년 최저임금 {MINIMUM_WAGE_2026:,}원"
+                f"시급 {hourly_wage:,}원 < 2026년 최저임금 {MINIMUM_WAGE_2026:,}원"
             ),
             detail=(
                 "확인된 시간급이 2026년 적용 최저임금보다 낮습니다. "
@@ -154,8 +484,7 @@ def check_minimum_wage(terms: ContractTerms) -> CheckResult:
         legal_basis=MINIMUM_WAGE_BASIS,
         standard_year=STANDARD_YEAR,
         calculation=(
-            f"시급 {hourly_wage:,}원 ≥ "
-            f"2026년 최저임금 {MINIMUM_WAGE_2026:,}원"
+            f"시급 {hourly_wage:,}원 ≥ 2026년 최저임금 {MINIMUM_WAGE_2026:,}원"
         ),
         detail="확인된 시간급이 2026년 적용 최저임금 이상입니다.",
     )
@@ -307,9 +636,7 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
 
     operator = "≥" if break_minutes >= required_minutes else "<"
     status = (
-        CheckStatus.OK
-        if break_minutes >= required_minutes
-        else CheckStatus.VIOLATION
+        CheckStatus.OK if break_minutes >= required_minutes else CheckStatus.VIOLATION
     )
     return CheckResult(
         code="BREAK_TIME",
@@ -343,9 +670,7 @@ def _required_group_result(
         legal_basis=REQUIRED_FIELDS_BASIS,
         standard_year=STANDARD_YEAR,
         calculation=(
-            f"{label}: 확인된 입력에서 찾지 못함"
-            if missing
-            else f"{label}: 확인됨"
+            f"{label}: 확인된 입력에서 찾지 못함" if missing else f"{label}: 확인됨"
         ),
         detail=(
             "확인된 입력에서 해당 항목을 찾지 못했습니다. "
@@ -404,13 +729,21 @@ def check_required_fields(terms: ContractTerms) -> list[CheckResult]:
     ]
 
 
-def validate(terms: ContractTerms) -> ValidationReport:
+def validate(
+    terms: ContractTerms,
+    worker_birth_date: str | None = None,
+) -> ValidationReport:
     """모든 지원 규칙을 실행해 하나의 검증 보고서를 반환한다."""
 
+    minor_checks = (
+        check_minor_working_hours(terms, worker_birth_date),
+        check_minor_night_work(terms, worker_birth_date),
+    )
     checks = [
         check_minimum_wage(terms),
         check_weekly_holiday(terms),
         check_break_time(terms),
+        *(check for check in minor_checks if check is not None),
         *check_required_fields(terms),
     ]
     return ValidationReport(

@@ -1,101 +1,203 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import { ScreenShell } from "@/components/ScreenShell";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
-import { CheckResultCard, CHECK_SOURCE_FIELD } from "@/components/CheckResultCard";
+import {
+  CheckResultCard,
+  CHECK_SOURCE_FIELD,
+} from "@/components/CheckResultCard";
 import { ButtonLink, Card } from "@/components/ui";
-import { MOCK_REPORT, MOCK_TERMS } from "@/lib/mock";
-import { MINIMUM_WAGE_2026, REFERENCE_YEAR } from "@/lib/constants";
+import { readSession } from "@/lib/session";
+import type { ContractTerms, ValidationReport } from "@/lib/types";
 
-/**
- * ③ 결과 — 백엔드 ValidationReport 표시 (기획서 단계 5).
- *
- * ⚠️ 숫자·판정·근거는 전부 POST /contracts/validate 반환값이다.
- *    프론트에서 계산하지 않는다. 현재는 lib/mock.ts.
- * TODO(D): validateTerms() 호출로 교체
- */
+function displayValue(
+  terms: ContractTerms,
+  key: keyof ContractTerms,
+): string | null {
+  const value = terms[key].value;
+  return value === null || String(value).trim() === "" ? null : String(value);
+}
+
 export default function ResultPage() {
-  const report = MOCK_REPORT;
-  const terms = MOCK_TERMS;
+  const [terms, setTerms] = useState<ContractTerms | null>(null);
+  const [report, setReport] = useState<ValidationReport | null>(null);
+  const [userEditedFields, setUserEditedFields] = useState<
+    (keyof ContractTerms)[]
+  >([]);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    const session = readSession();
+    setTerms(session.terms);
+    setReport(session.report);
+    setUserEditedFields(session.userEditedFields);
+    setReady(true);
+  }, []);
+
+  if (!ready) {
+    return (
+      <ScreenShell
+        step={3}
+        title="검증 결과 불러오는 중"
+        description="백엔드가 반환한 결과를 확인하고 있어요."
+      >
+        <Card>
+          <p aria-live="polite" className="text-sm text-ink-muted">
+            잠시만 기다려 주세요.
+          </p>
+        </Card>
+      </ScreenShell>
+    );
+  }
+
+  if (!terms || !report) {
+    return (
+      <ScreenShell
+        step={3}
+        title="표시할 검증 결과가 없어요"
+        description="현재 브라우저 탭에서 계약 조건을 다시 확인하고 검증해 주세요."
+      >
+        <Card className="flex flex-col gap-3">
+          <ButtonLink href="/review" className="w-full">
+            조건 확인으로 돌아가기
+          </ButtonLink>
+          <ButtonLink href="/" variant="secondary" className="w-full">
+            처음부터 시작
+          </ButtonLink>
+        </Card>
+        <LegalDisclaimer />
+      </ScreenShell>
+    );
+  }
 
   const problems = report.checks.filter(
-    (c) => c.status === "VIOLATION" || c.status === "MISSING",
+    (check) =>
+      check.status === "VIOLATION" || check.status === "MISSING",
   ).length;
+  const unknowns = report.checks.filter(
+    (check) => check.status === "UNKNOWN",
+  ).length;
+  const wage = displayValue(terms, "wage_amount");
+  const start = displayValue(terms, "work_start_time");
+  const end = displayValue(terms, "work_end_time");
+  const days = displayValue(terms, "work_days_per_week");
 
   return (
     <ScreenShell
       step={3}
       title="검증 결과"
-      description={`확정한 조건을 ${REFERENCE_YEAR}년 법정 기준과 대조했어요.`}
+      description="사용자가 확인한 계약 조건을 백엔드 검증 코드가 지원하는 기준과 비교한 결과입니다."
     >
       <Card className="text-center">
-        <div className="text-3xl">{problems > 0 ? "⚠️" : "✅"}</div>
+        <div aria-hidden="true" className="text-3xl">
+          {problems > 0 ? "⚠️" : unknowns > 0 ? "🔍" : "✅"}
+        </div>
         <p className="mt-3 text-xl font-extrabold tracking-tighter text-ink">
           {problems > 0
-            ? `확인이 필요한 항목이 ${problems}건 있어요`
-            : "법정 기준을 모두 충족해요"}
+            ? `다시 확인할 항목이 ${problems}건 있습니다`
+            : unknowns > 0
+              ? `정보 부족으로 확인하지 못한 항목이 ${unknowns}건 있습니다`
+              : "FairSign이 지원하는 항목에서 기준 미달·누락을 찾지 못했습니다"}
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          항목마다 계약서 근거와 법령·계산식을 함께 확인할 수 있어요.
+          상태는 법률 결론이 아니며, 각 항목의 적용 기준일·근거·계산식과
+          한계를 함께 확인해 주세요.
         </p>
       </Card>
 
-      {/* 계약 사실 vs 법정 기준 — 시각적으로 분리 (CLAUDE.md 규칙 2) */}
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Card>
-          <div className="text-xs font-bold text-ink-soft">📄 내 계약서 내용</div>
-          <div className="mt-2 text-2xl font-extrabold text-ink">
-            시급 {Number(terms.wage_amount.value).toLocaleString()}원
+      <Card>
+        <h2 className="text-sm font-extrabold text-ink">
+          <span aria-hidden="true">📄 </span>
+          사용자가 확인한 계약 조건
+        </h2>
+        <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+          <div className="rounded-field bg-brand-tint/60 p-4">
+            <dt className="font-bold text-ink-muted">임금 금액</dt>
+            <dd className="mt-1 font-extrabold text-ink">
+              {wage ? `${wage}원` : "입력되지 않음"}
+            </dd>
           </div>
-          <div className="mt-1 text-sm text-ink-muted">
-            {terms.work_start_time.value}~{terms.work_end_time.value} · 주{" "}
-            {terms.work_days_per_week.value}일
+          <div className="rounded-field bg-brand-tint/60 p-4">
+            <dt className="font-bold text-ink-muted">소정근로 시각</dt>
+            <dd className="mt-1 font-extrabold text-ink">
+              {start && end ? `${start} ~ ${end}` : "입력되지 않음"}
+            </dd>
           </div>
-        </Card>
-
-        <Card className="border-brand/30 bg-brand-tint/60">
-          <div className="text-xs font-bold text-brand-deep">⚖️ 법정 기준</div>
-          <div className="mt-2 text-2xl font-extrabold text-brand-deep">
-            시급 {MINIMUM_WAGE_2026.toLocaleString()}원
+          <div className="rounded-field bg-brand-tint/60 p-4">
+            <dt className="font-bold text-ink-muted">주 근무일수</dt>
+            <dd className="mt-1 font-extrabold text-ink">
+              {days ? `주 ${days}일` : "입력되지 않음"}
+            </dd>
           </div>
-          <div className="mt-1 text-sm text-brand-deep/80">
-            {REFERENCE_YEAR}년 적용 최저임금
+          <div className="rounded-field bg-brand-tint/60 p-4">
+            <dt className="font-bold text-ink-muted">검증 주체</dt>
+            <dd className="mt-1 font-extrabold text-ink">
+              백엔드 결정론적 규칙
+            </dd>
           </div>
-        </Card>
-      </div>
-
-      {/* 예상 월급·차액 — 백엔드 계산값 */}
-      <Card className="flex items-center justify-between gap-4">
-        <div>
-          <div className="text-xs font-bold text-ink-soft">
-            예상 월급 (검증 엔진 계산값)
-          </div>
-          <div className="mt-1 text-2xl font-extrabold text-ink">
-            {report.estimated_monthly_pay?.toLocaleString() ?? "—"}원
-          </div>
-          {report.wage_shortfall !== null && (
-            <div className="mt-1 text-xs font-bold text-amber-600">
-              최저임금 기준 월 {report.wage_shortfall.toLocaleString()}원 차이
-            </div>
-          )}
-        </div>
-        <span className="text-3xl">💰</span>
+        </dl>
       </Card>
 
+      {(report.estimated_monthly_pay !== null ||
+        report.wage_shortfall !== null) && (
+        <Card>
+          <h2 className="text-sm font-extrabold text-ink">
+            백엔드 계산 결과
+          </h2>
+          <dl className="mt-3 flex flex-col gap-2">
+            {report.estimated_monthly_pay !== null && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-sm text-ink-muted">예상 월급</dt>
+                <dd className="font-extrabold text-ink">
+                  {report.estimated_monthly_pay.toLocaleString()}원
+                </dd>
+              </div>
+            )}
+            {report.wage_shortfall !== null && (
+              <div className="flex items-center justify-between gap-3">
+                <dt className="text-sm text-ink-muted">기준과의 월 차이</dt>
+                <dd className="font-extrabold text-red-900">
+                  {report.wage_shortfall.toLocaleString()}원
+                </dd>
+              </div>
+            )}
+          </dl>
+        </Card>
+      )}
+
       <div className="flex flex-col gap-3">
-        {report.checks.map((check) => {
+        {report.checks.map((check, index) => {
           const fieldKey = CHECK_SOURCE_FIELD[check.code];
+          const field = fieldKey ? terms[fieldKey] : null;
+          const userEdited = fieldKey
+            ? userEditedFields.includes(fieldKey)
+            : false;
+          const sourceValue =
+            field?.value === null || field?.value === undefined
+              ? null
+              : String(field.value);
           return (
             <CheckResultCard
-              key={check.code}
+              key={`${check.code}-${index}`}
               check={check}
-              sourceText={fieldKey ? terms[fieldKey].source_text : null}
+              sourceText={field?.source_text ?? null}
+              sourceOrigin={
+                userEdited
+                  ? "USER"
+                  : field && (field.source_text || sourceValue)
+                    ? "CONTRACT"
+                    : undefined
+              }
+              sourceValue={sourceValue}
             />
           );
         })}
       </div>
 
       <div className="flex flex-col gap-2">
-        <ButtonLink href="/contract" className="w-full">
-          제대로 된 계약서 만들기 →
+        <ButtonLink href="/contract" className="w-full text-center">
+          확인한 조건으로 근로조건 확인 요청서 만들기 →
         </ButtonLink>
         <ButtonLink href="/review" variant="secondary" className="w-full">
           조건 다시 수정

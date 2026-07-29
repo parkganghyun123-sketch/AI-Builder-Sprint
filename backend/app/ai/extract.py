@@ -18,6 +18,7 @@ import re
 from pathlib import Path
 
 import httpx
+from pydantic import ValidationError
 
 from app.ai.document_parse import parse_document
 from app.config import settings
@@ -471,17 +472,32 @@ async def call_information_extract(
         "confidence": True,
     }
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
-        res = await client.post(
-            BASE_URL,
-            headers={**_auth_header(), "Content-Type": "application/json"},
-            json=payload,
-        )
+    try:
+        async with httpx.AsyncClient(timeout=60.0) as client:
+            res = await client.post(
+                BASE_URL,
+                headers={**_auth_header(), "Content-Type": "application/json"},
+                json=payload,
+            )
+    except ExtractError:
+        raise
+    except httpx.HTTPError:
+        # httpx 원본 예외 메시지는 외부 요청 정보를 포함할 수 있어 전달하지 않는다.
+        raise ExtractError("Upstage Information Extract 요청 실패") from None
 
     if res.status_code >= 400:
-        raise ExtractError(f"HTTP {res.status_code}: {res.text}")
+        # 제공자 오류 본문에는 계약서 내용이나 진단 정보가 포함될 수 있다.
+        raise ExtractError("Upstage Information Extract 요청 실패")
 
-    return res.json()
+    try:
+        response = res.json()
+    except ValueError:
+        # JSON 디코더의 원본 메시지에는 응답 본문 일부가 포함될 수 있다.
+        raise ExtractError("Upstage Information Extract 응답 검증 실패") from None
+
+    if not isinstance(response, dict):
+        raise ExtractError("Upstage Information Extract 응답 검증 실패")
+    return response
 
 
 def _parse_confidence_tool_call(message: dict) -> dict[str, str]:
@@ -528,11 +544,7 @@ def _parse_confidence_scores(extract_response: dict) -> dict[str, float]:
     if not isinstance(raw, dict):
         return {}
 
-    return {
-        k: float(v)
-        for k, v in raw.items()
-        if isinstance(v, (int, float))
-    }
+    return {k: float(v) for k, v in raw.items() if isinstance(v, int | float)}
 
 
 def build_contract_terms(
@@ -544,8 +556,11 @@ def build_contract_terms(
     try:
         message = extract_response["choices"][0]["message"]
         values = json.loads(message["content"])
-    except (KeyError, IndexError, json.JSONDecodeError) as e:
-        raise ExtractError(f"응답 파싱 실패: {e}") from e
+    except (KeyError, IndexError, TypeError, json.JSONDecodeError):
+        raise ExtractError("Upstage Information Extract 응답 검증 실패") from None
+
+    if not isinstance(message, dict) or not isinstance(values, dict):
+        raise ExtractError("Upstage Information Extract 응답 검증 실패")
 
     confidences = _parse_confidence_tool_call(message)
     scores = _parse_confidence_scores(extract_response)
@@ -564,7 +579,10 @@ def build_contract_terms(
         )
 
     # AI가 자신 있다고 한 값도 코드가 한 번 더 본다.
-    return ContractTerms(**apply_sanity_check(fields))
+    try:
+        return ContractTerms(**apply_sanity_check(fields))
+    except ValidationError:
+        raise ExtractError("Upstage Information Extract 응답 검증 실패") from None
 
 
 async def extract_contract_terms(file_bytes: bytes, filename: str) -> ContractTerms:
@@ -577,7 +595,15 @@ async def extract_contract_terms(file_bytes: bytes, filename: str) -> ContractTe
     mime_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
 
     parse_result = await parse_document(file_bytes, filename)
-    full_text = parse_result.get("content", {}).get("text", "")
+    if not isinstance(parse_result, dict):
+        raise ExtractError("Upstage Document Parse 응답 검증 실패")
+
+    content = parse_result.get("content", {})
+    if not isinstance(content, dict):
+        raise ExtractError("Upstage Document Parse 응답 검증 실패")
+    full_text = content.get("text", "")
+    if not isinstance(full_text, str):
+        raise ExtractError("Upstage Document Parse 응답 검증 실패")
 
     extract_response = await call_information_extract(file_bytes, mime_type)
 

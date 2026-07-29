@@ -7,6 +7,6 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]  # line-length는 formatter가 처리
 
 [tool.pytest.ini_options]
-testpaths = ["app"]
+testpaths = ["app", "tests"]
 python_files = ["test_*.py"]
 addopts = "-v"

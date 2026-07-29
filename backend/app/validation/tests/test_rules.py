@@ -14,6 +14,8 @@ from app.validation.cli import main as cli_main
 from app.validation.rules import (
     check_break_time,
     check_minimum_wage,
+    check_minor_night_work,
+    check_minor_working_hours,
     check_required_fields,
     check_weekly_holiday,
     validate,
@@ -271,6 +273,297 @@ def test_not_found_confidence_is_missing_even_if_value_exists() -> None:
     by_code = {result.code: result for result in results}
 
     assert by_code["REQUIRED_WORKPLACE"].status == CheckStatus.MISSING
+
+
+def test_seventeen_year_old_working_eight_hours_exceeds_basic_limit() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("17:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(4),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+    assert result.standard_year == 2026
+    assert "1일 8시간 > 기본 7시간" in result.calculation
+    assert "당사자 합의 여부" in result.detail
+
+
+def test_seventeen_year_old_working_seven_hours_meets_basic_limit() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("16:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(5),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.OK
+    assert "1일 7시간 ≤ 기본 7시간" in result.calculation
+    assert "1주 35시간 ≤ 기본 35시간" in result.calculation
+
+
+def test_seventeen_year_old_over_thirty_five_weekly_hours_is_violation() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("15:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(6),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+    assert "1주 36시간 > 기본 35시간" in result.calculation
+    assert "별도 확인" in result.detail
+
+
+def test_minor_hours_beyond_agreed_extension_limit_is_distinguished() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("18:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(4),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+    assert "연장 한도" in result.detail
+    assert "1일 총 8시간" in result.detail
+
+
+def test_seventeen_year_old_overnight_shift_overlaps_night_hours() -> None:
+    result = check_minor_night_work(
+        terms(
+            work_start_time=field("22:00"),
+            work_end_time=field("02:00"),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+    assert "22:00~02:00" in result.calculation
+    assert "고용노동부장관 인가" in result.detail
+
+
+def test_minor_working_hours_calculate_overnight_shift() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("22:00"),
+            work_end_time=field("02:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(5),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.OK
+    assert "1일 4시간 ≤ 기본 7시간" in result.calculation
+    assert "1주 20시간 ≤ 기본 35시간" in result.calculation
+
+
+def test_minor_overnight_eight_hours_without_break_exceeds_basic_limit() -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("22:00"),
+            work_end_time=field("06:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(4),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+    assert "1일 8시간 > 기본 7시간" in result.calculation
+
+
+@pytest.mark.parametrize(
+    ("break_start", "break_end"),
+    [
+        ("23:30", "00:30"),
+        ("00:30", "01:30"),
+    ],
+)
+def test_minor_overnight_hours_subtract_cross_midnight_or_next_day_break(
+    break_start: str,
+    break_end: str,
+) -> None:
+    result = check_minor_working_hours(
+        terms(
+            work_start_time=field("22:00"),
+            work_end_time=field("06:00"),
+            break_start_time=field(break_start),
+            break_end_time=field(break_end),
+            work_days_per_week=field(5),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.OK
+    assert "1일 7시간 ≤ 기본 7시간" in result.calculation
+    assert "1주 35시간 ≤ 기본 35시간" in result.calculation
+
+
+def test_minor_night_work_excludes_break_covering_entire_night_window() -> None:
+    result = check_minor_night_work(
+        terms(
+            work_start_time=field("21:00"),
+            work_end_time=field("07:00"),
+            break_start_time=field("22:00"),
+            break_end_time=field("06:00"),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.OK
+    assert "기재된 휴게시간 제외" in result.calculation
+    assert "겹치지 않음" in result.calculation
+
+
+def test_exact_daytime_boundary_does_not_overlap_minor_night_hours() -> None:
+    result = check_minor_night_work(
+        terms(
+            work_start_time=field("06:00"),
+            work_end_time=field("22:00"),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.OK
+    assert "겹치지 않음" in result.calculation
+
+
+@pytest.mark.parametrize(
+    ("work_start", "work_end"),
+    [
+        ("22:00", "23:00"),
+        ("05:00", "06:00"),
+    ],
+)
+def test_minor_night_boundaries_inside_restricted_window_are_violation(
+    work_start: str,
+    work_end: str,
+) -> None:
+    result = check_minor_night_work(
+        terms(
+            work_start_time=field(work_start),
+            work_end_time=field(work_end),
+        ),
+        "2009-07-31",
+    )
+
+    assert result is not None
+    assert result.status == CheckStatus.VIOLATION
+
+
+def test_nineteen_year_old_does_not_get_minor_checks() -> None:
+    contract = terms(
+        work_start_time=field("09:00"),
+        work_end_time=field("17:00"),
+        break_start_time=field(None),
+        break_end_time=field(None),
+    )
+
+    assert check_minor_working_hours(contract, "2007-08-01") is None
+    assert check_minor_night_work(contract, "2007-08-01") is None
+    report = validate(contract, worker_birth_date="2007-08-01")
+    assert not any(check.code.startswith("MINOR_") for check in report.checks)
+
+
+def test_missing_birth_date_does_not_get_minor_checks() -> None:
+    contract = terms()
+
+    assert check_minor_working_hours(contract, None) is None
+    assert check_minor_night_work(contract, None) is None
+    report = validate(contract)
+    assert not any(check.code.startswith("MINOR_") for check in report.checks)
+
+
+@pytest.mark.parametrize("birth_date", ["", "2009/07/31", "not-a-date"])
+def test_invalid_birth_date_does_not_get_minor_checks(birth_date: str) -> None:
+    contract = terms()
+
+    assert check_minor_working_hours(contract, birth_date) is None
+    assert check_minor_night_work(contract, birth_date) is None
+
+
+def test_under_fifteen_does_not_get_minor_checks() -> None:
+    contract = terms()
+
+    assert check_minor_working_hours(contract, "2011-08-02") is None
+    assert check_minor_night_work(contract, "2011-08-02") is None
+
+
+@pytest.mark.parametrize("contract_start", [None, "2026/08/01", "not-a-date"])
+def test_missing_or_invalid_contract_start_skips_minor_checks(
+    contract_start: str | None,
+) -> None:
+    contract = terms(contract_start=field(contract_start))
+
+    assert check_minor_working_hours(contract, "2009-07-31") is None
+    assert check_minor_night_work(contract, "2009-07-31") is None
+
+
+def test_contract_start_outside_supported_year_skips_minor_checks() -> None:
+    contract = terms(contract_start=field("2030-08-01"))
+
+    assert check_minor_working_hours(contract, "2013-07-31") is None
+    assert check_minor_night_work(contract, "2013-07-31") is None
+    report = validate(contract, worker_birth_date="2013-07-31")
+    assert not any(check.code.startswith("MINOR_") for check in report.checks)
+
+
+def test_age_is_calculated_at_fixed_contract_start_birthday_boundary() -> None:
+    day_before_eighteenth_birthday = terms(contract_start=field("2026-08-01"))
+    on_eighteenth_birthday = terms(contract_start=field("2026-08-02"))
+
+    assert (
+        check_minor_working_hours(
+            day_before_eighteenth_birthday,
+            "2008-08-02",
+        )
+        is not None
+    )
+    assert (
+        check_minor_working_hours(
+            on_eighteenth_birthday,
+            "2008-08-02",
+        )
+        is None
+    )
+
+
+def test_validate_conditionally_includes_minor_checks() -> None:
+    report = validate(terms(), worker_birth_date="2009-07-31")
+    minor_codes = {
+        check.code for check in report.checks if check.code.startswith("MINOR_")
+    }
+
+    assert minor_codes == {"MINOR_WORKING_HOURS", "MINOR_NIGHT_WORK"}
 
 
 def test_validate_returns_report_with_evidence_for_every_check() -> None:

@@ -1,65 +1,79 @@
-# 페어사인 프론트 (`web/`) — D 담당
+# FairSign 프론트엔드
 
-Next.js(App Router) + TypeScript + Tailwind.
+Next.js(App Router), TypeScript, Tailwind로 만든 모바일 우선 웹입니다. 계약서
+파일 추출부터 조건 확인, 백엔드 검증, PDF 미리보기, 모두싸인 요청과 상태 조회까지
+실제 백엔드 API에 연결합니다.
 
-## 실행
+## 로컬 실행
+
+Node.js `18.18` 이상이 필요합니다. 프로젝트 검증에는 bundled Node 24를
+사용했습니다.
+
+백엔드를 먼저 실행합니다.
+
+```bash
+cd backend
+python -m uvicorn app.main:app --reload
+```
+
+프론트 환경변수와 의존성을 준비한 뒤 실행합니다.
 
 ```bash
 cd web
+cp .env.example .env.local
 npm install
-npm run dev        # http://localhost:3000
+npm run dev
 ```
 
-백엔드는 별도로 띄운다 (`cd backend && uvicorn app.main:app --reload` → `http://localhost:8000`).
-API 명세: http://localhost:8000/docs
+기본 주소는 프론트 `http://localhost:3000`, 백엔드
+`http://localhost:8000`입니다. 실제 환경변수를 담은 `.env.local`은 커밋하지
+않습니다.
 
-환경변수는 `.env.example` → `.env.local` 복사.
+배포된 Railway 백엔드를 사용할 때는 `.env.local`을 다음처럼 설정합니다.
 
-기타: `npm run build`, `npm run typecheck`, `npm run lint`
-
-## 화면 (기획서 8단계 → 라우트 8개)
-
-| 기획서 단계 | 라우트 | 스텝 |
-|---|---|---|
-| 1 접속 | `/` | — |
-| 2·3 업로드·추출 | `/upload` | 1 |
-| 4 확인·수정 ⭐ | `/review` (`?path=B` 경로 B) | 2 |
-| 5 검증 | `/result` | 3 |
-| 6 수정본 생성 | `/contract` | 4 |
-| 7 전자서명 | `/sign` → `/complete` | 5 |
-| 8 보관 | `/archive` | 6 |
-
-버튼 전체 정리: [`../docs/버튼_정리.md`](../docs/버튼_정리.md)
-
-## 구조
-
-```
-app/          라우트 8개
-components/   ScreenShell · ui(Button/Card/Pill) · FieldInput
-              DocumentStatusBadge · CheckResultCard · LegalDisclaimer
-lib/
-  types.ts      backend/app/schemas.py 와 1:1 대응 ⚠️ 임의 변경 금지
-  api.ts        /contracts/validate · /preview · /analyze-sign 클라이언트
-  constants.ts  화면 표시용 상수 (판정 계산용 아님)
-  mock.ts       ⚠️ 화면 개발용 목 데이터 — API 연결 시 교체
+```dotenv
+NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 ```
 
-## 지켜야 할 것
+## 연결된 흐름
 
-- 화면의 숫자·판정·근거는 **백엔드 `ValidationReport` 반환값만**. 프론트에서 계산하지 않는다.
-- 시간은 **시각**으로 다룬다 (`"09:00"`). 1일/주 근로시간은 백엔드 property가 계산한다.
-- `confidence=LOW` 항목은 **노란색으로 강조**해 사용자 확인을 유도한다. `NOT_FOUND`는 "계약서에서 확인되지 않습니다"로 두고 임의 값을 채우지 않는다.
-- 계약 사실과 법정 기준을 시각적으로 분리하고 "2026년 기준"을 함께 표시한다.
-- 결과·서명·보관 화면에 1350 안내 문구를 고정한다.
-- 서명 전 문서는 "계약서"가 아니라 **"근로조건 확인 요청서"**로 부른다.
-- 모두싸인 서명 요청은 **이메일**로 보낸다 (전화번호 아님).
-- 위반이 남으면 `/contracts/analyze-sign` 이 409로 막는다. 사용자가 알고 진행할 때만 `proceed_with_violations=true`.
+| 라우트 | 실제 동작 |
+|---|---|
+| `/upload` | JPG·PNG·PDF를 `POST /contracts/extract`로 전송 |
+| `/review` | AI 추출값 또는 직접 입력값 23개를 확인·수정하고, 선택 생년월일과 함께 `POST /contracts/validate` 호출 |
+| `/result` | 백엔드 `ValidationReport`만 표시 |
+| `/contract` | `POST /contracts/preview` PDF를 메모리 URL로 미리보기·다운로드 |
+| `/sign` | 현재 탭의 선택 생년월일을 재사용해 `POST /contracts/analyze-sign`, 409 확인 후 명시적 재요청 |
+| `/complete` | `GET /contracts/{id}/status`를 폴링하고 실제 완료 상태와 다운로드 주소 표시 |
+| `/archive` | 보관 API가 없어 `준비 중`만 표시 |
 
-## 남은 작업
+계약 조건·검증 결과·서명 문서 ID와 선택 입력한 근로자 생년월일은 현재 브라우저
+탭의 `sessionStorage`에만 저장합니다. 생년월일은 `ContractTerms`나 계약서·PDF에
+넣지 않고, 검증과 서명 요청에만 전송하며 결과 화면·오류 메시지·로그에 표시하지
+않습니다. 생년월일 입력은 브라우저 자동완성을 끄고, 서명 요청이 성공하면 React
+상태와 현재 탭의 `sessionStorage`에서 즉시 지웁니다. 409 응답이나 오류가 발생한
+경우에는 재시도를 위해 유지하되 탭을 닫으면 사라집니다. 업로드한 파일 원본과 PDF
+Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생년월일 보관·삭제 정책은
+아직 검증되지 않았으므로 서버 측 자동 삭제를 보장하지 않습니다.
 
-- [ ] 입력 상태 관리(useState) → `validateTerms()` 연결
-- [ ] 업로드 → `/contracts/extract` (A 담당 완료 후)
-- [ ] `previewPdf()` blob 미리보기
-- [ ] `analyzeAndSign()` + 409 처리 + 서명 상태 폴링
-- [ ] 보관함 목록 API (C, Day 4)
-- [ ] Vercel 배포
+## API 안전 규칙
+
+- 외부 JSON 응답은 `lib/schemas.ts`의 Zod 스키마로 검증합니다.
+- 판정과 금액 계산은 프론트에서 하지 않습니다.
+- 생년월일로 나이 또는 법 적용 여부를 프론트에서 계산하지 않고 백엔드 검증
+  결과만 표시합니다.
+- 409 응답을 우회하지 않고, 사용자가 확인 체크를 한 재요청에서만
+  `proceed_with_violations=true`를 보냅니다.
+- 오류 메시지와 콘솔에 파일 내용, 추출 원문, 이름, 이메일을 남기지 않습니다.
+- `COMPLETED`는 상태 API가 해당 값을 반환했을 때만 표시합니다.
+- 보관함은 실제 API가 연결되기 전까지 저장 기능처럼 표시하지 않습니다.
+
+## 검사
+
+```bash
+cd web
+npm run typecheck
+npm run lint
+npm run build
+npm audit --omit=dev
+```

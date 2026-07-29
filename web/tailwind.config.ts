@@ -15,9 +15,9 @@ const config: Config = {
           soft: "#8FA6BC",
         },
         brand: {
-          DEFAULT: "#22C7C7", // 청록 (주 브랜드)
+          DEFAULT: "#006A6A", // M3 primary — CTA와 정보 텍스트
           sky: "#38BDF8", // 하늘 (그라데이션 끝)
-          deep: "#0891B2", // 진한 청록 (강조 텍스트)
+          deep: "#005858", // primary hover
           tint: "#F0FAFF", // 아주 옅은 배경
           line: "#D8EEF5", // 카드 테두리
         },

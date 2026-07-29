@@ -1,73 +1,219 @@
-/**
- * 백엔드 API 클라이언트.
- *
- * 엔드포인트는 backend/app/routers/ 기준이다. 명세: http://localhost:8000/docs
- *   POST /contracts/validate       조건 → 판정
- *   POST /contracts/preview        조건 → 계약서 PDF (bytes)
- *   POST /contracts/analyze-sign   조건 → 검증 → PDF → 서명 요청
- *   GET  /contracts/{id}/status    서명 상태
- */
+import type { z } from "zod";
+import {
+  analyzeSignResponseSchema,
+  contractTermsSchema,
+  signStatusResponseSchema,
+  validationReportSchema,
+  violationBlockedEnvelopeSchema,
+} from "./schemas";
 import type {
   AnalyzeSignRequest,
-  AnalyzeSignResponse,
   PreviewRequest,
-  ValidationReport,
   ValidateRequest,
   ViolationBlocked,
 } from "./types";
 
-const BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const BASE = (
+  process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000"
+).replace(/\/+$/, "");
 
-/** analyze-sign 이 위반을 이유로 막았을 때 (HTTP 409) */
-export class ViolationBlockedError extends Error {
+type ApiErrorCode =
+  | "BAD_INPUT"
+  | "CONFLICT"
+  | "FILE_TOO_LARGE"
+  | "INVALID_RESPONSE"
+  | "NETWORK"
+  | "SERVER"
+  | "UNAVAILABLE"
+  | "UNKNOWN";
+
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public readonly status: number | null,
+    public readonly code: ApiErrorCode,
+    public readonly retryable: boolean,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+/** analyze-sign이 확인 필요 항목을 이유로 막았을 때(HTTP 409). */
+export class ViolationBlockedError extends ApiError {
   constructor(public readonly detail: ViolationBlocked) {
-    super(detail.message);
+    super(
+      "서명 전에 다시 확인해야 할 계약 조건이 있습니다.",
+      409,
+      "CONFLICT",
+      false,
+    );
     this.name = "ViolationBlockedError";
   }
 }
 
-async function post<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
+function responseError(path: string, status: number): ApiError {
+  if (status === 400 || status === 422) {
+    return new ApiError(
+      "입력 형식을 확인한 뒤 다시 시도해 주세요.",
+      status,
+      "BAD_INPUT",
+      false,
+    );
+  }
+  if (status === 413) {
+    return new ApiError(
+      "파일이 너무 큽니다. 더 작은 파일로 다시 시도해 주세요.",
+      status,
+      "FILE_TOO_LARGE",
+      false,
+    );
+  }
+  if (status === 502 || status === 503 || status === 504) {
+    return new ApiError(
+      "외부 처리 서비스와 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      status,
+      "UNAVAILABLE",
+      true,
+    );
+  }
+  if (status >= 500) {
+    return new ApiError(
+      "서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      status,
+      "SERVER",
+      true,
+    );
+  }
+  return new ApiError(
+    `${path} 요청을 완료하지 못했습니다.`,
+    status,
+    "UNKNOWN",
+    status === 408 || status === 429,
+  );
+}
+
+async function request(
+  path: string,
+  init?: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(`${BASE}${path}`, init);
+  } catch {
+    throw new ApiError(
+      "백엔드에 연결할 수 없습니다. 네트워크와 API 주소를 확인해 주세요.",
+      null,
+      "NETWORK",
+      true,
+    );
+  }
+}
+
+async function parseJson<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  let json: unknown;
+  try {
+    json = await response.json();
+  } catch {
+    throw new ApiError(
+      "서버 응답 형식을 확인할 수 없습니다.",
+      response.status,
+      "INVALID_RESPONSE",
+      false,
+    );
+  }
+
+  const parsed = schema.safeParse(json);
+  if (!parsed.success) {
+    throw new ApiError(
+      "서버 응답 형식이 예상과 다릅니다.",
+      response.status,
+      "INVALID_RESPONSE",
+      false,
+    );
+  }
+  return parsed.data;
+}
+
+async function postJson<T>(
+  path: string,
+  body: unknown,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  const response = await request(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 
-  if (res.status === 409) {
-    const data = await res.json();
-    throw new ViolationBlockedError(data.detail as ViolationBlocked);
+  if (response.status === 409) {
+    const json: unknown = await response.json().catch(() => null);
+    const parsed = violationBlockedEnvelopeSchema.safeParse(json);
+    if (parsed.success) {
+      throw new ViolationBlockedError(parsed.data.detail);
+    }
+    throw responseError(path, response.status);
   }
-  if (!res.ok) {
-    throw new Error(`${path} 실패 (${res.status})`);
-  }
-  return (await res.json()) as T;
+  if (!response.ok) throw responseError(path, response.status);
+  return parseJson(response, schema);
 }
 
-/** 조건 → 법정 기준 판정 */
+/** 계약서 이미지/PDF → AI 추출 결과. 원본 파일은 브라우저 저장소에 보관하지 않는다. */
+export async function extractTerms(file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await request("/contracts/extract", {
+    method: "POST",
+    body: form,
+  });
+  if (!response.ok) throw responseError("/contracts/extract", response.status);
+  return parseJson(response, contractTermsSchema);
+}
+
+/** 사용자가 확인한 조건 → 결정론적 법정 기준 판정. */
 export function validateTerms(body: ValidateRequest) {
-  return post<ValidationReport>("/contracts/validate", body);
+  return postJson("/contracts/validate", body, validationReportSchema);
 }
 
-/** 조건 → 검증 → PDF → 서명 요청 */
+/** 조건 → 검증 → PDF → 모두싸인 서명 요청. */
 export function analyzeAndSign(body: AnalyzeSignRequest) {
-  return post<AnalyzeSignResponse>("/contracts/analyze-sign", body);
+  return postJson(
+    "/contracts/analyze-sign",
+    body,
+    analyzeSignResponseSchema,
+  );
 }
 
-/** 조건 → 계약서 PDF. 경로 B(MANUAL)는 "확인 전 초안" 워터마크가 찍힌다 */
+/** 조건 → PDF 미리보기. 경로 B에는 백엔드가 초안 워터마크를 적용한다. */
 export async function previewPdf(body: PreviewRequest): Promise<Blob> {
-  const res = await fetch(`${BASE}/contracts/preview`, {
+  const response = await request("/contracts/preview", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`미리보기 실패 (${res.status})`);
-  return res.blob();
+  if (!response.ok) throw responseError("/contracts/preview", response.status);
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/pdf")) {
+    throw new ApiError(
+      "PDF 응답 형식이 예상과 다릅니다.",
+      response.status,
+      "INVALID_RESPONSE",
+      false,
+    );
+  }
+  return response.blob();
 }
 
-/** 서명 상태 조회 */
+/** 모두싸인의 현재 서명 상태를 백엔드를 통해 조회한다. */
 export async function getSignStatus(documentId: string) {
-  const res = await fetch(`${BASE}/contracts/${documentId}/status`);
-  if (!res.ok) throw new Error(`상태 조회 실패 (${res.status})`);
-  return res.json();
+  const response = await request(
+    `/contracts/${encodeURIComponent(documentId)}/status`,
+  );
+  if (!response.ok) {
+    throw responseError("/contracts/{id}/status", response.status);
+  }
+  return parseJson(response, signStatusResponseSchema);
 }
