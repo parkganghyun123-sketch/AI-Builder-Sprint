@@ -2,13 +2,17 @@ import type { z } from "zod";
 import {
   analyzeSignResponseSchema,
   contractTermsSchema,
+  reviewItemsResponseSchema,
+  signBlockedEnvelopeSchema,
   signStatusResponseSchema,
   validationReportSchema,
+  validationStateSchema,
   violationBlockedEnvelopeSchema,
 } from "./schemas";
 import type {
   AnalyzeSignRequest,
   PreviewRequest,
+  SignBlocked,
   ValidateRequest,
   ViolationBlocked,
 } from "./types";
@@ -39,7 +43,7 @@ export class ApiError extends Error {
   }
 }
 
-/** analyze-sign이 확인 필요 항목을 이유로 막았을 때(HTTP 409). */
+/** analyze-sign이 법정 기준 위반으로 막았을 때(HTTP 409). 확인 후 진행 가능. */
 export class ViolationBlockedError extends ApiError {
   constructor(public readonly detail: ViolationBlocked) {
     super(
@@ -52,10 +56,30 @@ export class ViolationBlockedError extends ApiError {
   }
 }
 
-function responseError(path: string, status: number): ApiError {
+/**
+ * analyze-sign이 값 확인 누락·이름 불일치로 막았을 때(HTTP 409).
+ * 위반과 달리 '알고 진행'으로 넘길 수 없고, 돌아가서 확인·수정해야 한다.
+ */
+export class SignBlockedError extends ApiError {
+  constructor(public readonly detail: SignBlocked) {
+    super(detail.message, 409, "CONFLICT", false);
+    this.name = "SignBlockedError";
+  }
+}
+
+/** 뒤에 붙일 백엔드 사유. 있으면 "(사유)" 형태로 덧붙인다. */
+function suffix(detail?: string): string {
+  return detail ? ` (${detail})` : "";
+}
+
+function responseError(
+  path: string,
+  status: number,
+  detail?: string,
+): ApiError {
   if (status === 400 || status === 422) {
     return new ApiError(
-      "입력 형식을 확인한 뒤 다시 시도해 주세요.",
+      `입력한 값을 확인한 뒤 다시 시도해 주세요.${suffix(detail)}`,
       status,
       "BAD_INPUT",
       false,
@@ -69,9 +93,25 @@ function responseError(path: string, status: number): ApiError {
       false,
     );
   }
+  if (status === 401 || status === 403) {
+    return new ApiError(
+      `요청 권한을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
+      status,
+      "UNKNOWN",
+      false,
+    );
+  }
+  if (status === 404) {
+    return new ApiError(
+      `요청 주소를 찾지 못했어요. 서버 연결 설정을 확인해 주세요.${suffix(detail)}`,
+      status,
+      "UNKNOWN",
+      false,
+    );
+  }
   if (status === 502 || status === 503 || status === 504) {
     return new ApiError(
-      "외부 처리 서비스와 연결하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      "전자서명 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
       status,
       "UNAVAILABLE",
       true,
@@ -79,18 +119,36 @@ function responseError(path: string, status: number): ApiError {
   }
   if (status >= 500) {
     return new ApiError(
-      "서버에서 요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+      `서버에서 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
       status,
       "SERVER",
       true,
     );
   }
   return new ApiError(
-    `${path} 요청을 완료하지 못했습니다.`,
+    `요청을 처리하지 못했어요 (오류 코드 ${status}). 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
     status,
     "UNKNOWN",
     status === 408 || status === 429,
   );
+}
+
+/** 실패 응답에서 FastAPI 오류 사유(detail)를 최대한 뽑아낸다. 실패해도 무시한다. */
+async function readErrorDetail(response: Response): Promise<string | undefined> {
+  try {
+    const data: unknown = await response.json();
+    if (data && typeof data === "object" && "detail" in data) {
+      const detail = (data as { detail: unknown }).detail;
+      if (typeof detail === "string") return detail;
+      if (Array.isArray(detail) && detail.length > 0) {
+        const first = detail[0] as { msg?: unknown };
+        if (typeof first?.msg === "string") return first.msg;
+      }
+    }
+  } catch {
+    // 본문이 JSON이 아니면 사유 없이 진행한다.
+  }
+  return undefined;
 }
 
 async function request(
@@ -150,13 +208,22 @@ async function postJson<T>(
 
   if (response.status === 409) {
     const json: unknown = await response.json().catch(() => null);
-    const parsed = violationBlockedEnvelopeSchema.safeParse(json);
-    if (parsed.success) {
-      throw new ViolationBlockedError(parsed.data.detail);
+    // 1) 법정 기준 위반 — 확인 후 진행 가능(problems 형태).
+    const violation = violationBlockedEnvelopeSchema.safeParse(json);
+    if (violation.success) {
+      throw new ViolationBlockedError(violation.data.detail);
+    }
+    // 2) 값 확인 누락·이름 불일치 등 — 돌아가서 고쳐야 함.
+    const blocked = signBlockedEnvelopeSchema.safeParse(json);
+    if (blocked.success) {
+      throw new SignBlockedError(blocked.data.detail);
     }
     throw responseError(path, response.status);
   }
-  if (!response.ok) throw responseError(path, response.status);
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw responseError(path, response.status, detail);
+  }
   return parseJson(response, schema);
 }
 
@@ -175,6 +242,26 @@ export async function extractTerms(file: File) {
 /** 사용자가 확인한 조건 → 결정론적 법정 기준 판정. */
 export function validateTerms(body: ValidateRequest) {
   return postJson("/contracts/validate", body, validationReportSchema);
+}
+
+/**
+ * 입력값 유효성 + 진행 차단 판정. 프론트는 이 응답만 보고 "다음"을 켜고 끈다.
+ * ⚠️ 같은 규칙을 화면에 복사하지 말 것. can_proceed·issues 를 그대로 쓴다.
+ */
+export function getValidationState(body: ValidateRequest) {
+  return postJson("/contracts/validation-state", body, validationStateSchema);
+}
+
+/**
+ * 확인이 필요한 항목 목록. must_confirm 은 서명 전 반드시 확인해야 하는 필드 키다.
+ * 화면은 confidence 를 직접 해석하지 말고 이 응답을 그대로 쓴다.
+ */
+export function getReviewItems(body: ValidateRequest) {
+  return postJson(
+    "/contracts/review-items",
+    { terms: body.terms },
+    reviewItemsResponseSchema,
+  );
 }
 
 /** 조건 → 검증 → PDF → 모두싸인 서명 요청. */

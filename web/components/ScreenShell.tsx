@@ -42,19 +42,38 @@ export function ScreenShell({
   step,
   title,
   description,
+  backHref,
   children,
 }: {
   /** 현재 단계 (1~6). 미지정이면 스텝퍼 없음 */
   step?: Step;
   title: string;
   description?: string;
+  /**
+   * "뒤로" 버튼이 갈 곳. 미지정이면 한 단계 이전으로 간다(1단계면 홈).
+   * 경로 B(직접 입력)처럼 선형 이전 단계와 다른 경우에만 넘긴다.
+   */
+  backHref?: string;
   children: ReactNode;
 }) {
+  // 아직 안 간 단계는 클릭할 수 없다 — 순서가 의미를 가지므로(확인 없이 판정 금지).
+  // 이미 지나온 단계(n < step)만 눌러서 돌아갈 수 있다.
+  const backTo =
+    backHref ?? (step && step > 1 ? STEPS[step - 2].href : "/");
+
   return (
     <>
       <BrandHeader />
       <main className="mx-auto flex w-full max-w-3xl flex-col gap-7 px-5 pb-16 pt-8">
         <div className="flex flex-col gap-4">
+          {step && (
+            <Link
+              href={backTo}
+              className="inline-flex min-h-11 w-fit items-center gap-1 rounded-full py-2 pr-3 text-sm font-semibold text-ink-muted transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              <span aria-hidden="true">←</span> 뒤로
+            </Link>
+          )}
           {step && (
             <ol
               aria-label="계약서 처리 단계"
@@ -64,19 +83,29 @@ export function ScreenShell({
                 const n = (i + 1) as Step;
                 const active = n === step;
                 const done = n < step;
+                const chip = `block rounded-full px-3 py-1 text-xs font-bold transition ${
+                  active
+                    ? "bg-brand text-white shadow-cta"
+                    : done
+                      ? "bg-brand-tint text-brand-deep"
+                      : "border border-slate-300 bg-white text-ink-muted"
+                }`;
                 return (
-                  <li
-                    key={s.href}
-                    aria-current={active ? "step" : undefined}
-                    className={`rounded-full px-3 py-1 text-xs font-bold transition ${
-                      active
-                        ? "bg-brand text-white shadow-cta"
-                        : done
-                          ? "bg-brand-tint text-brand-deep"
-                          : "border border-slate-300 bg-white text-ink-muted"
-                    }`}
-                  >
-                    {n}. {s.label}
+                  <li key={s.href} aria-current={active ? "step" : undefined}>
+                    {done ? (
+                      // 지나온 단계 — 클릭하면 그 단계로 돌아간다.
+                      <Link
+                        href={s.href}
+                        className={`${chip} hover:bg-brand-tint/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand`}
+                      >
+                        {n}. {s.label}
+                      </Link>
+                    ) : (
+                      // 현재·이후 단계 — 이후 단계는 아직 갈 수 없다.
+                      <span className={chip} aria-disabled={!active}>
+                        {n}. {s.label}
+                      </span>
+                    )}
                   </li>
                 );
               })}

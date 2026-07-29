@@ -8,12 +8,15 @@ import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import {
   analyzeAndSign,
+  getValidationState,
+  SignBlockedError,
   ViolationBlockedError,
 } from "@/lib/api";
 import { readSession, updateSession } from "@/lib/session";
 import type {
   ContractTerms,
   EntryPath,
+  ValidationIssue,
   ValidationReport,
 } from "@/lib/types";
 
@@ -46,6 +49,14 @@ export default function SignPage() {
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [blockedProblems, setBlockedProblems] = useState<string[] | null>(null);
   const [acknowledged, setAcknowledged] = useState(false);
+  // 필수 항목 누락·값 오류. 하나라도 있으면 서명 요청(PDF 생성)을 막는다.
+  const [blockingIssues, setBlockingIssues] = useState<ValidationIssue[]>([]);
+  // 사용자가 review 화면에서 "값이 맞다"고 확인한 필드 키.
+  const [confirmedFields, setConfirmedFields] = useState<string[]>([]);
+  // 값 확인 누락·이름 불일치 등으로 막혔을 때(위반과 다른 409). 돌아가서 고쳐야 한다.
+  const [signBlock, setSignBlock] = useState<SignBlockedError["detail"] | null>(
+    null,
+  );
 
   useEffect(() => {
     const session = readSession();
@@ -53,6 +64,7 @@ export default function SignPage() {
     setReport(session.report);
     setEntryPath(session.entryPath);
     setWorkerBirthDate(session.workerBirthDate);
+    setConfirmedFields(session.confirmedFields);
     setForm({
       workerName: String(session.terms?.worker_name.value ?? ""),
       workerEmail: "",
@@ -61,6 +73,26 @@ export default function SignPage() {
     });
     setReady(true);
   }, []);
+
+  // 필수 항목·값 오류를 확인해 서명 요청 자체를 막을지 정한다.
+  // (review에서 걸러지지만, PDF를 만드는 경로라 여기서도 다시 본다.)
+  useEffect(() => {
+    if (!terms) return;
+    let cancelled = false;
+    getValidationState({ terms, worker_birth_date: workerBirthDate })
+      .then((state) => {
+        if (!cancelled) {
+          setBlockingIssues(state.issues.filter((issue) => issue.blocks));
+        }
+      })
+      .catch(() => {
+        // 판정을 못 받으면 서버 재검증(422)에 맡긴다.
+        if (!cancelled) setBlockingIssues([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [terms, workerBirthDate]);
 
   function setValue(key: keyof PartyForm, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -92,6 +124,8 @@ export default function SignPage() {
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!terms || loading) return;
+    // 필수 항목이 비었거나 값이 잘못됐으면 서명 요청을 보내지 않는다.
+    if (blockingIssues.length > 0) return;
 
     const invalid = validateForm();
     if (invalid) {
@@ -102,6 +136,7 @@ export default function SignPage() {
     setLoading(true);
     setError(null);
     setFieldError(null);
+    setSignBlock(null);
 
     try {
       const response = await analyzeAndSign({
@@ -112,6 +147,8 @@ export default function SignPage() {
         employer_name: form.employerName.trim(),
         employer_email: form.employerEmail.trim(),
         entry_path: entryPath,
+        // review 화면에서 확인한 값 목록. 비면 백엔드가 409로 막는다.
+        confirmed_fields: confirmedFields,
         proceed_with_violations:
           blockedProblems !== null && acknowledged,
       });
@@ -129,6 +166,9 @@ export default function SignPage() {
       if (caught instanceof ViolationBlockedError) {
         setBlockedProblems(caught.detail.problems);
         setAcknowledged(false);
+      } else if (caught instanceof SignBlockedError) {
+        // 값 확인 누락·이름 불일치 — 돌아가서 고쳐야 한다(진행 강행 불가).
+        setSignBlock(caught.detail);
       } else {
         setError(
           caught instanceof Error
@@ -188,20 +228,83 @@ export default function SignPage() {
         “조건 확인됨” 또는 “체결 완료” 상태를 만들지 않습니다.
       </p>
 
-      {reportProblems.length > 0 && !blockedProblems && (
+      {signBlock && (
+        <div
+          role="alert"
+          className="rounded-field border border-amber-400 bg-amber-50 px-4 py-4 text-sm text-amber-950"
+        >
+          <p className="font-extrabold">
+            <span aria-hidden="true">↩️ </span>
+            {signBlock.message}
+          </p>
+          {signBlock.fields && signBlock.fields.length > 0 && (
+            <ul className="mt-2 list-inside list-disc">
+              {signBlock.fields.map((field, index) => (
+                <li key={`${field}-${index}`}>{field}</li>
+              ))}
+            </ul>
+          )}
+          {signBlock.hint && (
+            <p className="mt-2 leading-relaxed">{signBlock.hint}</p>
+          )}
+          <ButtonLink href="/review" variant="secondary" className="mt-4">
+            조건 확인으로 돌아가기
+          </ButtonLink>
+        </div>
+      )}
+
+      {blockingIssues.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-field border border-red-300 bg-red-50 px-4 py-4 text-sm text-red-900"
+        >
+          <p className="font-bold">
+            <span aria-hidden="true">🚫 </span>
+            필수 항목이 비어 있거나 잘못됐어요
+          </p>
+          <p className="mt-1 leading-relaxed">
+            근로계약서에 꼭 필요한 항목을 채우기 전에는 서명 요청을 보낼 수
+            없어요.
+          </p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {blockingIssues.map((issue) => (
+              <li key={issue.field} className="flex flex-col gap-0.5">
+                <span className="font-bold">
+                  {issue.label} — {issue.reason}
+                </span>
+                <span className="text-red-800">→ {issue.fix}</span>
+              </li>
+            ))}
+          </ul>
+          <ButtonLink href="/review" variant="secondary" className="mt-4">
+            조건 확인으로 돌아가기
+          </ButtonLink>
+        </div>
+      )}
+
+      {reportProblems.length > 0 && !blockedProblems && blockingIssues.length === 0 && (
         <div className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3.5 text-sm text-amber-900">
           <p className="font-bold">
             <span aria-hidden="true">⚠️ </span>
-            결과에서 다시 확인할 항목이 {reportProblems.length}건 있습니다
+            서명 전에 한 번 더 확인하면 좋은 항목이 {reportProblems.length}건
+            있어요
           </p>
-          <ul className="mt-2 list-inside list-disc">
+          <ul className="mt-2 flex flex-col gap-2">
             {reportProblems.map((problem, index) => (
-              <li key={`${problem.code}-${index}`}>{problem.label}</li>
+              <li key={`${problem.code}-${index}`}>
+                <span className="font-bold">{problem.label}</span>
+                {(problem.detail || problem.calculation) && (
+                  <span className="mt-0.5 block leading-relaxed text-amber-800">
+                    {problem.detail || problem.calculation}
+                  </span>
+                )}
+              </li>
             ))}
           </ul>
-          <p className="mt-2 leading-relaxed">
-            백엔드는 첫 요청을 409로 차단할 수 있습니다. 차단된 뒤 내용을
-            확인하고 명시적으로 체크한 경우에만 재요청할 수 있습니다.
+          <p className="mt-3 leading-relaxed">
+            이 항목이 있어도 서명 요청은 보낼 수 있어요. 사장님과 조건을
+            조정해 보거나, 내용을 확인한 뒤 지금 조건 그대로 진행하셔도 됩니다.
+            발송을 누르면 확인하셨는지 한 번만 더 여쭤볼게요.
           </p>
         </div>
       )}
@@ -211,9 +314,10 @@ export default function SignPage() {
           role="alert"
           className="rounded-field border border-amber-400 bg-amber-50 px-4 py-4 text-sm text-amber-950"
         >
-          <p className="font-extrabold">서명 요청이 일시 중단됐어요</p>
+          <p className="font-extrabold">보내기 전에 이 항목을 확인해 주세요</p>
           <p className="mt-1 leading-relaxed">
-            백엔드가 다음 항목을 다시 확인하도록 요청했습니다.
+            아래 내용을 한 번만 더 확인하시면, 지금 조건 그대로 서명 요청을
+            보낼 수 있어요.
           </p>
           <ul className="mt-2 list-inside list-disc">
             {blockedProblems.map((problem, index) => (
@@ -312,15 +416,19 @@ export default function SignPage() {
             type="submit"
             className="w-full"
             disabled={
-              loading || (blockedProblems !== null && !acknowledged)
+              loading ||
+              blockingIssues.length > 0 ||
+              (blockedProblems !== null && !acknowledged)
             }
             aria-describedby={fieldError ? "sign-field-error" : undefined}
           >
             {loading
               ? "서명 요청을 보내고 있어요…"
-              : blockedProblems
-                ? "확인한 조건으로 서명 요청 다시 보내기"
-                : "확인 전 요청서 발송"}
+              : blockingIssues.length > 0
+                ? "필수 항목을 먼저 채워 주세요"
+                : blockedProblems
+                  ? "확인한 조건으로 서명 요청 다시 보내기"
+                  : "확인 전 요청서 발송"}
           </Button>
           <ButtonLink href="/result" variant="secondary" className="w-full">
             검증 결과 다시 확인

@@ -57,6 +57,32 @@ export const validationReportSchema = z.object({
   wage_shortfall: z.number().nullable(),
 });
 
+// 입력값 유효성 + 진행 차단 판정. 백엔드 severity.py 의 Issue/ValidationState 와 1:1.
+export const validationSeveritySchema = z.enum(["error", "warning", "info"]);
+
+export const validationIssueSchema = z.object({
+  field: z.string(),
+  label: z.string(),
+  severity: validationSeveritySchema,
+  value: z.union([z.string(), z.number(), z.null()]),
+  reason: z.string(),
+  fix: z.string(),
+  blocks: z.boolean(),
+  step: z.string(),
+  source: z.string(),
+});
+
+export const validationStateSchema = z.object({
+  can_proceed: z.boolean(),
+  blocking_fields: z.array(z.string()),
+  counts: z.object({
+    error: z.number().int().nonnegative(),
+    warning: z.number().int().nonnegative(),
+    info: z.number().int().nonnegative(),
+  }),
+  issues: z.array(validationIssueSchema),
+});
+
 export const documentStatusSchema = z.enum([
   "DRAFTING",
   "REVIEW_REQUESTED",
@@ -83,6 +109,36 @@ export const violationBlockedEnvelopeSchema = z.object({
     problems: z.array(z.string()),
     hint: z.string(),
   }),
+});
+
+// analyze-sign 이 확인 필요·이름 불일치 등으로 막을 때(위반과 다른 409 형태).
+export const signBlockedEnvelopeSchema = z.object({
+  detail: z
+    .object({
+      code: z.string().optional(),
+      message: z.string(),
+      hint: z.string().default(""),
+      fields: z.array(z.string()).optional(),
+    })
+    .passthrough(),
+});
+
+// review-items — 확인이 필요한 항목 목록.
+export const reviewItemSchema = z.object({
+  field: z.string(),
+  label: z.string(),
+  value: z.union([z.string(), z.number(), z.null()]),
+  confidence: confidenceSchema,
+  source_text: z.string().nullable(),
+  priority: z.enum(["high", "medium", "low"]),
+  reasons: z.array(z.string()),
+  affects_judgment: z.boolean(),
+  printed_on_contract: z.boolean(),
+});
+
+export const reviewItemsResponseSchema = z.object({
+  items: z.array(reviewItemSchema),
+  must_confirm: z.array(z.string()),
 });
 
 export const signStatusResponseSchema = z.object({

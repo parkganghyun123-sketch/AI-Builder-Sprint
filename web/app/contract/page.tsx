@@ -5,23 +5,34 @@ import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { Button, ButtonLink, Card } from "@/components/ui";
-import { previewPdf } from "@/lib/api";
+import { getValidationState, previewPdf } from "@/lib/api";
 import { readSession } from "@/lib/session";
-import type { ContractTerms, EntryPath } from "@/lib/types";
+import type {
+  ContractTerms,
+  EntryPath,
+  ValidationIssue,
+} from "@/lib/types";
 
 export default function ContractPage() {
   const [terms, setTerms] = useState<ContractTerms | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
+  const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // 필수 항목 누락·값 오류. 하나라도 있으면 PDF를 만들지 않는다.
+  // null = 아직 확인 전.
+  const [blockingIssues, setBlockingIssues] = useState<
+    ValidationIssue[] | null
+  >(null);
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     const session = readSession();
     setTerms(session.terms);
     setEntryPath(session.entryPath);
+    setWorkerBirthDate(session.workerBirthDate);
     setReady(true);
   }, []);
 
@@ -33,13 +44,36 @@ export default function ContractPage() {
     setLoading(true);
     setError(null);
     setPdfUrl(null);
+    setBlockingIssues(null);
 
-    previewPdf({
-      terms,
-      entry_path: entryPath,
-      include_verification: true,
-    })
-      .then((blob) => {
+    void (async () => {
+      // 1) PDF를 만들기 전에 필수 항목·값 오류를 먼저 본다.
+      //    비어 있거나 잘못된 값이 있으면 여기서 멈춘다 (0원짜리 계약서 방지).
+      let blocking: ValidationIssue[] = [];
+      try {
+        const state = await getValidationState({
+          terms,
+          worker_birth_date: workerBirthDate,
+        });
+        blocking = state.issues.filter((issue) => issue.blocks);
+      } catch {
+        // 판정을 못 받으면 서버 재검증(422)에 맡기고 미리보기를 시도한다.
+        blocking = [];
+      }
+      if (cancelled) return;
+      setBlockingIssues(blocking);
+      if (blocking.length > 0) {
+        setLoading(false);
+        return; // 차단 항목이 있으면 PDF 생성 안 함
+      }
+
+      // 2) 통과했을 때만 PDF 미리보기를 만든다.
+      try {
+        const blob = await previewPdf({
+          terms,
+          entry_path: entryPath,
+          include_verification: true,
+        });
         objectUrl = URL.createObjectURL(blob);
         if (cancelled) {
           URL.revokeObjectURL(objectUrl);
@@ -47,8 +81,7 @@ export default function ContractPage() {
           return;
         }
         setPdfUrl(objectUrl);
-      })
-      .catch((caught) => {
+      } catch (caught) {
         if (!cancelled) {
           setError(
             caught instanceof Error
@@ -56,16 +89,18 @@ export default function ContractPage() {
               : "PDF 미리보기를 만들지 못했습니다.",
           );
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [entryPath, retry, terms]);
+  }, [entryPath, retry, terms, workerBirthDate]);
+
+  const hasBlocking = (blockingIssues?.length ?? 0) > 0;
 
   function downloadDraft() {
     if (!pdfUrl) return;
@@ -127,10 +162,41 @@ export default function ContractPage() {
         </ul>
       </Card>
 
+      {hasBlocking && (
+        <div
+          role="alert"
+          className="rounded-field border border-red-300 bg-red-50 px-4 py-4 text-sm text-red-900"
+        >
+          <p className="font-bold">
+            <span aria-hidden="true">🚫 </span>
+            아직 요청서를 만들 수 없어요
+          </p>
+          <p className="mt-1 leading-relaxed">
+            근로계약서에 꼭 필요한 항목이 비어 있거나 잘못된 값이 있어요.
+            아래를 고치면 요청서 미리보기가 만들어져요.
+          </p>
+          <ul className="mt-3 flex flex-col gap-3">
+            {blockingIssues?.map((issue) => (
+              <li key={issue.field} className="flex flex-col gap-0.5">
+                <span className="font-bold">
+                  {issue.label} — {issue.reason}
+                </span>
+                <span className="text-red-800">→ {issue.fix}</span>
+              </li>
+            ))}
+          </ul>
+          <ButtonLink href="/review" variant="secondary" className="mt-4">
+            조건 수정하러 가기
+          </ButtonLink>
+        </div>
+      )}
+
       {loading && (
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            백엔드에서 PDF 초안을 만들고 있어요…
+            {blockingIssues === null
+              ? "필수 항목을 확인하고 있어요…"
+              : "백엔드에서 PDF 초안을 만들고 있어요…"}
           </p>
         </Card>
       )}
@@ -169,7 +235,9 @@ export default function ContractPage() {
           </ButtonLink>
         ) : (
           <Button className="w-full" disabled>
-            PDF 미리보기 후 발송 정보 입력으로
+            {hasBlocking
+              ? "필수 항목을 고치면 발송할 수 있어요"
+              : "PDF 미리보기 후 발송 정보 입력으로"}
           </Button>
         )}
         <Button

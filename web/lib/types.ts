@@ -108,6 +108,46 @@ export interface ValidationReport {
 }
 
 // ============================================================
+// 2-2. 입력값 유효성 + 진행 차단 — severity.py 대응
+// ============================================================
+
+/** error(차단) / warning(진행 가능) / info(참고) */
+export type ValidationSeverity = "error" | "warning" | "info";
+
+/**
+ * 화면에 그대로 뿌리는 이슈 하나. 문구를 프론트에서 새로 만들지 않는다.
+ * reason·fix 를 그대로 쓰고, field 로 해당 입력란에 포커스를 옮긴다.
+ */
+export interface ValidationIssue {
+  field: string;
+  label: string;
+  severity: ValidationSeverity;
+  /** 문제가 된 현재 값 */
+  value: string | number | null;
+  /** 왜 문제인가 */
+  reason: string;
+  /** 어떻게 고치나 */
+  fix: string;
+  /** 다음 단계를 막는가 */
+  blocks: boolean;
+  /** 어느 화면에서 고치나 */
+  step: string;
+  /** input(값 자체) / legal(법정 기준) */
+  source: string;
+}
+
+/**
+ * 진행 차단 판정. 프론트는 이 응답만 보고 "다음" 버튼을 켜고 끈다.
+ * ⚠️ 같은 규칙을 화면에 복사하지 말 것. 두 곳에 두면 반드시 어긋난다.
+ */
+export interface ValidationState {
+  can_proceed: boolean;
+  blocking_fields: string[];
+  counts: { error: number; warning: number; info: number };
+  issues: ValidationIssue[];
+}
+
+// ============================================================
 // 3. 문서 상태 — C가 관리 (모두싸인 상태와 대응)
 // ============================================================
 
@@ -150,8 +190,56 @@ export interface AnalyzeSignRequest {
   employer_name: string;
   employer_email: string;
   entry_path: EntryPath;
+  /**
+   * 사용자가 "값이 맞다"고 확인한 항목의 키 목록.
+   * review-items 의 must_confirm 을 여기에 담아 보내야 백엔드가 서명을 진행한다.
+   * 비우면 백엔드가 409(UNCONFIRMED_FIELDS)로 막는다.
+   */
+  confirmed_fields: string[];
   /** 위반이 남아 있어도 진행할지. 기본 false → 백엔드가 409로 막는다 */
   proceed_with_violations: boolean;
+}
+
+// ============================================================
+// 4-2. 확인이 필요한 항목 — review-items
+// ============================================================
+
+/** 서명 전에 확인받아야 하는 우선순위 */
+export type ReviewPriority = "high" | "medium" | "low";
+
+/** 확인이 필요한 항목 하나. 백엔드 build_review_items 와 대응. */
+export interface ReviewItem {
+  /** ContractTerms 키. confirmed_fields 에 담아 보낼 값. */
+  field: string;
+  label: string;
+  value: string | number | null;
+  confidence: Confidence;
+  source_text: string | null;
+  priority: ReviewPriority;
+  /** 왜 확인이 필요한지 */
+  reasons: string[];
+  /** 판정에 쓰이는 값인가 */
+  affects_judgment: boolean;
+  /** 계약서에 인쇄되는 신원 정보인가 */
+  printed_on_contract: boolean;
+}
+
+export interface ReviewItemsResponse {
+  items: ReviewItem[];
+  /** priority=high — 서명 전 반드시 확인해야 하는 필드 키 */
+  must_confirm: string[];
+}
+
+/**
+ * analyze-sign 이 409로 되돌릴 때 오는 본문 (확인 필요·이름 불일치 등).
+ * 위반(proceed 가능)과 달리 사용자가 돌아가서 고쳐야 한다.
+ */
+export interface SignBlocked {
+  code?: string;
+  message: string;
+  hint: string;
+  /** 확인/수정이 필요한 항목 라벨 */
+  fields?: string[];
 }
 
 export interface AnalyzeSignResponse {

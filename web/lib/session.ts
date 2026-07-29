@@ -45,6 +45,8 @@ const sessionSchema = z.object({
   report: validationReportSchema.nullable(),
   workerBirthDate: z.string().nullable().default(null),
   userEditedFields: z.array(contractTermKeySchema).default([]),
+  // 사용자가 "값이 맞다"고 확인한 필드 키. 서명 시 confirmed_fields 로 보낸다.
+  confirmedFields: z.array(z.string()).default([]),
   sign: z
     .object({
       documentId: z.string().min(1),
@@ -61,6 +63,7 @@ export const EMPTY_SESSION: FairSignSession = {
   report: null,
   workerBirthDate: null,
   userEditedFields: [],
+  confirmedFields: [],
   sign: null,
 };
 
@@ -169,6 +172,7 @@ export function startSession(
     report: null,
     workerBirthDate: null,
     userEditedFields: [],
+    confirmedFields: [],
     sign: null,
   };
   writeSession(session);

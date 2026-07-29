@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { type DragEvent, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ScreenShell } from "@/components/ScreenShell";
 import { Button, ButtonLink, Card } from "@/components/ui";
@@ -20,6 +20,17 @@ export default function UploadPage() {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 파일을 영역 위로 끌어온 동안만 true. 시각적 강조에만 쓴다.
+  const [dragging, setDragging] = useState(false);
+
+  // ⚠️ 파일은 onDrop 에서만 처리한다. onDragOver(끌어와 올려놓기)에서 업로드하면
+  //    의도치 않은 업로드가 생긴다. onDragOver 는 강조 표시만 담당한다.
+  function handleDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (loading) return;
+    selectFile(event.dataTransfer.files?.[0] ?? null);
+  }
 
   useEffect(() => {
     if (!file || !file.type.startsWith("image/")) {
@@ -78,7 +89,19 @@ export default function UploadPage() {
       title="계약서 사진 올리기"
       description="시급·근로시간 같은 조건을 AI가 읽어 드려요. 다음 화면에서 사람이 모든 항목을 확인하고 수정합니다."
     >
-      <Card className="flex flex-col items-center gap-4 border-2 border-dashed border-brand-line py-10 text-center">
+      <div
+        onDragOver={(event) => {
+          event.preventDefault();
+          if (!loading) setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={handleDrop}
+        className={`flex flex-col items-center gap-4 rounded-card border-2 border-dashed p-6 py-10 text-center shadow-card transition ${
+          dragging
+            ? "border-brand bg-brand-tint/50"
+            : "border-brand-line bg-white"
+        }`}
+      >
         {previewUrl ? (
           // 브라우저 메모리에만 만든 미리보기 URL이다.
           // eslint-disable-next-line @next/next/no-img-element
@@ -95,10 +118,14 @@ export default function UploadPage() {
 
         <div>
           <p className="font-bold text-ink">
-            {file ? file.name : "계약서 파일을 선택해 주세요"}
+            {dragging
+              ? "여기에 놓으면 파일이 선택돼요"
+              : file
+                ? file.name
+                : "파일을 이 영역으로 끌어다 놓으세요"}
           </p>
           <p className="mt-1 text-sm text-ink-muted">
-            JPG · PNG · PDF · 파일 한 개
+            또는 아래 버튼으로 선택 · JPG · PNG · PDF · 파일 한 개
           </p>
         </div>
 
@@ -132,7 +159,7 @@ export default function UploadPage() {
             ? "처리가 끝날 때까지 중복 제출을 막고 있어요."
             : "파일 원본은 브라우저 저장소에 넣지 않지만, 추출된 계약 조건은 현재 탭의 sessionStorage에 저장됩니다."}
         </p>
-      </Card>
+      </div>
 
       {error && (
         <div
@@ -181,10 +208,7 @@ export default function UploadPage() {
         </ul>
       </Card>
 
-      <div className="flex flex-col justify-between gap-2 sm:flex-row">
-        <ButtonLink href="/" variant="ghost">
-          ← 뒤로
-        </ButtonLink>
+      <div className="flex justify-end">
         <ButtonLink href="/review?path=B" variant="ghost">
           직접 입력할게요
         </ButtonLink>

@@ -12,6 +12,7 @@ export interface FieldOption {
  * NOT_FOUND는 빈칸으로 유지한다.
  */
 export function FieldInput({
+  name,
   label,
   field,
   onChange,
@@ -21,6 +22,8 @@ export function FieldInput({
   inputMode,
   options,
 }: {
+  /** ContractTerms 키. data-field 로 심어 오류→입력란 포커스 이동에 쓴다. */
+  name?: string;
   label: string;
   field: ExtractedField;
   onChange: (value: string) => void;
@@ -57,6 +60,7 @@ export function FieldInput({
       {options ? (
         <select
           id={id}
+          data-field={name}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           aria-describedby={describedBy}
@@ -72,6 +76,7 @@ export function FieldInput({
       ) : (
         <input
           id={id}
+          data-field={name}
           type={type}
           inputMode={inputMode}
           value={value}
