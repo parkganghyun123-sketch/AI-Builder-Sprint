@@ -28,6 +28,7 @@ from app.schemas import (
 )
 from app.signing import modusign
 from app.validation.rules import validate
+from app.validation.severity import build_validation_state
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -77,6 +78,41 @@ async def validate_terms(body: ValidateRequest) -> ValidationReport:
     return _validate_with_optional_birth_date(
         _minimize_contact_fields(body.terms),
         body.worker_birth_date,
+    )
+
+
+class ValidationStateResponse(BaseModel):
+    can_proceed: bool
+    blocking_fields: list[str]
+    counts: dict
+    issues: list[dict]
+
+
+@router.post("/contracts/validation-state", response_model=ValidationStateResponse)
+async def validation_state(body: ValidateRequest) -> ValidationStateResponse:
+    """
+    입력값 유효성 + 법정 기준을 한 번에 돌려준다.
+
+    프론트엔드는 이 응답만 보고 다음 단계 버튼을 켜고 끈다.
+    같은 규칙을 화면에 복사하지 말 것 — 두 곳에 두면 반드시 어긋난다.
+
+    각 issue 는 어디를·왜·어떻게 고쳐야 하는지까지 담는다.
+    "확인할 항목 5건" 처럼 개수만 보여주지 않기 위해서다.
+
+      severity  error(차단) / warning(진행 가능) / info(참고)
+      blocks    이 항목이 다음 단계를 막는가
+      field     화면에서 포커스를 옮길 대상
+
+    ⚠️ 임금 0원처럼 값 자체가 성립하지 않는 경우는 error 로 막지만,
+       최저임금 미달 같은 법정 기준 위반은 warning 이다.
+       사실이고, 사용자가 알고도 진행할 수 있어야 한다.
+    """
+    report = _validate_with_optional_birth_date(
+        _minimize_contact_fields(body.terms),
+        body.worker_birth_date,
+    )
+    return ValidationStateResponse(
+        **build_validation_state(body.terms, report).to_dict()
     )
 
 
@@ -184,6 +220,34 @@ def build_verification_note(
     )
 
 
+def _reject_if_blocking(terms: ContractTerms, worker_birth_date: str | None) -> None:
+    """
+    값 자체가 성립하지 않으면 문서를 만들지 않는다.
+
+    ⚠️ 프론트엔드 검증은 우회할 수 있다. URL 직접 접근, API 직접 호출,
+       개발자 도구 어느 쪽이든. 그래서 문서를 만드는 모든 경로에서 다시 본다.
+
+    최저임금 미달 같은 법정 기준 위반은 여기서 막지 않는다.
+    그건 사실이고 사용자가 알고도 진행할 수 있어야 한다.
+    여기서 막는 것은 임금 0원처럼 **계약으로 성립하지 않는 값**뿐이다.
+    """
+    report = _validate_with_optional_birth_date(terms, worker_birth_date)
+    state = build_validation_state(terms, report)
+    if state.can_proceed:
+        return
+
+    log.info("차단 오류로 문서 생성 거부: %s", state.blocking_fields)
+    raise HTTPException(
+        status_code=422,
+        detail={
+            "code": "INVALID_CONTRACT_VALUES",
+            "message": "계약서로 성립하지 않는 값이 있어 문서를 만들 수 없습니다.",
+            "blocking_fields": state.blocking_fields,
+            "issues": [i.to_dict() for i in state.blocking],
+        },
+    )
+
+
 # ============================================================
 # 3. PDF 미리보기
 # ============================================================
@@ -205,9 +269,12 @@ async def preview_pdf(body: PreviewRequest) -> Response:
     """
     terms = _minimize_contact_fields(body.terms)
 
+    # 미리보기도 PDF다. 0원짜리 계약서가 만들어져 돌아다니면 안 된다.
+    _reject_if_blocking(terms, None)
+
     note = None
     if body.include_verification:
-        note = build_verification_note(validate(terms))
+        note = build_verification_note(validate(terms), body.entry_path)
 
     pdf = render_contract_pdf(terms, is_draft=True, verification_note=note)
 
@@ -340,8 +407,14 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
             },
         )
 
-    # 3단계 — 확인된 값으로 법정 기준 판정
+    # 3단계 — 값 자체가 계약으로 성립하는가
+    #
+    # 확인 관문을 통과했다는 건 "사람이 봤다"는 뜻이지
+    # "값이 올바르다"는 뜻이 아니다. 임금 0원을 확인만 하고 넘어갈 수도 있다.
     terms = _minimize_contact_fields(body.terms)
+    _reject_if_blocking(terms, body.worker_birth_date)
+
+    # 4단계 — 확인된 값으로 법정 기준 판정
     report = _validate_with_optional_birth_date(terms, body.worker_birth_date)
 
     if report.has_problem and not body.proceed_with_violations:
