@@ -139,13 +139,36 @@ def _normalize_extracted_value(value):
     # 체크 표시가 값에 섞여 들어온다: '없음 [✓]' → '없음'
     cleaned = _CHECKMARK.sub("", stripped).strip()
 
-    # 인쇄된 양식 문구를 값으로 가져온 경우.
-    #   payday 칸이 비어 있는데 '매월(매주 또는 매일) 일' 을 값으로 반환한 사례.
-    #   빈칸이라는 뜻이므로 None 으로 되돌린다.
+    # 라벨이 값 앞에 붙어 오는 경우: '사업체명 : 편의점' → '편의점'
+    #
+    # ⚠️ 라벨이 보인다고 통째로 버리면 안 된다.
+    #    실제로 그렇게 만들었다가 '사업체명 : 편의점' 의 '편의점' 까지
+    #    잃었다. 라벨만 떼고 남는 게 있으면 그것이 값이다.
+    cleaned = _strip_label_prefix(cleaned)
+
+    # 라벨을 떼고도 값이 없으면 빈칸이다.
+    #   payday 칸이 비어 있는데 '매월(매주 또는 매일) 일' 을 반환한 사례.
     if _looks_like_form_label(cleaned):
         return None
 
     return cleaned or None
+
+
+def _strip_label_prefix(text: str) -> str:
+    """
+    '사업체명 : 편의점' → '편의점'
+    라벨만 있으면 빈 문자열이 되어 _looks_like_form_label 이 잡는다.
+    """
+    if ":" not in text or _TIME_LIKE.search(text):
+        return text
+
+    head, _, tail = text.rpartition(":")
+    head_compact = re.sub(r"[\s_()\[\]]", "", head)
+
+    # 콜론 앞이 라벨로 보이고 뒤에 내용이 있으면 뒤만 취한다
+    if tail.strip() and any(w in head_compact for w in _FIELD_LABEL_WORDS):
+        return tail.strip()
+    return text
 
 
 # 체크박스·괄호 표시. 값 뒤에 붙어 오는 경우가 있다.

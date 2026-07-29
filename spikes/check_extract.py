@@ -134,6 +134,12 @@ def run_many(image: Path, answer: dict, runs: int) -> None:
             always_bad.append(name)
         print(f"{name:24} {ok:>3}/{runs}  {dist}{flag}")
 
+        # 틀린 필드는 실제로 뭘 뽑았는지 보여준다.
+        # 값을 모르면 원인을 못 찾는다.
+        if ok < runs:
+            got = sorted(v for v in values[name] if v != "None") or ["(없음)"]
+            print(f"{'':24}   정답 {answer[name]!r} / 추출 {', '.join(got)}")
+
     print("\n" + "=" * 78)
     stable_ok = sum(1 for n, c in tally.items() if c.get("correct", 0) == runs)
     print(f"  {runs}회 모두 정확     {stable_ok}/{len(answer)}")
