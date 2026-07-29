@@ -154,6 +154,7 @@ function ReviewContent() {
   const wantsManual = searchParams.get("path") === "B";
   const [terms, setTerms] = useState<ContractTerms | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
+  const [workerBirthDate, setWorkerBirthDate] = useState("");
   const [userEditedFields, setUserEditedFields] = useState<
     (keyof ContractTerms)[]
   >([]);
@@ -167,17 +168,20 @@ function ReviewContent() {
     if (wantsManual) {
       if (existing.entryPath === "MANUAL" && existing.terms) {
         setTerms(existing.terms);
+        setWorkerBirthDate(existing.workerBirthDate ?? "");
         setUserEditedFields(existing.userEditedFields);
       } else {
         const emptyTerms = createEmptyTerms();
         const created = startSession(emptyTerms, "MANUAL");
         setTerms(created.terms);
+        setWorkerBirthDate(created.workerBirthDate ?? "");
         setUserEditedFields(created.userEditedFields);
       }
       setEntryPath("MANUAL");
     } else {
       setTerms(existing.terms);
       setEntryPath(existing.entryPath);
+      setWorkerBirthDate(existing.workerBirthDate ?? "");
       setUserEditedFields(existing.userEditedFields);
     }
     setReady(true);
@@ -208,13 +212,32 @@ function ReviewContent() {
     setError(null);
   }
 
+  function changeWorkerBirthDate(value: string) {
+    setWorkerBirthDate(value);
+    updateSession({
+      workerBirthDate: value || null,
+      report: null,
+      sign: null,
+    });
+    setError(null);
+  }
+
   async function submit() {
     if (!terms || loading) return;
     setLoading(true);
     setError(null);
     try {
-      const report = await validateTerms({ terms });
-      updateSession({ terms, entryPath, report, sign: null });
+      const report = await validateTerms({
+        terms,
+        worker_birth_date: workerBirthDate || null,
+      });
+      updateSession({
+        terms,
+        entryPath,
+        workerBirthDate: workerBirthDate || null,
+        report,
+        sign: null,
+      });
       router.push("/result");
     } catch (caught) {
       setError(
@@ -292,6 +315,49 @@ function ReviewContent() {
         화면에서 수집하거나 탭 세션에 저장하지 않습니다. 이름과 확인한 계약
         조건은 현재 브라우저 탭을 닫을 때까지 세션에 남을 수 있습니다.
       </p>
+
+      <Card className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-base font-extrabold text-ink">
+            연령별 근로조건 확인
+          </h2>
+          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+            생년월일을 입력하면 백엔드 검증 코드가 계약 시작일을 기준으로
+            15세 이상 18세 미만 근로시간과 야간근로 항목을 확인합니다.
+            입력하지 않으면 해당 검사를 결과에 추가하지 않습니다.
+          </p>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="worker-birth-date"
+            className="text-sm font-bold text-ink"
+          >
+            근로자 생년월일 (선택)
+          </label>
+          <input
+            id="worker-birth-date"
+            type="date"
+            value={workerBirthDate}
+            autoComplete="off"
+            aria-describedby="worker-birth-date-help"
+            disabled={loading}
+            onChange={(event) => changeWorkerBirthDate(event.target.value)}
+            className="min-h-14 w-full rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
+          />
+          <p
+            id="worker-birth-date-help"
+            className="text-xs leading-relaxed text-ink-muted"
+          >
+            생년월일은 계약 조건이나 계약서·PDF에 넣지 않습니다. 브라우저에서는
+            검증과 서명 요청을 이어가기 위해 현재 탭의 sessionStorage에만 임시
+            저장하고, 검증·서명 요청 때 백엔드로 전송합니다. 서명 요청이
+            성공하면 현재 탭의 저장값에서도 즉시 지우며, 409 응답이나 오류로
+            재시도가 필요하면 탭을 닫을 때까지만 유지합니다. 브라우저
+            자동완성은 사용하지 않고 결과 화면, 오류 메시지, 로그에도 표시하지
+            않습니다. 서버의 보관·삭제 정책은 아직 검증되지 않았습니다.
+          </p>
+        </div>
+      </Card>
 
       {SECTIONS.map((section) => (
         <Card key={section.title} className="flex flex-col gap-5">

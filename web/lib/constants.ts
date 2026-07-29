@@ -36,7 +36,7 @@ export const CHECK_STATUS_META: Record<
   },
   VIOLATION: {
     icon: "⚠️",
-    label: "기준보다 낮음",
+    label: "기준 벗어남",
     chip: "bg-red-100 text-red-900",
     ring: "border-red-300",
   },

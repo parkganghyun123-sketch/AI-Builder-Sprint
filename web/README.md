@@ -40,22 +40,28 @@ NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 | 라우트 | 실제 동작 |
 |---|---|
 | `/upload` | JPG·PNG·PDF를 `POST /contracts/extract`로 전송 |
-| `/review` | AI 추출값 또는 직접 입력값 23개를 확인·수정하고 `POST /contracts/validate` 호출 |
+| `/review` | AI 추출값 또는 직접 입력값 23개를 확인·수정하고, 선택 생년월일과 함께 `POST /contracts/validate` 호출 |
 | `/result` | 백엔드 `ValidationReport`만 표시 |
 | `/contract` | `POST /contracts/preview` PDF를 메모리 URL로 미리보기·다운로드 |
-| `/sign` | `POST /contracts/analyze-sign`, 409 확인 후 명시적 재요청 |
+| `/sign` | 현재 탭의 선택 생년월일을 재사용해 `POST /contracts/analyze-sign`, 409 확인 후 명시적 재요청 |
 | `/complete` | `GET /contracts/{id}/status`를 폴링하고 실제 완료 상태와 다운로드 주소 표시 |
 | `/archive` | 보관 API가 없어 `준비 중`만 표시 |
 
-계약 조건·검증 결과·서명 문서 ID는 현재 브라우저 탭의 `sessionStorage`에만
-저장합니다. 업로드한 파일 원본과 PDF Blob은 브라우저 저장소에 넣지 않습니다.
-서버의 파일 보관·삭제 정책은 아직 검증되지 않았으므로 자동 삭제를 보장하지
-않습니다.
+계약 조건·검증 결과·서명 문서 ID와 선택 입력한 근로자 생년월일은 현재 브라우저
+탭의 `sessionStorage`에만 저장합니다. 생년월일은 `ContractTerms`나 계약서·PDF에
+넣지 않고, 검증과 서명 요청에만 전송하며 결과 화면·오류 메시지·로그에 표시하지
+않습니다. 생년월일 입력은 브라우저 자동완성을 끄고, 서명 요청이 성공하면 React
+상태와 현재 탭의 `sessionStorage`에서 즉시 지웁니다. 409 응답이나 오류가 발생한
+경우에는 재시도를 위해 유지하되 탭을 닫으면 사라집니다. 업로드한 파일 원본과 PDF
+Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생년월일 보관·삭제 정책은
+아직 검증되지 않았으므로 서버 측 자동 삭제를 보장하지 않습니다.
 
 ## API 안전 규칙
 
 - 외부 JSON 응답은 `lib/schemas.ts`의 Zod 스키마로 검증합니다.
 - 판정과 금액 계산은 프론트에서 하지 않습니다.
+- 생년월일로 나이 또는 법 적용 여부를 프론트에서 계산하지 않고 백엔드 검증
+  결과만 표시합니다.
 - 409 응답을 우회하지 않고, 사용자가 확인 체크를 한 재요청에서만
   `proceed_with_violations=true`를 보냅니다.
 - 오류 메시지와 콘솔에 파일 내용, 추출 원문, 이름, 이메일을 남기지 않습니다.

@@ -41,6 +41,17 @@ def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
     )
 
 
+def _validate_with_optional_birth_date(
+    terms: ContractTerms,
+    worker_birth_date: str | None,
+) -> ValidationReport:
+    """생년월일 미입력 요청은 기존 한 인자 검증 호출과 호환한다."""
+
+    if worker_birth_date is None:
+        return validate(terms)
+    return validate(terms, worker_birth_date=worker_birth_date)
+
+
 # ============================================================
 # 1. 검증만
 # ============================================================
@@ -48,6 +59,7 @@ def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
 
 class ValidateRequest(BaseModel):
     terms: ContractTerms
+    worker_birth_date: str | None = None
 
 
 @router.post("/contracts/validate", response_model=ValidationReport)
@@ -58,7 +70,10 @@ async def validate_terms(body: ValidateRequest) -> ValidationReport:
     입력은 사용자가 확인·수정을 마친 조건이어야 한다.
     AI 추출 직후 값을 그대로 넣으면 안 된다.
     """
-    return validate(_minimize_contact_fields(body.terms))
+    return _validate_with_optional_birth_date(
+        _minimize_contact_fields(body.terms),
+        body.worker_birth_date,
+    )
 
 
 # ============================================================
@@ -81,18 +96,24 @@ def build_verification_note(report: ValidationReport) -> str:
 
     if not problems:
         return (
-            "※ 본 요청서는 FairSign에서 2026년 기준 최저임금·주휴 시간요건·"
-            "휴게시간 항목을 확인했으며, 확인된 범위에서 미달·누락 항목이 "
+            "※ 본 요청서는 FairSign에서 지원하는 2026년 법정 기준 항목을 "
+            "확인했으며, 확인된 범위에서 기준을 벗어나거나 누락된 항목이 "
             "발견되지 않았습니다. 법률 자문이 아닙니다."
         )
 
-    lines = [
-        f"· {c.label}: {c.calculation or c.detail or '확인 필요'}" for c in problems
-    ]
+    lines = []
+    for check in problems:
+        evidence = []
+        if check.calculation:
+            evidence.append(f"계산: {check.calculation}")
+        if check.detail:
+            evidence.append(f"안내: {check.detail}")
+        lines.append(f"· {check.label}: {' / '.join(evidence) or '확인 필요'}")
+
     return (
-        "※ FairSign 확인 결과(2026년 기준), 아래 항목은 지원하는 기준보다 낮거나 "
-        "확인된 입력에서 찾지 못했습니다. 이 요청서는 해당 결과를 자동으로 "
-        "수정하지 않습니다.\n"
+        "※ FairSign 확인 결과(2026년 기준), 아래 항목은 지원하는 기본 기준을 "
+        "벗어났거나 확인된 입력에서 찾지 못했거나 추가 확인이 필요합니다. "
+        "이 요청서는 해당 결과를 자동으로 수정하지 않습니다.\n"
         + "\n".join(lines)
         + "\n법정 기준 자동 계산 결과이며 법률 자문이 아닙니다."
     )
@@ -141,6 +162,7 @@ async def preview_pdf(body: PreviewRequest) -> Response:
 
 class AnalyzeSignRequest(BaseModel):
     terms: ContractTerms
+    worker_birth_date: str | None = None
     worker_name: str
     worker_email: str
     employer_name: str
@@ -166,19 +188,30 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
     사용자가 알고도 진행하려면 proceed_with_violations=true 를 보내야 한다.
     """
     terms = _minimize_contact_fields(body.terms)
-    report = validate(terms)
+    report = _validate_with_optional_birth_date(terms, body.worker_birth_date)
 
     if report.has_problem and not body.proceed_with_violations:
-        problems = [
-            c.label
-            for c in report.checks
-            if c.status in (CheckStatus.VIOLATION, CheckStatus.MISSING)
+        problem_checks = [
+            check
+            for check in report.checks
+            if check.status in (CheckStatus.VIOLATION, CheckStatus.MISSING)
         ]
         raise HTTPException(
             status_code=409,
             detail={
-                "message": "법정 기준에 미달하거나 누락된 항목이 있습니다.",
-                "problems": problems,
+                "message": (
+                    "기본 기준 초과·누락 또는 추가 확인이 필요한 항목이 있습니다."
+                ),
+                "problems": [check.label for check in problem_checks],
+                "problem_details": [
+                    {
+                        "code": check.code,
+                        "label": check.label,
+                        "calculation": check.calculation,
+                        "detail": check.detail,
+                    }
+                    for check in problem_checks
+                ],
                 "hint": "조건을 수정하거나 proceed_with_violations=true 로 다시 요청하세요.",
             },
         )

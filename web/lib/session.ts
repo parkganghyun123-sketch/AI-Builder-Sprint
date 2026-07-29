@@ -43,6 +43,7 @@ const sessionSchema = z.object({
   terms: contractTermsSchema.nullable(),
   entryPath: entryPathSchema,
   report: validationReportSchema.nullable(),
+  workerBirthDate: z.string().nullable().default(null),
   userEditedFields: z.array(contractTermKeySchema).default([]),
   sign: z
     .object({
@@ -58,6 +59,7 @@ export const EMPTY_SESSION: FairSignSession = {
   terms: null,
   entryPath: "PHOTO",
   report: null,
+  workerBirthDate: null,
   userEditedFields: [],
   sign: null,
 };
@@ -95,6 +97,7 @@ function normalizeSession(session: FairSignSession): FairSignSession {
   return {
     ...session,
     terms: session.terms ? minimizeTermsForValidation(session.terms) : null,
+    workerBirthDate: session.workerBirthDate?.trim() || null,
   };
 }
 
@@ -164,6 +167,7 @@ export function startSession(
     terms: minimizeTermsForValidation(terms),
     entryPath,
     report: null,
+    workerBirthDate: null,
     userEditedFields: [],
     sign: null,
   };

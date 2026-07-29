@@ -38,6 +38,7 @@ export default function SignPage() {
   const [terms, setTerms] = useState<ContractTerms | null>(null);
   const [report, setReport] = useState<ValidationReport | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
+  const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
   const [form, setForm] = useState<PartyForm>(EMPTY_FORM);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -51,6 +52,7 @@ export default function SignPage() {
     setTerms(session.terms);
     setReport(session.report);
     setEntryPath(session.entryPath);
+    setWorkerBirthDate(session.workerBirthDate);
     setForm({
       workerName: String(session.terms?.worker_name.value ?? ""),
       workerEmail: "",
@@ -104,6 +106,7 @@ export default function SignPage() {
     try {
       const response = await analyzeAndSign({
         terms,
+        worker_birth_date: workerBirthDate,
         worker_name: form.workerName.trim(),
         worker_email: form.workerEmail.trim(),
         employer_name: form.employerName.trim(),
@@ -112,7 +115,9 @@ export default function SignPage() {
         proceed_with_violations:
           blockedProblems !== null && acknowledged,
       });
+      setWorkerBirthDate(null);
       updateSession({
+        workerBirthDate: null,
         report: response.report,
         sign: {
           documentId: response.document_id,

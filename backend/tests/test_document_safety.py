@@ -65,6 +65,18 @@ def _terms() -> ContractTerms:
     )
 
 
+def _minor_problem_terms() -> ContractTerms:
+    return _terms().model_copy(
+        update={
+            "work_start_time": _field("20:00"),
+            "work_end_time": _field("04:00"),
+            "break_start_time": _field(None),
+            "break_end_time": _field(None),
+            "work_days_per_week": _field(4),
+        }
+    )
+
+
 def _empty_report() -> ValidationReport:
     return ValidationReport(
         checks=[],
@@ -146,6 +158,29 @@ def test_preview_is_always_a_watermarked_request_draft(monkeypatch) -> None:
     )
 
 
+def test_validate_request_forwards_worker_birth_date(monkeypatch) -> None:
+    captured: dict = {}
+
+    def fake_validate(terms, worker_birth_date=None):
+        captured["terms"] = terms
+        captured["worker_birth_date"] = worker_birth_date
+        return _empty_report()
+
+    monkeypatch.setattr(contracts, "validate", fake_validate)
+    response = asyncio.run(
+        contracts.validate_terms(
+            contracts.ValidateRequest(
+                terms=_terms(),
+                worker_birth_date="2009-07-31",
+            )
+        )
+    )
+
+    assert response == _empty_report()
+    assert captured["worker_birth_date"] == "2009-07-31"
+    assert captured["terms"].worker_contact.value is None
+
+
 def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     monkeypatch,
 ) -> None:
@@ -154,14 +189,19 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     def fake_render(terms, *, is_draft, verification_note=None):
         captured["is_draft"] = is_draft
         captured["terms"] = terms
+        captured["verification_note"] = verification_note
         return b"%PDF-synthetic"
+
+    def fake_validate(terms, worker_birth_date=None):
+        captured["worker_birth_date"] = worker_birth_date
+        return _empty_report()
 
     async def fake_request_signature(**kwargs):
         captured.update(kwargs)
         return {"id": "synthetic-document-id", "status": "ON_PROCESSING"}
 
     monkeypatch.setattr(contracts, "render_contract_pdf", fake_render)
-    monkeypatch.setattr(contracts, "validate", lambda terms: _empty_report())
+    monkeypatch.setattr(contracts, "validate", fake_validate)
     monkeypatch.setattr(contracts.modusign, "request_signature", fake_request_signature)
 
     response = asyncio.run(
@@ -172,6 +212,7 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
                 worker_email="worker@example.com",
                 employer_name="가상 사업주",
                 employer_email="employer@example.com",
+                worker_birth_date="2009-07-31",
                 entry_path="PHOTO",
             )
         )
@@ -180,8 +221,124 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     assert captured["is_draft"] is True
     assert captured["title"] == "근로조건 확인 요청서"
     assert captured["terms"].worker_contact.value is None
+    assert captured["worker_birth_date"] == "2009-07-31"
+    assert "2009-07-31" not in captured["verification_note"]
     assert response.status == DocumentStatus.ON_PROCESSING
     assert "체결 완료 여부" in response.message
+
+
+def test_verification_note_preserves_minor_calculation_and_limit_details() -> None:
+    birth_date = "2009-07-31"
+    report = contracts.validate(
+        _minor_problem_terms(),
+        worker_birth_date=birth_date,
+    )
+
+    note = contracts.build_verification_note(report)
+
+    assert "계산:" in note
+    assert "안내:" in note
+    assert "1일 8시간 > 기본 7시간" in note
+    assert "당사자 합의 여부는 입력에서 확인되지 않았습니다" in note
+    assert "야간 22:00~06:00 시간대가 겹침" in note
+    assert "고용노동부장관 인가 등 예외 요건" in note
+    assert birth_date not in note
+
+
+def test_analyze_sign_pdf_note_preserves_minor_limits_with_mock_provider(
+    monkeypatch,
+) -> None:
+    birth_date = "2009-07-31"
+    captured: dict = {}
+
+    def fake_render(terms, *, is_draft, verification_note=None):
+        captured["verification_note"] = verification_note
+        return b"%PDF-synthetic"
+
+    async def fake_request_signature(**kwargs):
+        return {"id": "synthetic-minor-document", "status": "ON_PROCESSING"}
+
+    monkeypatch.setattr(contracts, "render_contract_pdf", fake_render)
+    monkeypatch.setattr(
+        contracts.modusign,
+        "request_signature",
+        fake_request_signature,
+    )
+
+    response = asyncio.run(
+        contracts.analyze_and_sign(
+            contracts.AnalyzeSignRequest(
+                terms=_minor_problem_terms(),
+                worker_birth_date=birth_date,
+                worker_name="가상 근로자",
+                worker_email="worker@example.com",
+                employer_name="가상 사업주",
+                employer_email="employer@example.com",
+                entry_path="PHOTO",
+                proceed_with_violations=True,
+            )
+        )
+    )
+
+    assert response.status == DocumentStatus.ON_PROCESSING
+    assert (
+        "당사자 합의 여부는 입력에서 확인되지 않았습니다"
+        in captured["verification_note"]
+    )
+    assert "고용노동부장관 인가 등 예외 요건" in captured["verification_note"]
+    assert birth_date not in captured["verification_note"]
+
+
+def test_analyze_sign_409_preserves_minor_details_without_sending(
+    monkeypatch,
+    caplog,
+) -> None:
+    birth_date = "2009-07-31"
+    signing_called = False
+
+    async def fail_if_signature_requested(**kwargs):
+        nonlocal signing_called
+        signing_called = True
+        raise AssertionError("409 응답 전에 모두싸인 요청을 보내면 안 됩니다.")
+
+    monkeypatch.setattr(
+        contracts.modusign,
+        "request_signature",
+        fail_if_signature_requested,
+    )
+
+    with caplog.at_level(logging.INFO, logger=contracts.__name__):
+        with pytest.raises(HTTPException) as caught:
+            asyncio.run(
+                contracts.analyze_and_sign(
+                    contracts.AnalyzeSignRequest(
+                        terms=_minor_problem_terms(),
+                        worker_birth_date=birth_date,
+                        worker_name="가상 근로자",
+                        worker_email="worker@example.com",
+                        employer_name="가상 사업주",
+                        employer_email="employer@example.com",
+                        entry_path="PHOTO",
+                    )
+                )
+            )
+
+    assert caught.value.status_code == 409
+    assert caught.value.detail["message"] == (
+        "기본 기준 초과·누락 또는 추가 확인이 필요한 항목이 있습니다."
+    )
+    assert isinstance(caught.value.detail["problems"], list)
+    details = {
+        detail["code"]: detail for detail in caught.value.detail["problem_details"]
+    }
+    assert "MINOR_WORKING_HOURS" in details
+    assert "MINOR_NIGHT_WORK" in details
+    assert "1일 8시간 > 기본 7시간" in details["MINOR_WORKING_HOURS"]["calculation"]
+    assert "당사자 합의 여부" in details["MINOR_WORKING_HOURS"]["detail"]
+    assert "고용노동부장관 인가" in details["MINOR_NIGHT_WORK"]["detail"]
+    assert signing_called is False
+    assert birth_date not in str(caught.value.detail)
+    assert birth_date not in caplog.text
 
 
 def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None:

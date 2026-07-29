@@ -78,7 +78,7 @@ export interface ContractTerms {
 
 export type CheckStatus =
   | "OK" // 기준 충족
-  | "VIOLATION" // 법정 기준 미달
+  | "VIOLATION" // 법정 기준을 벗어남
   | "MISSING" // 필수 항목 누락
   | "UNKNOWN"; // 정보 부족으로 판정 불가
 
@@ -131,6 +131,8 @@ export type EntryPath =
 
 export interface ValidateRequest {
   terms: ContractTerms;
+  /** 사용자가 선택 입력한 생년월일. 계약서 추출값에는 포함하지 않는다. */
+  worker_birth_date?: string | null;
 }
 
 export interface PreviewRequest {
@@ -141,6 +143,8 @@ export interface PreviewRequest {
 
 export interface AnalyzeSignRequest {
   terms: ContractTerms;
+  /** 검증 단계에서 선택 입력한 생년월일. 계약서/PDF에는 포함하지 않는다. */
+  worker_birth_date?: string | null;
   worker_name: string;
   worker_email: string;
   employer_name: string;
