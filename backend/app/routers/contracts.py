@@ -4,7 +4,7 @@
   POST /contracts/validate       조건 → 법정 기준 판정
   POST /contracts/message        판정 → 사장님께 보낼 문의 문구
   POST /contracts/preview        조건 → 계약서 PDF 미리보기
-  POST /contracts/analyze-sign   조건 → 검증 → PDF → 서명 요청 (세로 흐름)
+  POST /contracts/analyze-sign   확인 → 검증 → PDF → 서명 요청 (세로 흐름)
 
 ⚠️ 판정은 app/validation/ 의 순수 함수가 수행한다. LLM 호출 없음.
 """
@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from app.bridge.numbers import verify
 from app.bridge.templates import build_lines, build_message
 from app.pdf.generator import render_contract_pdf
+from app.review.fields import unconfirmed_high_priority
 from app.schemas import (
     CheckStatus,
     ContractTerms,
@@ -176,6 +177,12 @@ class AnalyzeSignRequest(BaseModel):
     entry_path: EntryPath = EntryPath.PHOTO
     # 위반 항목이 남아 있어도 그대로 진행할지. 기본은 차단.
     proceed_with_violations: bool = False
+    # 사용자가 화면에서 확인을 마친 항목들.
+    #
+    # AI가 자신 있게 틀리는 경우가 있어(실측: '박강현' → '박강헌')
+    # 신뢰도만으로는 막을 수 없다. 사람이 봤다는 사실을 받아야 한다.
+    # /contracts/review-items 의 must_confirm 을 전부 담아 보낼 것.
+    confirmed_fields: list[str] = []
 
 
 class AnalyzeSignResponse(BaseModel):
@@ -193,6 +200,29 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
     위반 항목이 남아 있으면 기본적으로 막는다.
     사용자가 알고도 진행하려면 proceed_with_violations=true 를 보내야 한다.
     """
+    # 1단계 — 사람이 확인했는가.
+    #
+    # 법정 기준 검사보다 먼저 본다. 확인 안 된 값으로 판정해봐야
+    # 그 판정 자체를 믿을 수 없기 때문이다.
+    unconfirmed = unconfirmed_high_priority(
+        body.terms, set(body.confirmed_fields)
+    )
+    if unconfirmed:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "UNCONFIRMED_FIELDS",
+                "message": "확인이 필요한 항목이 남아 있습니다.",
+                "fields": unconfirmed,
+                "hint": (
+                    "AI가 읽은 값이 정확한지 사용자가 확인해야 합니다. "
+                    "/contracts/review-items 로 목록을 받아 화면에서 확인한 뒤 "
+                    "confirmed_fields 에 담아 다시 요청하세요."
+                ),
+            },
+        )
+
+    # 2단계 — 확인된 값으로 법정 기준 판정
     report = validate(body.terms)
 
     if report.has_problem and not body.proceed_with_violations:
