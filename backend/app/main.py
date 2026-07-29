@@ -9,6 +9,7 @@
 """
 
 import logging
+import os
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,16 +39,30 @@ log = logging.getLogger(__name__)
 log.info("CORS 허용 도메인: %s", settings.allowed_origins)
 
 
+# 지금 돌고 있는 코드가 어느 커밋인지.
+#
+# 고친 뒤 배포 전에 테스트를 돌려 "왜 안 고쳐졌지" 하는 일이 반복됐다.
+# Railway가 빌드 중이면 이전 커밋이 응답하는데 겉으로는 구분이 안 된다.
+# RAILWAY_GIT_COMMIT_SHA 는 Railway가 자동으로 넣어준다.
+_COMMIT = (
+    os.environ.get("RAILWAY_GIT_COMMIT_SHA")
+    or os.environ.get("GIT_COMMIT")
+    or "unknown"
+)[:7]
+
+
 @app.get("/health")
 async def health() -> dict:
     """
     배포 확인용. 각 연동의 설정 여부를 함께 보여준다.
 
     프론트를 붙이기 전에 이걸 먼저 확인할 것.
-    upstage가 false면 /contracts/extract 가 502로 죽는다.
+      upstage가 false면 /contracts/extract 가 502로 죽는다.
+      commit이 로컬 HEAD와 다르면 아직 이전 코드가 돌고 있는 것이다.
     """
     return {
         "status": "ok",
+        "commit": _COMMIT,
         "modusign": settings.modusign_configured,
         "upstage": bool(settings.upstage_api_key),
         "cors_origins": settings.allowed_origins,
