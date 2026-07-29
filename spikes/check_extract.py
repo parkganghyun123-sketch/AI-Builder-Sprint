@@ -1,246 +1,221 @@
 """
-추출 결과를 정답 라벨과 대조한다.
+실제 촬영 손글씨 계약서 반복 추출 정확도 측정 (A 담당).
 
-full_pipeline.py 는 개수만 보여준다. 그것만으로는
-"몇 개 읽었나"는 알아도 "제대로 읽었나"는 모른다.
-특히 위험한 두 경우를 놓친다.
+합성 벤치마크(app/evaluation/)는 "우리가 그린 대로 정확히 읽어내는가"만 잰다.
+이 스크립트는 실제 손글씨 사진에서 같은 API 호출을 --runs 회 반복해서
+1) 정답과 얼마나 맞는지, 2) 같은 사진인데도 호출마다 값이 흔들리는지를 같이 잰다.
+"100%"보다 "3회 모두 정확, 흔들림 0"이 더 강한 근거가 된다.
 
-  1. 빈칸에 값을 지어냄        (계약서에 없는 걸 만들어냄)
-  2. 틀리게 읽고 confidence HIGH (사용자가 검수할 기회를 잃음)
-
-이 스크립트는 필드별로 정답과 맞춰 그 둘을 드러낸다.
-
-⚠️ 추출은 재현되지 않는다. 같은 사진·같은 코드로도 실행마다 결과가 다르다.
-   실제로 worker_address 가 한 번은 '소 :' 로 유출되고 다음 실행에서는
-   깨끗하게 나왔다. 한 번 돌린 결과로 "고쳐졌다"고 판단하면 안 된다.
-   --runs 로 여러 번 돌려 안정성까지 보라.
-
-실행:
+사용법 (준비):
     cd ~/AI-Builder-Sprint
     set -a; source .env; set +a
-    python3 spikes/check_extract.py spikes/fixtures/handwritten_01.png
-    python3 spikes/check_extract.py spikes/fixtures/handwritten_01.png --runs 3
 
-정답 라벨은 같은 이름 + _answer.json 을 찾는다.
-    spikes/fixtures/handwritten_01.png
-    spikes/fixtures/handwritten_01_answer.json
+    # 1. 사진을 spikes/fixtures/ 에 넣는다 (예: handwritten_02.png)
+    # 2. 정답 라벨 템플릿을 만든다
+    python3 spikes/check_extract.py --init spikes/fixtures/handwritten_02.png
+    # 3. spikes/fixtures/handwritten_02.json 을 열어 실제 계약서 내용대로 값을 채운다
+    #    (모르는 항목은 null로 둔다 = 계약서에 그 항목이 없다는 뜻)
+
+사용법 (측정):
+    python3 spikes/check_extract.py spikes/fixtures/handwritten_02.png --runs 3
+    python3 spikes/check_extract.py spikes/fixtures --runs 3   # handwritten_*.png 전체 일괄
+
+라벨이 없는 사진은 건너뛰고 안내만 출력한다 (정답 없는 값을 지어내지 않는다).
+각 실행의 원본 추출 결과는 <이름>_runs.json 으로 옆에 저장된다.
 """
 
+import argparse
+import asyncio
 import json
-import mimetypes
 import os
+import re
 import sys
-import urllib.error
-import urllib.request
-import uuid
 from pathlib import Path
 
-API_BASE = os.environ.get(
-    "API_BASE", "https://ai-builder-sprint-production.up.railway.app"
-)
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "backend"))
+from app.ai.extract import extract_contract_terms  # noqa: E402
+
+FIXTURES = Path(__file__).parent / "fixtures"
+IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg"}
+
+# app/schemas.py ContractTerms 필드와 동일한 순서/이름
+FIELDS = [
+    "contract_start",
+    "contract_end",
+    "workplace",
+    "job_description",
+    "work_start_time",
+    "work_end_time",
+    "break_start_time",
+    "break_end_time",
+    "work_days_per_week",
+    "weekly_holiday_day",
+    "wage_type",
+    "wage_amount",
+    "has_bonus",
+    "other_allowance",
+    "payday",
+    "payment_method",
+    "employer_business_name",
+    "employer_phone",
+    "employer_address",
+    "employer_name",
+    "worker_address",
+    "worker_contact",
+    "worker_name",
+]
+
+_DIGITS = re.compile(r"\d+")
+_NUMERIC_FIELDS = {"contract_start", "contract_end", "work_days_per_week", "wage_amount"}
 
 
-def upload(image: Path) -> dict:
-    content = image.read_bytes()
-    mime = mimetypes.guess_type(image.name)[0] or "application/octet-stream"
-    boundary = f"----fairsign{uuid.uuid4().hex}"
-
-    body = b"".join([
-        f"--{boundary}\r\n".encode(),
-        f'Content-Disposition: form-data; name="file"; filename="{image.name}"\r\n'.encode(),
-        f"Content-Type: {mime}\r\n\r\n".encode(),
-        content,
-        f"\r\n--{boundary}--\r\n".encode(),
-    ])
-
-    req = urllib.request.Request(
-        API_BASE + "/contracts/extract", data=body, method="POST"
-    )
-    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
-    req.add_header("Accept", "application/json")
-
-    try:
-        with urllib.request.urlopen(req, timeout=120) as res:
-            return json.loads(res.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        sys.exit(f"추출 실패 HTTP {e.code}\n{e.read().decode('utf-8', 'replace')[:400]}")
+def _digits_only(value) -> str:
+    return "".join(_DIGITS.findall(str(value))) if value is not None else ""
 
 
-def norm(value) -> str:
-    """비교용 정규화 — 공백·쉼표를 무시한다."""
-    if value is None:
-        return ""
-    return str(value).replace(",", "").replace(" ", "").strip()
+def _norm_text(value) -> str:
+    return re.sub(r"\s+", "", str(value)) if value is not None else ""
 
 
-def classify(expected, field: dict) -> str:
-    """한 필드의 결과를 5가지 중 하나로 분류한다."""
-    actual = field.get("value")
-    conf = field.get("confidence", "?")
-
-    if norm(expected) == norm(actual):
-        return "correct"
+def _matches(field: str, expected, actual) -> bool:
     if expected is None:
-        return "hallucinated"      # 없는 걸 만들어냄
+        return actual is None
     if actual is None:
-        return "missed"            # 못 읽음 (안전한 실패)
-    if conf == "HIGH":
-        return "wrong_confident"   # 가장 위험
-    return "wrong_flagged"         # 틀렸지만 표시됨
+        return False
+    if field in _NUMERIC_FIELDS:
+        return _digits_only(expected) == _digits_only(actual)
+    return _norm_text(expected) == _norm_text(actual)
 
 
-def run_many(image: Path, answer: dict, runs: int) -> None:
-    """
-    여러 번 돌려 안정성을 본다.
+def labels_path_for(image_path: Path) -> Path:
+    return image_path.with_suffix(".json")
 
-    추출은 재현되지 않으므로 1회 결과로는 개선 여부를 판단할 수 없다.
-    필드별로 몇 번 맞았는지 세면 '운 좋게 맞은 것'과 '실제로 안정적인 것'이
-    구분된다.
-    """
-    tally: dict[str, dict[str, int]] = {k: {} for k in answer}
-    values: dict[str, set] = {k: set() for k in answer}
 
-    for i in range(runs):
-        print(f"  {i + 1}/{runs} 회 추출 중...")
-        terms = upload(image)
-        for name, expected in answer.items():
-            field = terms.get(name) or {}
-            kind = classify(expected, field)
-            tally[name][kind] = tally[name].get(kind, 0) + 1
-            values[name].add(str(field.get("value")))
-
-    MARK = {
-        "correct": "✅", "missed": "➖", "wrong_flagged": "⚠️",
-        "hallucinated": "🚨", "wrong_confident": "❌",
+def write_template(image_path: Path) -> Path:
+    path = labels_path_for(image_path)
+    if path.exists():
+        print(f"이미 있음, 덮어쓰지 않음: {path}")
+        return path
+    template = {
+        "_note": "실제 계약서 내용대로 값을 채운다. 모르면 null(계약서에 없다는 뜻).",
+        **{field: None for field in FIELDS},
     }
+    path.write_text(json.dumps(template, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"라벨 템플릿 생성: {path}")
+    return path
 
-    print(f"\n{'필드':24} {'정확':>6}  결과 분포")
-    print("-" * 78)
 
-    unstable: list[str] = []
-    always_bad: list[str] = []
+def load_labels(image_path: Path) -> dict | None:
+    path = labels_path_for(image_path)
+    if not path.exists():
+        return None
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    return {field: raw.get(field) for field in FIELDS}
 
-    for name, counts in tally.items():
-        ok = counts.get("correct", 0)
-        dist = " ".join(
-            f"{MARK[k]}{v}" for k, v in sorted(counts.items()) if k in MARK
+
+async def run_once(file_bytes: bytes, filename: str) -> dict[str, object]:
+    terms = await extract_contract_terms(file_bytes, filename)
+    return {field: getattr(terms, field).value for field in FIELDS}
+
+
+def score_run(labels: dict, actual: dict) -> dict[str, bool]:
+    return {field: _matches(field, labels[field], actual[field]) for field in FIELDS}
+
+
+def instability(run_results: list[dict[str, object]]) -> list[str]:
+    unstable = []
+    for field in FIELDS:
+        values = {_norm_text(r[field]) for r in run_results}
+        if len(values) > 1:
+            unstable.append(field)
+    return unstable
+
+
+def check_image(image_path: Path, runs: int) -> dict | None:
+    labels = load_labels(image_path)
+    if labels is None:
+        print(f"\n[건너뜀] {image_path.name}: 라벨 없음 (--init 으로 템플릿 생성 후 채워주세요)")
+        return None
+
+    print(f"\n=== {image_path.name} ({runs}회) ===")
+    file_bytes = image_path.read_bytes()
+
+    run_results = []
+    run_scores = []
+    for i in range(1, runs + 1):
+        actual = asyncio.run(run_once(file_bytes, image_path.name))
+        scores = score_run(labels, actual)
+        correct = sum(scores.values())
+        print(f"  {i}회차: {correct}/{len(FIELDS)}")
+        run_results.append(actual)
+        run_scores.append(scores)
+
+    unstable_fields = instability(run_results)
+    correct_counts = {sum(s.values()) for s in run_scores}
+
+    if len(correct_counts) == 1 and not unstable_fields:
+        n = next(iter(correct_counts))
+        print(f"  → {runs}회 모두 정확 {n}/{len(FIELDS)}, 흔들림 0")
+    else:
+        print(f"  → 흔들림 {len(unstable_fields)}개 필드: {', '.join(unstable_fields) or '없음'}")
+        wrong_by_run = []
+        for i, scores in enumerate(run_scores, start=1):
+            wrong = [f for f, ok in scores.items() if not ok]
+            if wrong:
+                wrong_by_run.append(f"    {i}회차 오답: {', '.join(wrong)}")
+        print("\n".join(wrong_by_run))
+
+    out_path = image_path.with_name(f"{image_path.stem}_runs.json")
+    out_path.write_text(
+        json.dumps({"labels": labels, "runs": run_results}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    return {"image": image_path.name, "run_scores": run_scores, "unstable_fields": unstable_fields}
+
+
+def resolve_images(path: Path) -> list[Path]:
+    if path.is_file():
+        return [path]
+    return sorted(p for p in path.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+
+
+def print_overall(all_reports: list[dict]) -> None:
+    if len(all_reports) <= 1:
+        return
+    print(f"\n=== 전체 ({len(all_reports)}장) ===")
+    for report in all_reports:
+        total_correct = sum(sum(s.values()) for s in report["run_scores"])
+        total_fields = len(FIELDS) * len(report["run_scores"])
+        print(
+            f"  {report['image']}: {total_correct}/{total_fields}, "
+            f"흔들림 {len(report['unstable_fields'])}개 필드"
         )
-        flag = ""
-        if 0 < ok < runs:
-            flag = "  ← 실행마다 다름"
-            unstable.append(name)
-        elif ok == 0:
-            flag = "  ← 항상 틀림"
-            always_bad.append(name)
-        print(f"{name:24} {ok:>3}/{runs}  {dist}{flag}")
-
-        # 틀린 필드는 실제로 뭘 뽑았는지 보여준다.
-        # 값을 모르면 원인을 못 찾는다.
-        if ok < runs:
-            got = sorted(v for v in values[name] if v != "None") or ["(없음)"]
-            print(f"{'':24}   정답 {answer[name]!r} / 추출 {', '.join(got)}")
-
-    print("\n" + "=" * 78)
-    stable_ok = sum(1 for n, c in tally.items() if c.get("correct", 0) == runs)
-    print(f"  {runs}회 모두 정확     {stable_ok}/{len(answer)}")
-    print(f"  실행마다 흔들림   {len(unstable)}  {unstable}")
-    print(f"  항상 틀림         {len(always_bad)}  {always_bad}")
-    print("=" * 78)
-
-    if unstable:
-        print("\n⚠️ 흔들리는 필드는 1회 테스트로 '고쳐졌다'고 판단하면 안 된다.")
-    if always_bad:
-        print("\n❌ 항상 틀리는 필드는 재현되므로 원인을 찾을 수 있다.")
 
 
 def main() -> None:
-    if len(sys.argv) < 2:
-        sys.exit("사용법: python3 spikes/check_extract.py <이미지경로> [--runs N]")
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("path", nargs="?", default=str(FIXTURES), help="이미지 파일 또는 디렉터리")
+    parser.add_argument("--runs", type=int, default=3, help="반복 호출 횟수 (기본 3)")
+    parser.add_argument("--init", action="store_true", help="정답 라벨 템플릿만 생성하고 종료")
+    args = parser.parse_args()
 
-    args = sys.argv[1:]
-    runs = 1
-    if "--runs" in args:
-        i = args.index("--runs")
-        runs = int(args[i + 1])
-        args = args[:i] + args[i + 2:]
+    target = Path(args.path)
 
-    image = Path(args[0])
-    if not image.exists():
-        sys.exit(f"사진이 없습니다: {image}")
-
-    answer_path = image.with_name(f"{image.stem}_answer.json")
-    if not answer_path.exists():
-        sys.exit(f"정답 라벨이 없습니다: {answer_path}")
-
-    answer = {
-        k: v for k, v in json.loads(answer_path.read_text()).items()
-        if not k.startswith("_")
-    }
-
-    print(f"사진 : {image}")
-    print(f"정답 : {answer_path}")
-    print(f"서버 : {API_BASE}\n")
-
-    if runs > 1:
-        run_many(image, answer, runs)
+    if args.init:
+        if not target.is_file():
+            print("--init 은 이미지 파일 경로가 필요합니다.")
+            sys.exit(1)
+        write_template(target)
         return
 
-    print("추출 중...\n")
-    terms = upload(image)
+    images = resolve_images(target)
+    if not images:
+        print(f"이미지 없음: {target}")
+        sys.exit(1)
 
-    hallucinated: list[str] = []   # 빈칸인데 값을 만들어냄
-    wrong_confident: list[str] = []  # 틀렸는데 HIGH
-    wrong_flagged: list[str] = []    # 틀렸지만 LOW (사용자가 고칠 수 있음)
-    missed: list[str] = []           # 값이 있는데 못 읽음
-    correct: list[str] = []
-
-    print(f"{'필드':24} {'정답':18} {'추출':18} 신뢰도")
-    print("-" * 78)
-
-    for name, expected in answer.items():
-        field = terms.get(name) or {}
-        actual = field.get("value")
-        conf = field.get("confidence", "?")
-
-        exp_s, act_s = norm(expected), norm(actual)
-        ok = exp_s == act_s
-
-        if ok:
-            mark, bucket = "✅", correct
-        elif expected is None:
-            mark, bucket = "🚨", hallucinated       # 없는 걸 만들어냄
-        elif actual is None:
-            mark, bucket = "➖", missed             # 못 읽음 (안전한 실패)
-        elif conf == "HIGH":
-            mark, bucket = "❌", wrong_confident    # 가장 위험
-        else:
-            mark, bucket = "⚠️", wrong_flagged      # 틀렸지만 표시됨
-
-        bucket.append(name)
-        print(
-            f"{mark} {name:22} {str(expected)[:16]:18} "
-            f"{str(actual)[:16]:18} {conf}"
-        )
-
-    total = len(answer)
-    print("\n" + "=" * 78)
-    print(f"  정확        {len(correct):2}/{total}")
-    print(f"  못 읽음     {len(missed):2}  {missed}")
-    print(f"  틀림(LOW)   {len(wrong_flagged):2}  {wrong_flagged}")
-    print("=" * 78)
-    print("  ↓ 아래 둘이 진짜 위험이다")
-    print(f"  🚨 지어냄        {len(hallucinated):2}  {hallucinated}")
-    print(f"  ❌ 틀림+HIGH     {len(wrong_confident):2}  {wrong_confident}")
-    print("=" * 78)
-
-    if hallucinated:
-        print("\n🚨 빈칸에 값을 만들어냈다. 판정을 왜곡할 수 있다.")
-        print("   추출 프롬프트에 '빈칸이면 반드시 null' 을 강화할 것.")
-    if wrong_confident:
-        print("\n❌ 틀렸는데 confidence가 HIGH다. 사용자가 검수할 기회를 잃는다.")
-    if not hallucinated and not wrong_confident:
-        print("\n✅ 지어내거나 자신 있게 틀린 항목이 없다.")
-        print("   못 읽은 항목은 화면에서 사용자가 채우면 된다.")
+    all_reports = [r for img in images if (r := check_image(img, args.runs)) is not None]
+    print_overall(all_reports)
 
 
 if __name__ == "__main__":
