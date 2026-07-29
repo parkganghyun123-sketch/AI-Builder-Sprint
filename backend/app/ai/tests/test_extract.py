@@ -321,3 +321,96 @@ class TestWhitespaceNormalization:
             )
             == "(근로자) 주 소 : 부산광역시 금정구 구서동 00-0"
         )
+
+
+# ============================================================
+# 손글씨 실측에서 드러난 실패 (spikes/fixtures/handwritten_01.png)
+#
+#   wage_amount   '10 000'(띄어쓰기) → '0000' 으로 읽고 confidence HIGH
+#   payday        빈칸인데 인쇄 문구 '매월(매주 또는 매일) 일' 을 값으로 반환
+#   other_allowance '없음' 에 체크표시가 섞여 '없음 [✓]'
+#
+# 시급은 판정에 가장 중요한 값이라, 틀린 채 HIGH로 두면
+# 없는 위반을 만들거나 있는 위반을 가린다.
+# ============================================================
+
+from app.ai.extract import (  # noqa: E402
+    _is_implausible,
+    _normalize_extracted_value,
+    apply_sanity_check,
+)
+from app.schemas import ExtractedField  # noqa: E402
+
+
+class TestFormLabelLeak:
+    def test_printed_label_becomes_null(self):
+        """빈칸 옆 인쇄 문구를 값으로 가져오면 빈칸으로 되돌린다."""
+        assert _normalize_extracted_value("매월(매주 또는 매일) 일") is None
+
+    def test_empty_parentheses_becomes_null(self):
+        assert _normalize_extracted_value("( ) 요일") is None
+        assert _normalize_extracted_value("____일") is None
+
+    def test_real_value_survives(self):
+        assert _normalize_extracted_value("매월 10일") == "매월 10일"
+
+
+class TestCheckmarkStripping:
+    def test_removes_checkbox_marker(self):
+        assert _normalize_extracted_value("없음 [✓]") == "없음"
+        assert _normalize_extracted_value("있음 [ ]") == "있음"
+
+    def test_keeps_plain_value(self):
+        assert _normalize_extracted_value("없음") == "없음"
+
+
+class TestSanityCheck:
+    """코드가 AI의 확신을 검증한다."""
+
+    def test_zero_hourly_wage_is_implausible(self):
+        """'10 000' → '0000' 사례. 시급 0원은 있을 수 없다."""
+        assert _is_implausible("wage_amount", "0000", "HOURLY")
+
+    def test_normal_hourly_wage_passes(self):
+        assert not _is_implausible("wage_amount", "10000", "HOURLY")
+
+    def test_spaced_digits_pass_after_normalization(self):
+        assert not _is_implausible("wage_amount", "10 000", "HOURLY")
+
+    def test_monthly_wage_uses_its_own_range(self):
+        """월급 190만원은 정상, 시급이었다면 비정상."""
+        assert not _is_implausible("wage_amount", "1900000", "MONTHLY")
+        assert _is_implausible("wage_amount", "1900000", "HOURLY")
+
+    def test_invalid_time_is_implausible(self):
+        assert _is_implausible("work_start_time", "25:00", None)
+        assert not _is_implausible("work_start_time", "12:00", None)
+
+    def test_impossible_work_days(self):
+        assert _is_implausible("work_days_per_week", "9", None)
+        assert not _is_implausible("work_days_per_week", "3", None)
+
+
+class TestSanityDowngrade:
+    def test_high_confidence_is_downgraded_when_implausible(self):
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="0000", confidence=Confidence.HIGH),
+        }
+        result = apply_sanity_check(fields)
+        assert result["wage_amount"].confidence == Confidence.LOW
+
+    def test_value_is_kept_so_user_can_correct_it(self):
+        """값을 지우지 않는다. 무엇을 고쳐야 하는지 보여야 한다."""
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="0000", confidence=Confidence.HIGH),
+        }
+        assert apply_sanity_check(fields)["wage_amount"].value == "0000"
+
+    def test_plausible_value_keeps_high(self):
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="10320", confidence=Confidence.HIGH),
+        }
+        assert apply_sanity_check(fields)["wage_amount"].confidence == Confidence.HIGH
