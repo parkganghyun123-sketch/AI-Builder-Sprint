@@ -161,6 +161,17 @@ _FORM_LABEL_HINTS = (
     "이하",
 )
 
+# 표준근로계약서의 항목 이름들.
+# 빈칸을 만나면 모델이 이 라벨을 값으로 집어온다.
+#   worker_address  → '소 :'
+#   worker_contact  → '주연성 락 처 :'
+# 양식에 자간이 들어가 있어('주  소', '연 락 처') 조각으로 잘려 나온다.
+_FIELD_LABEL_WORDS = (
+    "주소", "연락처", "성명", "사업체명", "대표자", "전화",
+    "근무장소", "업무의내용", "소정근로시간", "근무일", "휴일",
+    "임금", "상여금", "지급일", "지급방법", "서명", "근로계약기간",
+)
+
 
 def _looks_like_form_label(text: str) -> bool:
     """
@@ -169,12 +180,39 @@ def _looks_like_form_label(text: str) -> bool:
     빈칸을 만나면 모델이 옆의 인쇄 문구를 값으로 집어오는 일이 있다.
     이것은 '지어낸 값'과 같은 효과를 낸다 — 비어 있는 항목이
     채워진 것처럼 보여 누락 판정이 무력화된다.
+
+    ⚠️ 시각(work_start_time 등)은 'HH:MM' 이라 콜론을 쓴다.
+       그 필드는 _normalize_extracted_value 에서 이 함수를 거치기 전에
+       형식 검사로 걸러지므로 여기서는 콜론을 라벨 신호로 봐도 된다.
     """
     if any(hint in text for hint in _FORM_LABEL_HINTS):
         return True
+
+    compact = re.sub(r"[\s_()\[\]:]", "", text)
+
     # 괄호 안내문만 남고 실제 값이 없는 경우: '( ) 요일', '____일'
-    stripped = re.sub(r"[\s_()\[\]]", "", text)
-    return stripped in {"일", "요일", "원", "시분"}
+    if compact in {"일", "요일", "원", "시분", ""}:
+        return True
+
+    # 라벨 단어가 통째로 남은 경우: '주소', '연락처', '성명'
+    if compact in _FIELD_LABEL_WORDS:
+        return True
+
+    # 라벨 조각 + 콜론. 값에는 콜론이 없다(시각은 위 주석 참고).
+    #   '소 :'  '주연성 락 처 :'
+    if ":" in text and not _TIME_LIKE.search(text):
+        return True
+
+    # 라벨 단어를 품고 있으면서 그 외 내용이 거의 없는 경우
+    for word in _FIELD_LABEL_WORDS:
+        if word in compact and len(compact) <= len(word) + 3:
+            return True
+
+    return False
+
+
+# 'HH:MM' 형태가 들어있는지. 시각 값은 라벨로 오인하면 안 된다.
+_TIME_LIKE = re.compile(r"\d{1,2}:\d{2}")
 
 
 # confidence_score(0~1)가 이 값 이상이면 HIGH.

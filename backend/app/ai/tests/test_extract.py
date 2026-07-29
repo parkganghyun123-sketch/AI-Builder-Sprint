@@ -414,3 +414,55 @@ class TestSanityDowngrade:
             "wage_amount": ExtractedField(value="10320", confidence=Confidence.HIGH),
         }
         assert apply_sanity_check(fields)["wage_amount"].confidence == Confidence.HIGH
+
+
+class TestFieldLabelLeak:
+    """
+    빈칸을 만나면 모델이 인쇄된 항목 이름을 값으로 집어온다.
+    표준양식은 자간이 넓어('주  소', '연 락 처') 조각으로 잘려 나온다.
+
+    실측(handwritten_01.png):
+      worker_address → '소 :'
+      worker_contact → '주연성 락 처 :'
+
+    빈칸이 채워진 것처럼 보이면 누락 판정이 무력화되므로 반드시 걸러야 한다.
+    """
+
+    @pytest.mark.parametrize(
+        "leaked",
+        [
+            "소 :",
+            "주연성 락 처 :",
+            "주 소 :",
+            "연 락 처 :",
+            "성    명 :",
+            "대 표 자 :",
+            "(서명)",
+            "( ) 요일",
+            "____일",
+            "매월(매주 또는 매일) 일",
+        ],
+    )
+    def test_label_fragments_become_null(self, leaked):
+        assert _normalize_extracted_value(leaked) is None
+
+    @pytest.mark.parametrize(
+        "real",
+        [
+            "박강현",
+            "부산광역시 금정구 구서동 00-0",
+            "010-0000-0000",
+            "매월 10일",
+            "근로자 명의 계좌에 입금",
+            "음료 제조 및 매장 관리",
+            "카페 000",
+            "편의점",
+            "2026년 11월 1일",
+        ],
+    )
+    def test_real_values_survive(self, real):
+        assert _normalize_extracted_value(real) == real
+
+    def test_time_value_keeps_colon(self):
+        """시각은 콜론을 쓴다. 라벨로 오인하면 안 된다."""
+        assert _normalize_extracted_value("12:00") == "12:00"
