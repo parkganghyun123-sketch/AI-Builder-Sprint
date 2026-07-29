@@ -10,10 +10,16 @@ full_pipeline.py 는 개수만 보여준다. 그것만으로는
 
 이 스크립트는 필드별로 정답과 맞춰 그 둘을 드러낸다.
 
+⚠️ 추출은 재현되지 않는다. 같은 사진·같은 코드로도 실행마다 결과가 다르다.
+   실제로 worker_address 가 한 번은 '소 :' 로 유출되고 다음 실행에서는
+   깨끗하게 나왔다. 한 번 돌린 결과로 "고쳐졌다"고 판단하면 안 된다.
+   --runs 로 여러 번 돌려 안정성까지 보라.
+
 실행:
     cd ~/AI-Builder-Sprint
     set -a; source .env; set +a
     python3 spikes/check_extract.py spikes/fixtures/handwritten_01.png
+    python3 spikes/check_extract.py spikes/fixtures/handwritten_01.png --runs 3
 
 정답 라벨은 같은 이름 + _answer.json 을 찾는다.
     spikes/fixtures/handwritten_01.png
@@ -67,11 +73,92 @@ def norm(value) -> str:
     return str(value).replace(",", "").replace(" ", "").strip()
 
 
+def classify(expected, field: dict) -> str:
+    """한 필드의 결과를 5가지 중 하나로 분류한다."""
+    actual = field.get("value")
+    conf = field.get("confidence", "?")
+
+    if norm(expected) == norm(actual):
+        return "correct"
+    if expected is None:
+        return "hallucinated"      # 없는 걸 만들어냄
+    if actual is None:
+        return "missed"            # 못 읽음 (안전한 실패)
+    if conf == "HIGH":
+        return "wrong_confident"   # 가장 위험
+    return "wrong_flagged"         # 틀렸지만 표시됨
+
+
+def run_many(image: Path, answer: dict, runs: int) -> None:
+    """
+    여러 번 돌려 안정성을 본다.
+
+    추출은 재현되지 않으므로 1회 결과로는 개선 여부를 판단할 수 없다.
+    필드별로 몇 번 맞았는지 세면 '운 좋게 맞은 것'과 '실제로 안정적인 것'이
+    구분된다.
+    """
+    tally: dict[str, dict[str, int]] = {k: {} for k in answer}
+    values: dict[str, set] = {k: set() for k in answer}
+
+    for i in range(runs):
+        print(f"  {i + 1}/{runs} 회 추출 중...")
+        terms = upload(image)
+        for name, expected in answer.items():
+            field = terms.get(name) or {}
+            kind = classify(expected, field)
+            tally[name][kind] = tally[name].get(kind, 0) + 1
+            values[name].add(str(field.get("value")))
+
+    MARK = {
+        "correct": "✅", "missed": "➖", "wrong_flagged": "⚠️",
+        "hallucinated": "🚨", "wrong_confident": "❌",
+    }
+
+    print(f"\n{'필드':24} {'정확':>6}  결과 분포")
+    print("-" * 78)
+
+    unstable: list[str] = []
+    always_bad: list[str] = []
+
+    for name, counts in tally.items():
+        ok = counts.get("correct", 0)
+        dist = " ".join(
+            f"{MARK[k]}{v}" for k, v in sorted(counts.items()) if k in MARK
+        )
+        flag = ""
+        if 0 < ok < runs:
+            flag = "  ← 실행마다 다름"
+            unstable.append(name)
+        elif ok == 0:
+            flag = "  ← 항상 틀림"
+            always_bad.append(name)
+        print(f"{name:24} {ok:>3}/{runs}  {dist}{flag}")
+
+    print("\n" + "=" * 78)
+    stable_ok = sum(1 for n, c in tally.items() if c.get("correct", 0) == runs)
+    print(f"  {runs}회 모두 정확     {stable_ok}/{len(answer)}")
+    print(f"  실행마다 흔들림   {len(unstable)}  {unstable}")
+    print(f"  항상 틀림         {len(always_bad)}  {always_bad}")
+    print("=" * 78)
+
+    if unstable:
+        print("\n⚠️ 흔들리는 필드는 1회 테스트로 '고쳐졌다'고 판단하면 안 된다.")
+    if always_bad:
+        print("\n❌ 항상 틀리는 필드는 재현되므로 원인을 찾을 수 있다.")
+
+
 def main() -> None:
     if len(sys.argv) < 2:
-        sys.exit("사용법: python3 spikes/check_extract.py <이미지경로>")
+        sys.exit("사용법: python3 spikes/check_extract.py <이미지경로> [--runs N]")
 
-    image = Path(sys.argv[1])
+    args = sys.argv[1:]
+    runs = 1
+    if "--runs" in args:
+        i = args.index("--runs")
+        runs = int(args[i + 1])
+        args = args[:i] + args[i + 2:]
+
+    image = Path(args[0])
     if not image.exists():
         sys.exit(f"사진이 없습니다: {image}")
 
@@ -86,8 +173,13 @@ def main() -> None:
 
     print(f"사진 : {image}")
     print(f"정답 : {answer_path}")
-    print(f"서버 : {API_BASE}\n추출 중...\n")
+    print(f"서버 : {API_BASE}\n")
 
+    if runs > 1:
+        run_many(image, answer, runs)
+        return
+
+    print("추출 중...\n")
     terms = upload(image)
 
     hallucinated: list[str] = []   # 빈칸인데 값을 만들어냄
