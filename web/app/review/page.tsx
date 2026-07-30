@@ -199,7 +199,14 @@ const SECTIONS: { title: string; description?: string; fields: FieldConfig[] }[]
 function ReviewContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const wantsManual = searchParams.get("path") === "B";
+  // 빈 폼으로 시작하는 두 경로.
+  //   path=B         근로자가 구두로 들은 조건을 입력 (계약서 없음)
+  //   path=EMPLOYER  사업주가 계약서를 작성
+  // 둘은 **같은 입력 폼과 같은 검증 API**를 쓴다. 다른 것은 화면 문구와
+  // 서명 순서뿐이다(백엔드 modusign.request_signature employer_first 참고).
+  const pathParam = searchParams.get("path");
+  const blankFormPath: EntryPath | null =
+    pathParam === "B" ? "MANUAL" : pathParam === "EMPLOYER" ? "EMPLOYER" : null;
   const [terms, setTerms] = useState<ContractTerms | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
   const [workerBirthDate, setWorkerBirthDate] = useState("");
@@ -223,21 +230,22 @@ function ReviewContent() {
   useEffect(() => {
     const existing = readSession();
 
-    if (wantsManual) {
-      if (existing.entryPath === "MANUAL" && existing.terms) {
+    if (blankFormPath) {
+      // 같은 경로로 돌아온 경우엔 입력값을 살린다. 새로고침 한 번에
+      // 다 지워지면 스무 개 넘는 항목을 처음부터 다시 입력해야 한다.
+      if (existing.entryPath === blankFormPath && existing.terms) {
         setTerms(existing.terms);
         setWorkerBirthDate(existing.workerBirthDate ?? "");
         setUserEditedFields(existing.userEditedFields);
         setConfirmedFields(existing.confirmedFields);
       } else {
-        const emptyTerms = createEmptyTerms();
-        const created = startSession(emptyTerms, "MANUAL");
+        const created = startSession(createEmptyTerms(), blankFormPath);
         setTerms(created.terms);
         setWorkerBirthDate(created.workerBirthDate ?? "");
         setUserEditedFields(created.userEditedFields);
         setConfirmedFields(created.confirmedFields);
       }
-      setEntryPath("MANUAL");
+      setEntryPath(blankFormPath);
     } else {
       setTerms(existing.terms);
       setEntryPath(existing.entryPath);
@@ -246,7 +254,7 @@ function ReviewContent() {
       setConfirmedFields(existing.confirmedFields);
     }
     setReady(true);
-  }, [wantsManual]);
+  }, [blankFormPath]);
 
   // 값이 바뀔 때마다 백엔드에 다시 물어 진행 차단 여부를 갱신한다.
   // onChange마다 부르면 요청이 쏟아지므로 입력이 멈춘 뒤 400ms 두고 부른다.
@@ -407,6 +415,9 @@ function ReviewContent() {
     (field) => field.confidence === "LOW",
   ).length;
   const isManual = entryPath === "MANUAL";
+  const isEmployer = entryPath === "EMPLOYER";
+  // 빈 폼에서 직접 입력하는 두 경로. AI 추출 근거가 없다는 점이 공통이다.
+  const isBlankForm = isManual || isEmployer;
 
   // 이 화면은 여기서 고칠 수 있는 항목(step === "review")만 보여준다.
   // 법정 기준 판정(step === "result")은 field 가 판정 코드라 이 화면 입력란과
@@ -436,17 +447,37 @@ function ReviewContent() {
   return (
     <ScreenShell
       step={2}
-      backHref={isManual ? "/" : "/upload"}
-      title={isManual ? "조건 직접 입력" : "읽어낸 조건 확인하기"}
+      backHref={isBlankForm ? "/" : "/upload"}
+      title={
+        isEmployer
+          ? "근로계약서 작성"
+          : isManual
+            ? "조건 직접 입력"
+            : "읽어낸 조건 확인하기"
+      }
       description={
-        isManual
-          ? "말로 들은 내용만 입력해 주세요. 모르는 항목은 비워 두면 정보 부족 또는 찾지 못함으로 확인합니다."
-          : "AI가 읽은 값과 원문 근거를 비교해 주세요. 여기서 확인한 조건만 백엔드 검증에 사용합니다."
+        isEmployer
+          ? "정하신 근로조건을 입력하시면 법정 기준을 함께 확인해 드려요. 모르는 항목은 비워 두셔도 됩니다."
+          : isManual
+            ? "말로 들은 내용만 입력해 주세요. 모르는 항목은 비워 두면 정보 부족 또는 찾지 못함으로 확인합니다."
+            : "AI가 읽은 값과 원문 근거를 비교해 주세요. 여기서 확인한 조건만 백엔드 검증에 사용합니다."
       }
     >
-      {isManual && <DocumentStatusBadge status="DRAFTING" />}
+      {isBlankForm && <DocumentStatusBadge status="DRAFTING" />}
 
-      {!isManual && lowCount > 0 && (
+      {isEmployer && (
+        <div className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm leading-relaxed text-ink">
+          <span aria-hidden="true">🏪 </span>
+          <strong>사장님, 여기서 확인하시면 나중에 다툴 일이 줄어듭니다.</strong>
+          <p className="mt-1 text-ink-muted">
+            근로계약서 미작성의 1위 이유는 &ldquo;작성해야 하는지
+            몰라서&rdquo;입니다. 최저임금·주휴·휴게시간 기준을 입력과 동시에
+            확인해 드리고, 작성된 계약서는 전자서명으로 양측이 갖게 됩니다.
+          </p>
+        </div>
+      )}
+
+      {!isBlankForm && lowCount > 0 && (
         <div className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span aria-hidden="true">⚠️ </span>
           확인이 필요한 추출 항목이 {lowCount}개 있습니다. 원문 근거와 함께
@@ -539,7 +570,7 @@ function ReviewContent() {
                     <span aria-hidden="true">📄 </span>
                     계약서에서 읽은 값입니다.
                   </p>
-                ) : !isManual && hasValue ? (
+                ) : !isBlankForm && hasValue ? (
                   <p className="text-xs font-semibold text-amber-900">
                     <span aria-hidden="true">📄 </span>
                     계약서에서 읽은 값이지만 연결된 원문 근거를 찾지

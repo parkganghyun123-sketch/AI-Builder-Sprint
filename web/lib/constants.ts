@@ -4,7 +4,12 @@
  * ⚠️ 여기 있는 법정 기준값은 "화면 문구·라벨"용이다. 판정 계산에 쓰지 않는다.
  *    판정·계산은 backend/app/validation/ 이 하고 프론트는 결과를 표시만 한다.
  */
-import type { CheckStatus, Confidence, DocumentStatus } from "./types";
+import type {
+  CheckStatus,
+  Confidence,
+  DocumentStatus,
+  EntryPath,
+} from "./types";
 
 /** 적용 기준 연도 — backend/app/validation/constants.py STANDARD_YEAR */
 export const REFERENCE_YEAR = 2026;
@@ -22,6 +27,26 @@ export const LEGAL_DISCLAIMER =
 
 /** 계약서에 없는 항목 고정 문구 */
 export const FIELD_NOT_FOUND = "계약서에서 확인되지 않습니다.";
+
+/**
+ * 진입 경로별 문서 제목.
+ *
+ * ⚠️ backend/app/routers/contracts.py DOCUMENT_TITLES 와 반드시 일치시킬 것.
+ *    화면이 "근로조건 확인 요청서"라고 안내하는데 실제로 발송된 문서 제목이
+ *    "근로계약서"이면 사용자가 받은 메일과 화면이 어긋난다.
+ *
+ * 사업주가 작성한 것은 계약서지만, 근로자가 만든 것은 "이 조건이 맞나요"를
+ * 묻는 확인 요청서다. 근로자가 만든 문서를 '근로계약서'로 보내면
+ * 사업주가 이미 합의된 계약으로 오해할 수 있다.
+ */
+export function documentTitle(entryPath: EntryPath): string {
+  return entryPath === "EMPLOYER" ? "근로계약서" : "근로조건 확인 요청서";
+}
+
+/** 누가 먼저 서명하는가. 문서를 만든 쪽이 먼저 서명한다. */
+export function firstSignerLabel(entryPath: EntryPath): string {
+  return entryPath === "EMPLOYER" ? "사장님" : "근로자";
+}
 
 /** 판정 상태별 표시 메타 */
 export const CHECK_STATUS_META: Record<

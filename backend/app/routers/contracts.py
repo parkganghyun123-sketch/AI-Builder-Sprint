@@ -167,14 +167,46 @@ async def build_owner_message(body: ValidateRequest) -> MessageResponse:
 # ============================================================
 
 
-# 경로 B(근로자가 조건을 직접 입력)로 만들어진 문서에 붙이는 출처 표시.
+# 문서를 누가 만들었는지 밝히는 출처 표시.
 #
 # 서명할 문서에는 '확인 전 초안' 워터마크를 찍지 않는다(analyze_and_sign 주석 참고).
-# 대신 조건의 출처를 문장으로 밝혀, 사업주가 무엇에 서명하는지 알 수 있게 한다.
+# 대신 조건의 출처를 문장으로 밝혀, **상대방이 무엇에 서명하는지** 알 수 있게 한다.
+#
+# ⚠️ 양쪽 모두에 붙인다. 근로자가 만든 문서에만 출처를 밝히고 사업주가 만든
+#    문서에는 안 밝히면, 그 자체가 한쪽을 덜 신뢰하는 설계가 된다.
 MANUAL_ENTRY_NOTICE = (
     "※ 본 문서의 근로조건은 근로자가 구두로 안내받은 내용을 직접 입력한 것입니다. "
     "사실과 다른 부분이 있으면 서명 전에 수정을 요청해 주세요."
 )
+
+EMPLOYER_ENTRY_NOTICE = (
+    "※ 본 문서의 근로조건은 사업주가 작성한 것입니다. "
+    "내용을 확인하시고 사실과 다른 부분이 있으면 서명 전에 수정을 요청해 주세요."
+)
+
+ENTRY_NOTICES: dict[EntryPath, str] = {
+    EntryPath.MANUAL: MANUAL_ENTRY_NOTICE,
+    EntryPath.EMPLOYER: EMPLOYER_ENTRY_NOTICE,
+    # PHOTO 는 출처가 계약서 원본이므로 별도 표시를 붙이지 않는다.
+}
+
+# 문서 제목. 모두싸인 문서 목록과 메일 제목에 그대로 노출된다.
+#
+# ⚠️ 경로에 따라 문서의 성격이 다르므로 제목도 달라야 한다.
+#    사업주가 작성한 것은 계약서지만, 근로자가 만든 것은 "이 조건이 맞나요"를
+#    묻는 확인 요청서다. 근로자가 만든 문서를 '근로계약서'라고 보내면
+#    사업주가 이미 합의된 계약으로 오해할 수 있다.
+#
+# ⚠️ 이름을 제목에 넣지 않는다. 모두싸인 문서 목록·메일 제목에 노출된다.
+DOCUMENT_TITLES: dict[EntryPath, str] = {
+    EntryPath.EMPLOYER: "근로계약서",
+    EntryPath.MANUAL: "근로조건 확인 요청서",
+    EntryPath.PHOTO: "근로조건 확인 요청서",
+}
+
+
+def document_title(entry_path: EntryPath) -> str:
+    return DOCUMENT_TITLES.get(entry_path, "근로조건 확인 요청서")
 
 
 def build_verification_note(
@@ -187,11 +219,8 @@ def build_verification_note(
     ⚠️ 여기서 새로운 사실이나 숫자를 만들지 않는다.
        CheckResult가 담고 있는 값만 옮긴다.
     """
-    prefix = (
-        f"{MANUAL_ENTRY_NOTICE}\n\n"
-        if entry_path == EntryPath.MANUAL
-        else ""
-    )
+    notice = ENTRY_NOTICES.get(entry_path)
+    prefix = f"{notice}\n\n" if notice else ""
     problems = [
         c
         for c in report.checks
@@ -464,15 +493,23 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
         verification_note=build_verification_note(report, body.entry_path),
     )
 
+    # 문서를 만든 쪽이 먼저 서명한다.
+    #
+    # 사업주가 작성한 문서(경로 C)는 사업주가 먼저 서명해 근로자에게 보낸다.
+    # 근로자가 마지막에 서명해야 조건을 확인한 뒤 결정할 수 있다.
+    # 근로자가 만든 문서(경로 A·B)는 반대다.
+    employer_first = body.entry_path == EntryPath.EMPLOYER
+    title = document_title(body.entry_path)
+
     try:
         result = await modusign.request_signature(
             pdf_bytes=pdf,
-            # 이름을 넣지 않는다. 모두싸인 문서 목록·메일 제목에 노출된다.
-            title="근로계약서",
+            title=title,
             worker_name=body.worker_name,
             worker_email=body.worker_email,
             employer_name=body.employer_name,
             employer_email=body.employer_email,
+            employer_first=employer_first,
         )
     except modusign.ModusignError as e:
         log.error("서명 요청 실패: error_type=%s", type(e).__name__)
@@ -494,15 +531,23 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
         document_id,
         status=status,
         entry_path=body.entry_path,
-        title="근로계약서",
+        title=title,
     )
+
+    # 발송했다는 사실만 말한다.
+    #
+    # ⚠️ "체결됐다"고 말하지 않는다. 발송만으로 양쪽의 조건 확인이나
+    #    체결 완료를 추정하면, 사용자가 아직 효력 없는 문서를 근거로
+    #    행동하게 된다. 상태는 /contracts/{id}/status 가 제공자에서 읽는다.
+    first_signer = "사장님" if employer_first else "근로자"
 
     return AnalyzeSignResponse(
         document_id=document_id,
         status=status,
         report=report,
         message=(
-            "확인 전 초안 요청서를 서명 절차에 보냈습니다. "
-            "체결 완료 여부는 제공자 상태를 다시 확인한 뒤 표시합니다."
+            f"{title}를 서명 절차에 보냈습니다. "
+            f"{first_signer}부터 서명하며, 체결 완료 여부는 "
+            "제공자 상태를 다시 확인한 뒤 표시합니다."
         ),
     )

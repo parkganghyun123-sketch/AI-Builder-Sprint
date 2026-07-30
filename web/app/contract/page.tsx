@@ -6,6 +6,7 @@ import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import { getValidationState, previewPdf } from "@/lib/api";
+import { documentTitle, firstSignerLabel } from "@/lib/constants";
 import { readSession } from "@/lib/session";
 import type {
   ContractTerms,
@@ -138,27 +139,40 @@ export default function ContractPage() {
     );
   }
 
+  // 경로에 따라 문서의 성격이 다르다.
+  // ⚠️ 백엔드 DOCUMENT_TITLES 와 같은 값을 써야 한다. 화면 안내와 실제
+  //    발송 메일 제목이 어긋나면 사용자가 무엇을 받았는지 알 수 없다.
+  const title = documentTitle(entryPath);
+  const authorLabel =
+    entryPath === "EMPLOYER" ? "사업주(사장님)" : "근로자";
+
   return (
     <ScreenShell
       step={4}
-      title="근로조건 확인 요청서 미리보기 · 확인 전 초안"
-      description="사용자가 확인한 조건을 그대로 백엔드 PDF 생성기에 전달했습니다. 임금이나 다른 조건을 자동으로 바꾸지 않으며, 체결 완료 상태가 확인되기 전 문서입니다."
+      title={`${title} 미리보기 · 확인 전 초안`}
+      description="입력한 조건을 그대로 백엔드 PDF 생성기에 전달했습니다. 임금이나 다른 조건을 자동으로 바꾸지 않으며, 체결 완료 상태가 확인되기 전 문서입니다."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
       <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
-        이 PDF는 어느 입력 경로에서 시작했든 “확인 전 초안” 워터마크가 있는
-        근로조건 확인 요청서입니다. 미리보기나 한쪽의 발송만으로 양쪽이
-        조건을 확인했다고 표시하지 않습니다.
+        이 미리보기 PDF에는 “확인 전 초안” 워터마크가 있습니다. 미리보기나
+        한쪽의 발송만으로 양쪽이 조건을 확인했다고 표시하지 않습니다.
+        {/* 실제 서명용 문서에는 워터마크를 찍지 않는다. 체결된 계약서에
+            '초안' 표기가 남으면 분쟁 시 빌미가 되고 제17조 교부 증거로도
+            약해진다. 근거: backend analyze_and_sign 주석 */}
       </p>
 
       <Card>
         <h2 className="text-sm font-extrabold text-ink">문서 생성 기준</h2>
         <ul className="mt-3 flex flex-col gap-2 text-sm leading-relaxed text-ink-muted">
-          <li>· 입력 경로: {entryPath === "PHOTO" ? "사진 추출 후 확인" : "직접 입력"}</li>
-          <li>· 내용: 사용자가 확인한 현재 세션의 계약 조건</li>
-          <li>· 검증 메모: 백엔드 검증 결과 포함</li>
-          <li>· 문서 상태: “확인 전 초안” 워터마크가 있는 요청서</li>
+          <li>· 문서 종류: {title}</li>
+          <li>· 작성 주체: {authorLabel}</li>
+          <li>
+            · 조건 출처:{" "}
+            {entryPath === "PHOTO" ? "계약서 사진 추출 후 사람이 확인" : "직접 입력"}
+          </li>
+          <li>· 검증 메모: 백엔드 판정 결과를 문서 하단에 포함</li>
+          <li>· 서명 순서: {firstSignerLabel(entryPath)}부터</li>
         </ul>
       </Card>
 

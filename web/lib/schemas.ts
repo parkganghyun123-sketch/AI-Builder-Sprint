@@ -101,7 +101,7 @@ export const documentStatusSchema = z.enum([
   "PROCESSING_FAILED",
 ]);
 
-export const entryPathSchema = z.enum(["PHOTO", "MANUAL"]);
+export const entryPathSchema = z.enum(["PHOTO", "MANUAL", "EMPLOYER"]);
 
 export const analyzeSignResponseSchema = z.object({
   document_id: z.string().min(1),

@@ -257,7 +257,12 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     # 경로 B의 투명성은 검증 문단의 출처 표시로 확보한다.
     assert captured["is_draft"] is False
     # 제목에 이름을 넣지 않는다 — 모두싸인 문서 목록·메일 제목에 노출된다.
-    assert captured["title"] == "근로계약서"
+    assert "가상 근로자" not in captured["title"]
+    assert "가상 사업주" not in captured["title"]
+    # 근로자가 만든 문서는 '확인 요청서'다. 이미 합의된 계약서로
+    # 오해하지 않도록 제목을 구분한다(contracts.DOCUMENT_TITLES).
+    assert captured["title"] == "근로조건 확인 요청서"
+    assert captured["employer_first"] is False
     assert captured["terms"].worker_contact.value is None
     assert captured["worker_birth_date"] == "2009-07-31"
     assert "2009-07-31" not in captured["verification_note"]

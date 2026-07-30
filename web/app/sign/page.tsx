@@ -12,6 +12,7 @@ import {
   SignBlockedError,
   ViolationBlockedError,
 } from "@/lib/api";
+import { documentTitle, firstSignerLabel } from "@/lib/constants";
 import { readSession, updateSession } from "@/lib/session";
 import type {
   ContractTerms,
@@ -214,18 +215,29 @@ export default function SignPage() {
       check.status === "VIOLATION" || check.status === "MISSING",
   );
 
+  // 문서 종류와 서명 순서는 경로가 결정한다.
+  // ⚠️ 백엔드 DOCUMENT_TITLES / employer_first 와 같은 기준을 쓴다.
+  const title = documentTitle(entryPath);
+  const firstSigner = firstSignerLabel(entryPath);
+
   return (
     <ScreenShell
       step={5}
-      title="근로조건 확인 요청서 전자서명 발송"
+      title={`${title} 전자서명 발송`}
       description="이 단계에서만 입력한 이메일로 모두싸인 서명 요청을 보냅니다. 발송 후에도 제공자 상태가 체결 완료로 확인되기 전까지는 완료로 표시하지 않습니다."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
       <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
-        발송되는 PDF는 “확인 전 초안” 워터마크가 있는 근로조건 확인
-        요청서입니다. 한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로
-        “조건 확인됨” 또는 “체결 완료” 상태를 만들지 않습니다.
+        <strong>{firstSigner}부터 서명</strong>하고, 그다음 상대방에게 서명
+        요청이 갑니다. 서명할 문서에는 “확인 전 초안” 워터마크를 찍지 않습니다
+        — 체결된 문서에 초안 표기가 남으면 나중에 “초안인 줄 알았다”는 주장의
+        빌미가 되고, 근로기준법 제17조 교부 의무를 이행한 증거로도 약해집니다.
+        조건의 출처는 문서 하단에 문장으로 밝힙니다.
+      </p>
+      <p className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm leading-relaxed text-ink-muted">
+        한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로 “조건 확인됨” 또는
+        “체결 완료” 상태를 만들지 않습니다. 상태는 모두싸인에서 직접 읽어옵니다.
       </p>
 
       {signBlock && (

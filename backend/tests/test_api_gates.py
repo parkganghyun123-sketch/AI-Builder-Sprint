@@ -324,6 +324,87 @@ def test_발송한_문서는_이력에_남는다(fake_provider, memory_store):
 
 
 # ============================================================
+# 4-2. 사업주 경로 (경로 C)
+# ============================================================
+
+
+def test_사업주가_만든_문서는_사업주가_먼저_서명한다(fake_provider):
+    """
+    문서를 만든 쪽이 먼저 서명한다.
+
+    사업주가 작성한 계약서는 사업주가 서명해 근로자에게 보낸다.
+    근로자가 마지막에 서명해야 조건을 확인한 뒤 결정할 수 있다.
+
+    ⚠️ 순서만 바뀐다. anchor 와 참여자 매핑은 절대 바뀌지 않는다.
+       섞이면 서명란이 뒤바뀐 계약서가 나간다.
+    """
+    terms = _terms()
+    res = client.post(
+        "/contracts/analyze-sign",
+        json=_body(
+            terms,
+            entry_path="EMPLOYER",
+            confirmed_fields=_must_confirm(terms),
+            proceed_with_violations=True,
+        ),
+    )
+
+    assert res.status_code == 200, res.text
+    assert fake_provider[0]["employer_first"] is True
+
+
+def test_근로자가_만든_문서는_근로자가_먼저_서명한다(fake_provider):
+    terms = _terms()
+    for path in ("PHOTO", "MANUAL"):
+        fake_provider.clear()
+        res = client.post(
+            "/contracts/analyze-sign",
+            json=_body(
+                terms,
+                entry_path=path,
+                confirmed_fields=_must_confirm(terms),
+                proceed_with_violations=True,
+            ),
+        )
+        assert res.status_code == 200, res.text
+        assert fake_provider[0]["employer_first"] is False, path
+
+
+@pytest.mark.parametrize(
+    "entry_path,expected",
+    [
+        ("EMPLOYER", "사업주가 작성한 것입니다"),
+        ("MANUAL", "근로자가 구두로 안내받은 내용을 직접 입력한 것입니다"),
+    ],
+)
+def test_문서에_작성자를_밝힌다(entry_path, expected):
+    """
+    ⚠️ 상대방이 무엇에 서명하는지 알아야 한다.
+
+    양쪽 모두에 출처를 붙인다. 근로자가 만든 문서에만 출처를 밝히고
+    사업주가 만든 문서에는 안 밝히면, 그 자체가 한쪽을 덜 신뢰하는
+    설계가 된다.
+    """
+    from app.schemas import EntryPath, ValidationReport
+
+    note = contracts.build_verification_note(
+        ValidationReport(checks=[]), EntryPath(entry_path)
+    )
+    assert expected in note
+
+
+def test_계약서_사진_경로는_출처_문구를_붙이지_않는다():
+    """출처가 계약서 원본이므로 별도 표시가 필요 없다."""
+    from app.schemas import EntryPath, ValidationReport
+
+    note = contracts.build_verification_note(
+        ValidationReport(checks=[]), EntryPath.PHOTO
+    )
+    assert "직접 입력한 것입니다" not in note
+    assert "사업주가 작성한 것입니다" not in note
+
+
+# ============================================================
 # 5. 이메일·이름 형식 검증 (Pydantic)
 # ============================================================
 

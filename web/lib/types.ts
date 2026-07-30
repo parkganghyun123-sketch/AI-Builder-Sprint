@@ -185,9 +185,14 @@ export type DocumentStatus =
   | "ABORTED" // 중단
   | "PROCESSING_FAILED"; // 처리 실패
 
+/**
+ * 조건이 어디서 왔는가. 문서의 출처 표시와 서명 순서를 결정한다.
+ * backend/app/schemas.py EntryPath 와 1:1.
+ */
 export type EntryPath =
-  | "PHOTO" // 경로 A — 계약서 사진 업로드
-  | "MANUAL"; // 경로 B — 직접 입력 (구두계약 / OCR 실패)
+  | "PHOTO" // 경로 A — 근로자가 받은 계약서 사진
+  | "MANUAL" // 경로 B — 근로자가 직접 입력 (구두계약 / OCR 실패)
+  | "EMPLOYER"; // 경로 C — 사업주가 계약서를 작성
 
 // ============================================================
 // 4. API 요청·응답
