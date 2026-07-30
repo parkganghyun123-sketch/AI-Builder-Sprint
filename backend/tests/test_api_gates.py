@@ -31,6 +31,7 @@ _pdf_stub.render_contract_pdf = lambda *a, **k: b"%PDF-stub"
 _pdf_stub.verify_anchors = lambda pdf: {}
 sys.modules.setdefault("app.pdf.generator", _pdf_stub)
 
+from app.auth.deps import require_user  # noqa: E402
 from app.main import app  # noqa: E402
 from app.review.fields import build_review_items  # noqa: E402
 from app.routers import contracts  # noqa: E402
@@ -41,6 +42,30 @@ client = TestClient(app)
 
 WORKER = "김가상"
 EMPLOYER = "홍길동"
+
+TEST_USER = {
+    "user_id": "kakao:test-1",
+    "provider": "kakao",
+    "nickname": "가상 사용자",
+    "role": "WORKER",
+}
+
+
+@pytest.fixture(autouse=True)
+def logged_in():
+    """
+    로그인한 상태를 기본으로 둔다.
+
+    이 파일의 테스트는 **관문 로직**을 검증한다. 로그인 자체는
+    tests/test_auth.py 가 검증하므로 여기서는 의존성을 대체한다.
+
+    ⚠️ 그렇다고 "로그인 없이도 통과한다"를 놓치면 안 된다.
+       아래 test_로그인_없이는_서명을_보낼_수_없다 가 오버라이드를 걷어내고
+       확인한다.
+    """
+    app.dependency_overrides[require_user] = lambda: dict(TEST_USER)
+    yield
+    app.dependency_overrides.pop(require_user, None)
 
 
 def _f(value=None, confidence: str | None = None) -> dict:
@@ -430,6 +455,105 @@ def test_잘못된_이메일과_이름은_발송_전에_422로_막는다(
     """
     res = client.post("/contracts/analyze-sign", json=_body(**{field: value}))
     assert res.status_code == 422
+
+
+# ============================================================
+# 5-2. 로그인 관문 — 어디서부터 로그인이 필요한가
+# ============================================================
+
+
+def test_로그인_없이는_서명을_보낼_수_없다(no_provider_call):
+    """
+    ⚠️ 익명 발송을 허용하면 이 서비스가 스팸 도구가 된다.
+       아무 이메일이나 넣고 "근로계약서 서명 요청"을 보낼 수 있게 된다.
+    """
+    app.dependency_overrides.pop(require_user, None)  # 로그인 상태를 걷어낸다
+
+    res = client.post("/contracts/analyze-sign", json=_body())
+
+    assert res.status_code == 401
+    assert res.json()["detail"]["code"] == "LOGIN_REQUIRED"
+
+
+def test_로그인_없이는_보관함을_볼_수_없다():
+    app.dependency_overrides.pop(require_user, None)
+    assert client.get("/contracts").status_code == 401
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        ("/contracts/validate", {"terms": _terms()}),
+        ("/contracts/validation-state", {"terms": _terms()}),
+        ("/contracts/message", {"terms": _terms()}),
+        ("/contracts/review-items", {"terms": _terms()}),
+    ],
+)
+def test_판정과_문구는_로그인_없이_된다(path, payload):
+    """
+    ⚠️ 이 테스트가 깨지면 제품의 전제가 무너진 것이다.
+
+    열여섯 살이 첫 계약서를 확인하려고 회원가입부터 해야 한다면
+    그 벽을 넘지 못한다. 로그인은 "내 문서"를 구분해야 하는
+    시점(서명 발송·보관함)에서 처음 필요해진다.
+    """
+    app.dependency_overrides.pop(require_user, None)
+
+    res = client.post(path, json=payload)
+
+    assert res.status_code == 200, res.text
+
+
+def test_남의_문서_상태는_볼_수_없다(memory_store):
+    """
+    ⚠️ 403 이 아니라 404 를 낸다.
+
+    403 은 "그 문서는 존재하지만 네 것이 아니다"를 알려주는 셈이라,
+    문서 ID 를 넣어보며 존재 여부를 알아낼 수 있다.
+    계약서의 존재 자체가 개인정보다.
+    """
+    import asyncio
+
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "SOMEONE-ELSE-DOC",
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id="kakao:다른사람",
+        )
+    )
+
+    res = client.get("/contracts/SOMEONE-ELSE-DOC/status")
+
+    assert res.status_code == 404
+
+
+def test_보관함은_내_문서만_보여준다(memory_store):
+    """
+    ⚠️ owner_id 조건이 빠지면 보관함이 전체 사용자의 계약서 목록이 된다.
+    """
+    import asyncio
+
+    from app.schemas import DocumentStatus, EntryPath
+
+    async def seed(doc_id: str, owner: str) -> None:
+        await memory_store.remember(
+            doc_id,
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=owner,
+        )
+
+    asyncio.run(seed("MINE", TEST_USER["user_id"]))
+    asyncio.run(seed("THEIRS", "kakao:다른사람"))
+
+    ids = [item["document_id"] for item in client.get("/contracts").json()]
+
+    assert ids == ["MINE"]
 
 
 # ============================================================

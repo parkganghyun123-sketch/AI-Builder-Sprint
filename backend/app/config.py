@@ -39,6 +39,30 @@ class Settings(BaseSettings):
     # Upstage
     upstage_api_key: str = ""
 
+    # ---------------------------------------------------------- 카카오 로그인
+    #
+    # ⚠️ 로그인은 **서명 단계에서만** 요구한다.
+    #    사진 업로드·판정·문구 복사는 로그인 없이 된다.
+    #    열여섯 살이 첫 계약서를 확인하려고 가입부터 해야 한다면
+    #    그 벽을 넘지 못한다. 로그인은 "내 문서"를 구분해야 하는
+    #    시점에만 필요하다.
+    #
+    # ⚠️ 이메일 동의항목은 쓰지 않는다. 비즈 앱 심사가 필요하고,
+    #    서명받을 이메일은 사용자가 화면에서 직접 입력한다.
+    #    우리가 카카오에서 받는 것은 회원번호와 닉네임뿐이다.
+    kakao_rest_api_key: str = ""  # 앱 설정 → 앱 키 → REST API 키 (client_id)
+    kakao_client_secret: str = ""  # 카카오 로그인 → 보안 → 코드 (활성화 필요)
+    kakao_redirect_uri: str = ""  # 프론트엔드 콜백 주소. 카카오 콘솔 등록값과 일치해야 함
+
+    # 우리 세션 토큰 서명 키. 생성: openssl rand -hex 32
+    #
+    # ⚠️ 비어 있으면 로그인 기능 전체를 끈다. 서명 키 없이 토큰을 발급하면
+    #    누구나 위조할 수 있어 로그인이 없느니만 못하다.
+    jwt_secret: str = ""
+
+    # 세션 유효 기간(시간). 계약서 한 건을 끝내기에 충분하면 된다.
+    jwt_ttl_hours: int = 12
+
     # 인프라
     database_url: str = ""
 
@@ -61,6 +85,22 @@ class Settings(BaseSettings):
     @property
     def modusign_configured(self) -> bool:
         return bool(self.modusign_email and self.modusign_api_key)
+
+    @property
+    def kakao_configured(self) -> bool:
+        """
+        로그인을 켤 수 있는가.
+
+        ⚠️ 넷 중 하나라도 없으면 끈다. 반쯤 켜진 로그인은 가장 나쁘다 —
+           사용자는 로그인했다고 믿는데 실제로는 아무것도 보호되지 않는다.
+           설정 여부는 GET /health 의 kakao_login 으로 확인한다.
+        """
+        return bool(
+            self.kakao_rest_api_key
+            and self.kakao_client_secret
+            and self.kakao_redirect_uri
+            and self.jwt_secret
+        )
 
 
 settings = Settings()

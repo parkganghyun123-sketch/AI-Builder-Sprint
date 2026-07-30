@@ -14,6 +14,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from app.auth.deps import CurrentUser
 from app.bridge.numbers import verify
 from app.bridge.templates import build_lines, build_message
 from app.pdf.generator import render_contract_pdf
@@ -389,12 +390,26 @@ def _name_conflicts(body: "AnalyzeSignRequest") -> list[dict]:
 
 
 @router.post("/contracts/analyze-sign", response_model=AnalyzeSignResponse)
-async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
+async def analyze_and_sign(
+    body: AnalyzeSignRequest,
+    user: CurrentUser,
+) -> AnalyzeSignResponse:
     """
     조건 확인 → 법정 기준 검증 → 계약서 생성 → 서명 요청.
 
     위반 항목이 남아 있으면 기본적으로 막는다.
     사용자가 알고도 진행하려면 proceed_with_violations=true 를 보내야 한다.
+
+    ⚠️ **여기서 처음 로그인을 요구한다.**
+
+       사진 업로드·판정·문구 복사는 로그인 없이 된다. 열여섯 살이 첫
+       계약서를 확인하려고 가입부터 해야 한다면 그 벽을 넘지 못한다.
+
+       하지만 서명 발송부터는 다르다.
+         · 상대방에게 실제로 메일이 나간다 — 익명 발송을 허용하면
+           이 서비스가 스팸 도구가 된다
+         · 체결 문서는 나중에 다시 찾아야 한다 — 누구 것인지 알아야 한다
+         · 다운로드 링크가 딸린 상태 조회를 아무나 하면 안 된다
     """
     # 1단계 — 사람이 확인했는가.
     #
@@ -532,6 +547,9 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
         status=status,
         entry_path=body.entry_path,
         title=title,
+        # 소유자를 남긴다. 이게 없으면 보관함이 전체 사용자의 계약서를
+        # 보여주게 되고, 상태 조회도 아무나 할 수 있게 된다.
+        owner_id=user["user_id"],
     )
 
     # 발송했다는 사실만 말한다.

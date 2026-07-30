@@ -17,7 +17,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import contracts, extract, sign
+from app.routers import auth, contracts, extract, sign
 from app.store import get_store, init_store
 
 logging.basicConfig(level=logging.INFO)
@@ -40,7 +40,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     메모리로 계속 간다. 연결 실패로 앱이 아예 안 뜨면 데모가 죽는다.
     어느 쪽을 쓰고 있는지는 GET /health 의 "store" 로 확인할 것.
     """
-    log.info("문서 이력 저장소: %s", await init_store())
+    backend = await init_store()
+    log.info("문서 이력 저장소: %s", backend)
+
+    # 사용자 표는 문서 표와 같은 연결 풀을 쓴다.
+    from app.auth import users
+
+    try:
+        await users.ensure_table()
+    except Exception as error:
+        # 로그인이 안 되더라도 판정·문구 기능은 계속 동작해야 한다.
+        log.error("사용자 표 준비 실패: error_type=%s", type(error).__name__)
     yield
 
 
@@ -91,6 +101,7 @@ async def health() -> dict:
         "upstage": bool(settings.upstage_api_key),
         "store": get_store().backend,
         "webhook_token": bool(settings.webhook_path_token),
+        "kakao_login": settings.kakao_configured,
         "cors_origins": settings.allowed_origins,
     }
 
@@ -118,6 +129,7 @@ async def health_pdf() -> Response:
     )
 
 
+app.include_router(auth.router)
 app.include_router(contracts.router, tags=["contracts"])
 app.include_router(extract.router, tags=["ai"])
 app.include_router(sign.router, tags=["signing"])

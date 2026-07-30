@@ -14,6 +14,7 @@ import logging
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ValidationError
 
+from app.auth.deps import CurrentUser
 from app.config import settings
 from app.pdf.generator import render_contract_pdf
 from app.schemas import (
@@ -37,6 +38,7 @@ async def remember_document(
     entry_path: EntryPath,
     title: str,
     total: int = 2,  # 근로자 + 사업주
+    owner_id: str | None = None,
 ) -> None:
     """
     발송한 문서를 이력에 남긴다.
@@ -67,6 +69,7 @@ async def remember_document(
             entry_path=entry_path,
             title=title,
             total=total,
+            owner_id=owner_id,
         )
     except Exception as error:
         log.error(
@@ -208,13 +211,77 @@ async def reconcile(document_id: str) -> dict:
     }
 
 
+def _assert_owner(record: dict | None, user: dict) -> None:
+    """
+    남의 문서를 볼 수 없게 한다.
+
+    ⚠️ 403 이 아니라 404 를 낸다. 403 은 "그 문서는 존재하지만 네 것이
+       아니다"를 알려주는 셈이라, 문서 ID 를 무작위로 넣어보며 존재 여부를
+       알아낼 수 있다. 계약서의 존재 자체가 개인정보다.
+
+    ⚠️ owner_id 가 없는 문서(로그인 도입 전에 만들어진 것)는 통과시킨다.
+       지금은 서명 발송에 로그인이 필요하므로 새로 생기지 않는다.
+       기존 문서를 조회 불가로 만들면 이미 서명 진행 중인 사람이
+       상태를 볼 수 없게 된다.
+    """
+    if record is None:
+        return  # 외부 문서. reconcile 이 제공자에서 직접 읽는다.
+
+    owner_id = record.get("owner_id")
+    if owner_id and owner_id != user["user_id"]:
+        log.warning("다른 사용자의 문서 접근 시도 — 거부")
+        raise HTTPException(status_code=404, detail="Not Found")
+
+
+class ArchiveItem(BaseModel):
+    document_id: str
+    title: str
+    status: DocumentStatus
+    signed: int
+    total: int
+    entry_path: EntryPath
+    created_at: str
+
+
+@router.get("/contracts", response_model=list[ArchiveItem])
+async def list_my_documents(user: CurrentUser) -> list[ArchiveItem]:
+    """
+    내가 만든 문서 목록 (보관함).
+
+    ⚠️ 상태는 저장된 값을 그대로 준다. 목록을 열 때마다 문서 수만큼
+       모두싸인 API 를 부르면 쿼터가 금방 마르고 화면도 느려진다.
+       정확한 최신 상태와 다운로드 링크는 개별 문서를 열 때
+       /contracts/{id}/status 가 제공자에서 읽는다.
+
+    ⚠️ 다운로드 링크를 여기에 담지 않는다. 유효시간이 10분이라
+       목록에 실어도 대부분 만료된 링크가 된다.
+    """
+    records = await get_store().list_for_owner(user["user_id"])
+    return [
+        ArchiveItem(
+            document_id=r["document_id"],
+            title=r["title"],
+            status=r["status"],
+            signed=r.get("signed", 0),
+            total=r.get("total", 2),
+            entry_path=r["entry_path"],
+            created_at=r["created_at"].isoformat(),
+        )
+        for r in records
+    ]
+
+
 @router.get("/contracts/{document_id}/status")
-async def get_status(document_id: str) -> dict:
+async def get_status(document_id: str, user: CurrentUser) -> dict:
     """
     문서 상태 조회.
 
     웹훅이 유실됐더라도 이 조회 한 번으로 상태가 복구된다.
+
+    ⚠️ 로그인이 필요하다. 이 응답에는 체결 문서 다운로드 링크가 들어간다.
     """
+    _assert_owner(await get_store().get(document_id), user)
+
     try:
         return await reconcile(document_id)
     except modusign.ModusignError as e:
