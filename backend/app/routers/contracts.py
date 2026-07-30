@@ -18,12 +18,15 @@ from app.bridge.numbers import verify
 from app.bridge.templates import build_lines, build_message
 from app.pdf.generator import render_contract_pdf
 from app.review.fields import unconfirmed_high_priority
+from app.routers.sign import remember_document
 from app.schemas import (
     CheckStatus,
     ContractTerms,
     DocumentStatus,
+    EmailAddress,
     EntryPath,
     ExtractedField,
+    PartyName,
     ValidationReport,
 )
 from app.signing import modusign
@@ -295,10 +298,10 @@ async def preview_pdf(body: PreviewRequest) -> Response:
 class AnalyzeSignRequest(BaseModel):
     terms: ContractTerms
     worker_birth_date: str | None = None
-    worker_name: str
-    worker_email: str
-    employer_name: str
-    employer_email: str
+    worker_name: PartyName
+    worker_email: EmailAddress
+    employer_name: PartyName
+    employer_email: EmailAddress
     entry_path: EntryPath = EntryPath.PHOTO
     # 위반 항목이 남아 있어도 그대로 진행할지. 기본은 차단.
     proceed_with_violations: bool = False
@@ -478,9 +481,25 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
             detail="서명 요청 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
         ) from e
 
+    document_id = result["id"]
+    status = modusign.to_document_status(result["status"])
+
+    # 이력에 남긴다.
+    #
+    # ⚠️ 이 줄이 없으면 webhook() 이 이 문서의 이벤트를 전부 버린다.
+    #    (sign.remember_document 주석 참고 — 실제로 그런 상태였다)
+    #    화면이 실제로 쓰는 경로는 여기이므로, 여기서 남기지 않으면
+    #    "웹훅으로 상태를 동기화한다"는 설명이 사실이 아니게 된다.
+    remember_document(
+        document_id,
+        status=status,
+        entry_path=body.entry_path,
+        title="근로계약서",
+    )
+
     return AnalyzeSignResponse(
-        document_id=result["id"],
-        status=modusign.to_document_status(result["status"]),
+        document_id=document_id,
+        status=status,
         report=report,
         message=(
             "확인 전 초안 요청서를 서명 절차에 보냈습니다. "

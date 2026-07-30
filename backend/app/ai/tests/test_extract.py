@@ -356,11 +356,10 @@ class TestWhitespaceNormalization:
 # 없는 위반을 만들거나 있는 위반을 가린다.
 # ============================================================
 
-from app.ai.extract import (  # noqa: E402
-    _is_implausible,
-    _normalize_extracted_value,
-    apply_sanity_check,
-)
+# ⚠️ _normalize_extracted_value 는 파일 상단에서 이미 import 했다.
+#    여기서 다시 import 하면 상단 import 가 죽고(F811), 어느 쪽을
+#    검증하는지 읽는 사람이 알 수 없게 된다.
+from app.ai.extract import _is_implausible, apply_sanity_check  # noqa: E402
 from app.schemas import ExtractedField  # noqa: E402
 
 

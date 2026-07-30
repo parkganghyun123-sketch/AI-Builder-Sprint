@@ -16,7 +16,14 @@ from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 from app.pdf.generator import render_contract_pdf
-from app.schemas import ContractTerms, DocumentStatus, EntryPath, ExtractedField
+from app.schemas import (
+    ContractTerms,
+    DocumentStatus,
+    EmailAddress,
+    EntryPath,
+    ExtractedField,
+    PartyName,
+)
 from app.signing import modusign
 
 log = logging.getLogger(__name__)
@@ -24,6 +31,38 @@ router = APIRouter()
 
 # 임시 저장소 — DB 연결 전까지 사용
 _store: dict[str, dict] = {}
+
+
+def remember_document(
+    document_id: str,
+    *,
+    status: DocumentStatus,
+    entry_path: EntryPath,
+    title: str,
+    total: int = 2,  # 근로자 + 사업주
+) -> None:
+    """
+    발송한 문서를 이력에 남긴다.
+
+    ⚠️ 서명 요청을 보내는 **모든** 경로가 이 함수를 불러야 한다.
+
+    한동안 /contracts/sign 만 저장하고 /contracts/analyze-sign 은 저장하지
+    않았다. 그런데 화면이 실제로 쓰는 건 analyze-sign 이다. 결과적으로
+    webhook() 의 `if doc_id not in _store: return` 에서 모든 이벤트가
+    조용히 버려졌고, 상태는 사용자가 /complete 화면을 열어 폴링하는
+    동안에만 갱신됐다. 화면을 닫으면 갱신이 멈췄다.
+
+    저장 대상은 문서 식별자와 진행 상태뿐이다.
+    계약 조건·이름·이메일은 남기지 않는다 — 이력 조회에 필요하지 않고,
+    남기면 그 순간부터 보관 기간과 삭제 책임이 생긴다.
+    """
+    _store[document_id] = {
+        "status": status,
+        "signed": 0,
+        "total": total,
+        "entry_path": entry_path,
+        "title": title,
+    }
 
 
 def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
@@ -40,10 +79,10 @@ def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
 
 class SignRequestBody(BaseModel):
     terms: ContractTerms
-    worker_name: str
-    worker_email: str
-    employer_name: str
-    employer_email: str
+    worker_name: PartyName
+    worker_email: EmailAddress
+    employer_name: PartyName
+    employer_email: EmailAddress
     entry_path: EntryPath = EntryPath.PHOTO
 
 
@@ -84,13 +123,12 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
     doc_id = result["id"]
     status = modusign.to_document_status(result["status"])
 
-    _store[doc_id] = {
-        "status": status,
-        "signed": 0,
-        "total": 2,  # 근로자 + 사업주
-        "entry_path": body.entry_path,
-        "title": title,
-    }
+    remember_document(
+        doc_id,
+        status=status,
+        entry_path=body.entry_path,
+        title=title,
+    )
 
     return SignResponseBody(
         document_id=doc_id,

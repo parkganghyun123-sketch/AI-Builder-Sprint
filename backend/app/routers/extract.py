@@ -9,6 +9,7 @@
 """
 
 import logging
+from pathlib import Path
 from typing import Annotated
 
 import httpx
@@ -23,6 +24,49 @@ from app.schemas import ContractTerms
 log = logging.getLogger(__name__)
 router = APIRouter()
 
+# ------------------------------------------------------------ 업로드 제한
+#
+# ⚠️ 이 엔드포인트는 인증이 없고 배포 링크가 공개된다.
+#    그리고 요청 한 번이 Upstage 유료 API를 두 번 호출한다
+#    (Document Parse + Information Extract).
+#
+#    제한이 없으면 아무나 크레딧을 소진시킬 수 있고, 그러면
+#    데모 당일에 서비스가 멈춘다. 실제로 막아야 하는 위험이다.
+#
+#    CORS는 브라우저만 막는다. curl 은 막지 못한다.
+#    그래서 서버에서 크기와 형식을 직접 본다.
+MAX_UPLOAD_BYTES = 10 * 1024 * 1024  # 10MB — 휴대폰 사진 1장이면 충분하다
+
+# web/app/upload/page.tsx 의 accept 속성과 동일하게 유지할 것.
+ALLOWED_CONTENT_TYPES = frozenset({"image/jpeg", "image/png", "application/pdf"})
+ALLOWED_SUFFIXES = frozenset({".jpg", ".jpeg", ".png", ".pdf"})
+
+
+def _reject_unsupported_file(file: UploadFile) -> None:
+    """
+    계약서 사진으로 볼 수 없는 파일은 Upstage에 보내기 전에 거른다.
+
+    Content-Type 과 확장자를 둘 다 본다.
+      · Content-Type 은 클라이언트가 정하므로 신뢰할 수 없다
+      · 확장자만 보면 Content-Type 이 없는 정상 요청까지 막힌다
+    둘 중 하나라도 허용 목록에 있으면 통과시키고, 둘 다 아니면 막는다.
+
+    ⚠️ 415 대신 400을 쓴다. 프론트엔드가 400을 "입력한 값을 확인해 주세요"로
+       안내하고, 415는 "잠시 후 다시 시도"라는 틀린 안내로 떨어진다.
+       파일 형식이 틀린 것은 기다려서 해결되는 문제가 아니다.
+    """
+    content_type = (file.content_type or "").split(";")[0].strip().lower()
+    suffix = Path(file.filename or "").suffix.lower()
+
+    if content_type in ALLOWED_CONTENT_TYPES or suffix in ALLOWED_SUFFIXES:
+        return
+
+    log.info("지원하지 않는 업로드 형식: content_type=%s suffix=%s", content_type, suffix)
+    raise HTTPException(
+        status_code=400,
+        detail="JPG · PNG · PDF 파일만 올릴 수 있습니다.",
+    )
+
 
 @router.post("/contracts/extract", response_model=ContractTerms)
 async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
@@ -33,7 +77,18 @@ async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
        확인이 필요한 항목은 /contracts/review-items 로 받는다.
        (기존 연동을 깨지 않으려고 응답 형태는 그대로 둔다)
     """
-    file_bytes = await file.read()
+    # 형식 검사를 먼저 한다 — 본문을 읽지 않고 끝낼 수 있으면 그게 가장 싸다.
+    _reject_unsupported_file(file)
+
+    # 한도보다 1바이트만 더 읽는다. 초과 판정에 그 1바이트로 충분하고,
+    # 전체를 읽으면 제한을 두는 의미가 없어진다.
+    file_bytes = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(file_bytes) > MAX_UPLOAD_BYTES:
+        log.info("업로드 크기 초과로 거부: %d bytes 초과", MAX_UPLOAD_BYTES)
+        raise HTTPException(
+            status_code=413,
+            detail="파일이 너무 큽니다. 10MB 이하로 다시 시도해 주세요.",
+        )
     if not file_bytes:
         raise HTTPException(status_code=400, detail="빈 파일입니다.")
 

@@ -1,5 +1,6 @@
 """환경 설정. .env에서 읽어온다."""
 
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,7 +21,20 @@ class Settings(BaseSettings):
     #
     # 값을 비워두면 검증하지 않는다 — 로컬 개발용.
     #   생성: openssl rand -hex 16
-    webhook_path_token: str = ""
+    #
+    # ⚠️ MODUSIGN_WEBHOOK_SECRET 도 같은 값으로 읽는다.
+    #    설계가 HMAC(시크릿) → URL 경로 토큰으로 바뀌면서 이름도 바뀌었는데
+    #    .env 와 배포 환경에는 옛 이름이 남아 있었다. 그래서 실제 운영에서
+    #    이 값이 항상 빈 문자열이었고, 토큰 검증이 조용히 꺼져 있었다.
+    #    두 이름을 모두 받아 그 사고가 다시 나지 않게 한다.
+    #    (새로 설정할 때는 WEBHOOK_PATH_TOKEN 을 쓸 것)
+    webhook_path_token: str = Field(
+        default="",
+        validation_alias=AliasChoices(
+            "WEBHOOK_PATH_TOKEN",
+            "MODUSIGN_WEBHOOK_SECRET",
+        ),
+    )
 
     # Upstage
     upstage_api_key: str = ""

@@ -26,8 +26,10 @@ rules.py 는 **법정 기준 판정**을 한다. "시급 9,500원 < 최저임금
 """
 
 import re
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 
+from app.review.fields import FIELD_LABELS
 from app.schemas import CheckStatus, ContractTerms, ValidationReport, WageType
 
 # ------------------------------------------------------------ 유효 범위
@@ -57,31 +59,13 @@ REQUIRED_FOR_CONTRACT = (
     "employer_name",
 )
 
-FIELD_LABELS: dict[str, str] = {
-    "contract_start": "계약 시작일",
-    "contract_end": "계약 종료일",
-    "workplace": "근무장소",
-    "job_description": "업무의 내용",
-    "work_start_time": "출근 시각",
-    "work_end_time": "퇴근 시각",
-    "break_start_time": "휴게 시작",
-    "break_end_time": "휴게 종료",
-    "work_days_per_week": "주 근무일수",
-    "weekly_holiday_day": "주휴일",
-    "wage_type": "임금 형태",
-    "wage_amount": "임금 금액",
-    "has_bonus": "상여금",
-    "other_allowance": "기타 수당",
-    "payday": "임금 지급일",
-    "payment_method": "임금 지급방법",
-    "employer_business_name": "사업체명",
-    "employer_phone": "사업주 전화",
-    "employer_address": "사업체 주소",
-    "employer_name": "대표자",
-    "worker_address": "근로자 주소",
-    "worker_contact": "근로자 연락처",
-    "worker_name": "근로자 성명",
-}
+# 화면에 보일 항목 이름.
+#
+# ⚠️ app/review/fields.py 의 것을 그대로 쓴다. 여기에 다시 정의하지 말 것.
+#    같은 23개 라벨을 두 파일에 복사해 두었던 시기가 있었다.
+#    라벨이 어긋나면 같은 항목이 화면마다 다른 이름으로 보인다.
+#    (anchor 좌표를 두 파일에 복사했다가 서명 위치가 어긋난 것과 같은 실수다)
+__all__ = ["FIELD_LABELS", "Issue", "ValidationState", "build_validation_state"]
 
 
 @dataclass
@@ -282,13 +266,29 @@ class ValidationState:
     def can_proceed(self) -> bool:
         return not self.blocking
 
+    @property
+    def blocking_fields(self) -> list[str]:
+        """
+        진행을 막는 항목의 필드 이름. 화면이 포커스를 옮길 대상이다.
+
+        ⚠️ 이 속성이 없던 동안 app/routers/contracts.py 의
+           _reject_if_blocking() 이 `state.blocking_fields` 를 참조해
+           AttributeError 를 냈다. 즉 임금 0원처럼 **차단해야 하는 값이
+           들어오면 422 대신 500** 이 나갔다.
+
+           can_proceed 가 True 인 경로만 테스트돼 있어서 아무도 몰랐다.
+           to_dict() 는 같은 값을 따로 계산하고 있었기 때문에
+           응답 형태만 보면 정상으로 보였다.
+        """
+        return [i.field for i in self.blocking]
+
     def to_dict(self) -> dict:
         counts = {"error": 0, "warning": 0, "info": 0}
         for issue in self.issues:
             counts[issue.severity] = counts.get(issue.severity, 0) + 1
         return {
             "can_proceed": self.can_proceed,
-            "blocking_fields": [i.field for i in self.blocking],
+            "blocking_fields": self.blocking_fields,
             "counts": counts,
             "issues": [i.to_dict() for i in self.issues],
         }

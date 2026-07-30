@@ -19,7 +19,12 @@ for _noisy in ("fontTools", "weasyprint", "PIL"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
 from app.pdf.generator import render_contract_pdf, verify_anchors  # noqa: E402
-from app.schemas import Confidence, ContractTerms, ExtractedField, WageType
+from app.schemas import (  # noqa: E402
+    Confidence,
+    ContractTerms,
+    ExtractedField,
+    WageType,
+)
 
 
 def f(value, conf=Confidence.HIGH, source=None) -> ExtractedField:

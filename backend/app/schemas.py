@@ -5,10 +5,42 @@ A(AI 추출)와 B(검증 엔진)는 이 파일만 보고 작업한다.
 변경 시 반드시 상대 담당자에게 알릴 것.
 """
 
-from datetime import date
 from enum import Enum
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# ============================================================
+# 0. 공용 타입
+# ============================================================
+
+# 서명 요청을 보낼 이메일 주소.
+#
+# ⚠️ 이 값이 검증되지 않으면 API를 직접 호출해 아무 주소로나 서명 요청을
+#    발송할 수 있다. 화면에서만 막는 것으로는 부족하다 — 프론트엔드 검증은
+#    URL 직접 접근·개발자 도구·curl 로 우회된다.
+#
+# pydantic 의 EmailStr 을 쓰지 않는 이유:
+#   email-validator 의존성이 추가되고, 그 패키지 설치가 실패하면 배포가
+#   전부 멈춘다. 마감이 가까운 시점에 감수할 위험이 아니다.
+#   여기서 필요한 것은 "발송 가능한 형태인가"이고 형식 검사로 충분하다.
+#   web/app/sign/page.tsx 의 EMAIL_PATTERN 과 같은 규칙이다.
+EmailAddress = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=5,
+        max_length=254,  # RFC 5321 이 정한 주소 최대 길이
+        pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+    ),
+]
+
+# 계약서에 그대로 인쇄되는 이름. 빈 문자열로 서명 요청이 나가면
+# 모두싸인 문서 참여자 이름이 비어버린다.
+PartyName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 # ============================================================
 # 1. 계약 조건 — A의 출력 = B의 입력
@@ -232,10 +264,10 @@ class EntryPath(str, Enum):
 
 
 class SignRequest(BaseModel):
-    worker_name: str
-    worker_email: str
-    employer_name: str
-    employer_email: str
+    worker_name: PartyName
+    worker_email: EmailAddress
+    employer_name: PartyName
+    employer_email: EmailAddress
 
 
 class SignResponse(BaseModel):
