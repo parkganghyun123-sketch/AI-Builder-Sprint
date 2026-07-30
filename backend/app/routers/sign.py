@@ -25,15 +25,12 @@ from app.schemas import (
     PartyName,
 )
 from app.signing import modusign
+from app.store import get_store
 
 log = logging.getLogger(__name__)
 router = APIRouter()
 
-# 임시 저장소 — DB 연결 전까지 사용
-_store: dict[str, dict] = {}
-
-
-def remember_document(
+async def remember_document(
     document_id: str,
     *,
     status: DocumentStatus,
@@ -48,21 +45,35 @@ def remember_document(
 
     한동안 /contracts/sign 만 저장하고 /contracts/analyze-sign 은 저장하지
     않았다. 그런데 화면이 실제로 쓰는 건 analyze-sign 이다. 결과적으로
-    webhook() 의 `if doc_id not in _store: return` 에서 모든 이벤트가
-    조용히 버려졌고, 상태는 사용자가 /complete 화면을 열어 폴링하는
-    동안에만 갱신됐다. 화면을 닫으면 갱신이 멈췄다.
+    webhook() 의 "저장소에 없으면 무시" 분기에서 모든 이벤트가 조용히
+    버려졌고, 상태는 사용자가 /complete 화면을 열어 폴링하는 동안에만
+    갱신됐다. 화면을 닫으면 갱신이 멈췄다.
 
     저장 대상은 문서 식별자와 진행 상태뿐이다.
     계약 조건·이름·이메일은 남기지 않는다 — 이력 조회에 필요하지 않고,
     남기면 그 순간부터 보관 기간과 삭제 책임이 생긴다.
+
+    ⚠️ 이력 기록이 실패해도 서명 요청 자체는 이미 발송됐다.
+       여기서 예외를 올리면 사용자는 "실패했다"고 보는데 상대방에게는
+       메일이 가 있는, 가장 혼란스러운 상태가 된다.
+       그래서 실패를 로그로만 남기고 응답은 성공으로 돌려준다.
+       상태는 /contracts/{id}/status 가 모두싸인에서 직접 읽으므로
+       이력이 없어도 사용자 흐름은 이어진다.
     """
-    _store[document_id] = {
-        "status": status,
-        "signed": 0,
-        "total": total,
-        "entry_path": entry_path,
-        "title": title,
-    }
+    try:
+        await get_store().remember(
+            document_id,
+            status=status,
+            entry_path=entry_path,
+            title=title,
+            total=total,
+        )
+    except Exception as error:
+        log.error(
+            "문서 이력 기록 실패 (서명 요청은 이미 발송됨): document=%s error_type=%s",
+            document_id,
+            type(error).__name__,
+        )
 
 
 def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
@@ -123,7 +134,7 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
     doc_id = result["id"]
     status = modusign.to_document_status(result["status"])
 
-    remember_document(
+    await remember_document(
         doc_id,
         status=status,
         entry_path=body.entry_path,
@@ -161,7 +172,7 @@ async def reconcile(document_id: str) -> dict:
     signed = len(doc.get("signings", []))
     total = len(doc.get("participants", []))
 
-    record = _store.get(document_id)
+    record = await get_store().get(document_id)
 
     # 조회 자체를 항상 남긴다.
     # 예전에는 "저장소에 있고 + 상태가 바뀐" 경우에만 찍어서,
@@ -172,16 +183,14 @@ async def reconcile(document_id: str) -> dict:
         status,
         signed,
         total,
-        ""
-        if record is not None
-        else "  [저장소에 없음 — 재배포로 유실됐거나 외부 문서]",
+        "" if record is not None else "  [이력에 없음 — 외부 문서이거나 기록 실패]",
     )
 
     if record is not None:
         before = record.get("status")
-        record["status"] = status
-        record["signed"] = signed
-        record["total"] = total
+        await get_store().update_progress(
+            document_id, status=status, signed=signed, total=total
+        )
         if before != status:
             log.info("문서 %s 상태 변경: %s → %s", document_id, before, status)
 
@@ -307,9 +316,11 @@ async def webhook(request: Request, token: str | None = None) -> dict:
         )
         return {"received": True}
 
-    if doc_id not in _store:
-        # 스파이크 스크립트로 보낸 문서 등, 우리가 만들지 않은 건 조회하지 않는다
-        log.info("저장소에 없는 문서: %s (event=%s)", doc_id, event_type)
+    record = await get_store().get(doc_id)
+    if record is None:
+        # 스파이크 스크립트로 보낸 문서 등, 우리가 만들지 않은 건 조회하지 않는다.
+        # 모두싸인 API 를 부르지 않으므로 쿼터도 쓰지 않는다.
+        log.info("이력에 없는 문서: %s (event=%s)", doc_id, event_type)
         return {"received": True}
 
     try:
@@ -325,7 +336,13 @@ async def webhook(request: Request, token: str | None = None) -> dict:
             fallback,
         )
         if fallback is not None:
-            _store[doc_id]["status"] = fallback
+            await get_store().update_progress(
+                doc_id,
+                status=fallback,
+                # 서명 진행도는 이벤트로 알 수 없다. 지어내지 않고 기존 값을 둔다.
+                signed=record.get("signed", 0),
+                total=record.get("total", 2),
+            )
 
     # 모두싸인은 2xx를 기대한다. 여기서 500을 내면 웹훅이 실패로 집계되고
     # 반복되면 자동 비활성화될 수 있으므로, 실패해도 200을 준다.

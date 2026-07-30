@@ -33,8 +33,9 @@ sys.modules.setdefault("app.pdf.generator", _pdf_stub)
 
 from app.main import app  # noqa: E402
 from app.review.fields import build_review_items  # noqa: E402
-from app.routers import contracts, sign  # noqa: E402
+from app.routers import contracts  # noqa: E402
 from app.schemas import ContractTerms  # noqa: E402
+from app.store import MemoryDocumentStore, set_store  # noqa: E402
 
 client = TestClient(app)
 
@@ -122,7 +123,20 @@ def no_provider_call(monkeypatch):
 
 
 @pytest.fixture
-def fake_provider(monkeypatch):
+def memory_store():
+    """
+    항상 빈 메모리 저장소를 심는다.
+
+    ⚠️ DATABASE_URL 이 설정된 환경에서 테스트를 돌려도 실제 DB를
+       건드리지 않아야 한다.
+    """
+    store = MemoryDocumentStore()
+    set_store(store)
+    return store
+
+
+@pytest.fixture
+def fake_provider(monkeypatch, memory_store):
     """서명 요청을 가짜로 성공시킨다. 호출 인자를 기록한다."""
     calls: list[dict] = []
 
@@ -132,7 +146,6 @@ def fake_provider(monkeypatch):
 
     monkeypatch.setattr(contracts.modusign, "request_signature", fake)
     monkeypatch.setattr(contracts, "render_contract_pdf", lambda *a, **k: b"%PDF-stub")
-    sign._store.clear()
     return calls
 
 
@@ -279,11 +292,11 @@ def test_확인_완료_후_위반_미강행이면_409로_안내한다(no_provide
     assert "proceed_with_violations" in detail["hint"]
 
 
-def test_발송한_문서는_이력에_남는다(fake_provider):
+def test_발송한_문서는_이력에_남는다(fake_provider, memory_store):
     """
     ⚠️ 이 테스트가 실패하면 웹훅이 조용히 죽는다.
 
-    webhook() 은 `if doc_id not in _store: return` 으로 시작한다.
+    webhook() 은 이력에 없는 문서를 그냥 무시한다.
     발송 경로가 이력을 남기지 않으면 모두싸인 이벤트가 전부 버려지고,
     상태는 사용자가 화면을 열어 폴링하는 동안에만 갱신된다.
 
@@ -300,9 +313,10 @@ def test_발송한_문서는_이력에_남는다(fake_provider):
         ),
     )
 
-    assert "TEST-DOC-1" in sign._store
+    rows = memory_store.snapshot()
+    assert "TEST-DOC-1" in rows
 
-    record = sign._store["TEST-DOC-1"]
+    record = rows["TEST-DOC-1"]
     assert record["total"] == 2  # 근로자 + 사업주
     # 계약 조건·이름·이메일은 이력에 남기지 않는다.
     assert "terms" not in record

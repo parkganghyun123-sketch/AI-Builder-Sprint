@@ -28,6 +28,21 @@ from app.schemas import (  # noqa: E402
     ExtractedField,
     ValidationReport,
 )
+from app.store import MemoryDocumentStore, get_store, set_store  # noqa: E402
+
+
+def fresh_store() -> MemoryDocumentStore:
+    """
+    빈 메모리 저장소로 갈아끼운다.
+
+    ⚠️ 예전에는 sign._store.clear() 를 호출했다. 저장소가 라우터 모듈의
+       전역 딕셔너리였기 때문이다. 지금은 app/store.py 가 소유하고
+       DATABASE_URL 유무로 구현이 바뀌므로, 테스트는 항상 메모리를 심는다.
+       (테스트가 실수로 실제 DB를 건드리는 일도 이렇게 막는다)
+    """
+    store = MemoryDocumentStore()
+    set_store(store)
+    return store
 
 
 def _field(value=None, source_text: str | None = None) -> ExtractedField:
@@ -380,7 +395,7 @@ def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None
 
     monkeypatch.setattr(sign, "render_contract_pdf", fake_render)
     monkeypatch.setattr(sign.modusign, "request_signature", fake_request_signature)
-    sign._store.clear()
+    fresh_store()
 
     response = asyncio.run(
         sign.create_and_send(
@@ -400,14 +415,26 @@ def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None
     # (검증·확인을 마치는 /contracts/analyze-sign 은 워터마크를 찍지 않는다)
     assert captured["is_draft"] is True
     assert captured["title"] == "근로조건 확인 요청서"
-    assert "terms" not in sign._store[response.document_id]
-    assert sign._store[response.document_id]["title"] == "근로조건 확인 요청서"
+
+    record = asyncio.run(get_store().get(response.document_id))
+    assert record is not None
+    assert "terms" not in record
+    assert record["title"] == "근로조건 확인 요청서"
 
 
-def test_webhook_logs_only_event_and_document_identifiers(caplog) -> None:
+def test_webhook_logs_only_event_and_document_identifiers(caplog, monkeypatch) -> None:
     private_email = "private-person@example.com"
     private_name = "로그에 남으면 안 되는 이름"
-    sign._store.clear()
+
+    # ⚠️ 웹훅 토큰을 명시적으로 비운다.
+    #
+    #    이 테스트는 로그 내용만 검증한다. 그런데 토큰 검증이 앞단에 있어서,
+    #    개발자의 로컬 .env 에 WEBHOOK_PATH_TOKEN 이 들어 있으면
+    #    404 로 막히고 테스트가 깨졌다. 실제로 그런 일이 있었다.
+    #    테스트는 로컬 환경 설정에 좌우되어서는 안 된다.
+    monkeypatch.setattr(sign.settings, "webhook_path_token", "")
+
+    fresh_store()
     request = _request_with_json(
         {
             "event": {"type": "document_started"},

@@ -490,7 +490,7 @@ async def analyze_and_sign(body: AnalyzeSignRequest) -> AnalyzeSignResponse:
     #    (sign.remember_document 주석 참고 — 실제로 그런 상태였다)
     #    화면이 실제로 쓰는 경로는 여기이므로, 여기서 남기지 않으면
     #    "웹훅으로 상태를 동기화한다"는 설명이 사실이 아니게 된다.
-    remember_document(
+    await remember_document(
         document_id,
         status=status,
         entry_path=body.entry_path,

@@ -10,12 +10,15 @@
 
 import logging
 import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import contracts, extract, sign
+from app.store import get_store, init_store
 
 logging.basicConfig(level=logging.INFO)
 
@@ -25,7 +28,23 @@ logging.basicConfig(level=logging.INFO)
 for _noisy in ("fontTools", "weasyprint", "PIL", "httpx", "httpcore"):
     logging.getLogger(_noisy).setLevel(logging.WARNING)
 
-app = FastAPI(title="FairSign API", version="0.1.0")
+log = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """
+    앱이 뜰 때 문서 이력 저장소를 준비한다.
+
+    DATABASE_URL 이 있으면 Postgres 로 전환하고, 없거나 연결에 실패하면
+    메모리로 계속 간다. 연결 실패로 앱이 아예 안 뜨면 데모가 죽는다.
+    어느 쪽을 쓰고 있는지는 GET /health 의 "store" 로 확인할 것.
+    """
+    log.info("문서 이력 저장소: %s", await init_store())
+    yield
+
+
+app = FastAPI(title="FairSign API", version="0.1.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,7 +54,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-log = logging.getLogger(__name__)
 log.info("CORS 허용 도메인: %s", settings.allowed_origins)
 
 
@@ -59,12 +77,20 @@ async def health() -> dict:
     프론트를 붙이기 전에 이걸 먼저 확인할 것.
       upstage가 false면 /contracts/extract 가 502로 죽는다.
       commit이 로컬 HEAD와 다르면 아직 이전 코드가 돌고 있는 것이다.
+      cors_origins에 프론트 도메인이 없으면 브라우저가 전부 막는다.
+      store가 memory면 재배포 시 계약 이력이 사라진다.
+      webhook_token이 false면 웹훅 URL을 아무나 호출할 수 있다.
+
+    ⚠️ 비밀값은 담지 않는다. 설정됐는지(true/false)만 보여준다.
+       실제 값을 노출하면 이 엔드포인트가 그대로 유출 경로가 된다.
     """
     return {
         "status": "ok",
         "commit": _COMMIT,
         "modusign": settings.modusign_configured,
         "upstage": bool(settings.upstage_api_key),
+        "store": get_store().backend,
+        "webhook_token": bool(settings.webhook_path_token),
         "cors_origins": settings.allowed_origins,
     }
 
