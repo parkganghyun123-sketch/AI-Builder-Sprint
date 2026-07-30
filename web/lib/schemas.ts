@@ -83,6 +83,13 @@ export const validationStateSchema = z.object({
   issues: z.array(validationIssueSchema),
 });
 
+// "말 꺼내기" 문구 — bridge/templates.py + bridge/numbers.py 대응.
+export const ownerMessageSchema = z.object({
+  message: z.string().nullable(),
+  lines: z.array(z.string()),
+  numbers_verified: z.boolean(),
+});
+
 export const documentStatusSchema = z.enum([
   "DRAFTING",
   "REVIEW_REQUESTED",

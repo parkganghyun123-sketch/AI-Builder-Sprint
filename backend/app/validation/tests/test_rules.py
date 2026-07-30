@@ -138,7 +138,10 @@ def test_weekly_hours_14_point_9_does_not_meet_time_threshold() -> None:
     )
 
     assert result.status == CheckStatus.OK
-    assert "14.9시간 < 15시간" in result.calculation
+    # 시간은 분 단위로 끊어 표시한다. 이 문자열이 사용자가 사장님에게 보낼
+    # 문구에 그대로 들어가므로 부동소수점(14.9000000000001)이 새면 안 된다.
+    # 근거: app/validation/rules.py _hours()
+    assert "14시간 54분 < 15시간" in result.calculation
     assert "충족하지 않습니다" in result.detail
 
 

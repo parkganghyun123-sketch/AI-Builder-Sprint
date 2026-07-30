@@ -2,6 +2,7 @@ import type { z } from "zod";
 import {
   analyzeSignResponseSchema,
   contractTermsSchema,
+  ownerMessageSchema,
   reviewItemsResponseSchema,
   signBlockedEnvelopeSchema,
   signStatusResponseSchema,
@@ -250,6 +251,19 @@ export function validateTerms(body: ValidateRequest) {
  */
 export function getValidationState(body: ValidateRequest) {
   return postJson("/contracts/validation-state", body, validationStateSchema);
+}
+
+/**
+ * 판정 결과 → 사장님께 보낼 문의 메시지.
+ *
+ * 계약서가 최저임금 미달인 걸 아는 것과, 그걸 사장님에게 말하는 것은
+ * 다른 문제다. 이 호출은 후자를 돕는다.
+ *
+ * ⚠️ numbers_verified 가 false 면 화면에 표시하지 말 것.
+ *    문장의 숫자가 판정 결과와 대조되지 않았다는 뜻이다.
+ */
+export function buildOwnerMessage(body: ValidateRequest) {
+  return postJson("/contracts/message", body, ownerMessageSchema);
 }
 
 /**

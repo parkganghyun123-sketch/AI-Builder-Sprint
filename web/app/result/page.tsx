@@ -7,9 +7,10 @@ import {
   CheckResultCard,
   CHECK_SOURCE_FIELD,
 } from "@/components/CheckResultCard";
+import { OwnerMessageCard } from "@/components/OwnerMessageCard";
 import { ButtonLink, Card } from "@/components/ui";
 import { readSession } from "@/lib/session";
-import type { ContractTerms, ValidationReport } from "@/lib/types";
+import type { ContractTerms, EntryPath, ValidationReport } from "@/lib/types";
 
 function displayValue(
   terms: ContractTerms,
@@ -25,6 +26,8 @@ export default function ResultPage() {
   const [userEditedFields, setUserEditedFields] = useState<
     (keyof ContractTerms)[]
   >([]);
+  const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
+  const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -32,6 +35,8 @@ export default function ResultPage() {
     setTerms(session.terms);
     setReport(session.report);
     setUserEditedFields(session.userEditedFields);
+    setEntryPath(session.entryPath);
+    setWorkerBirthDate(session.workerBirthDate);
     setReady(true);
   }, []);
 
@@ -78,6 +83,9 @@ export default function ResultPage() {
   const unknowns = report.checks.filter(
     (check) => check.status === "UNKNOWN",
   ).length;
+  // 경로 B(계약서를 아예 못 받은 경우)는 문서 발송이 주 산출물이다.
+  // 경로 A는 사장님께 말을 꺼내는 것이 먼저다.
+  const isManual = entryPath === "MANUAL";
   const wage = displayValue(terms, "wage_amount");
   const start = displayValue(terms, "work_start_time");
   const end = displayValue(terms, "work_end_time");
@@ -195,14 +203,66 @@ export default function ResultPage() {
         })}
       </div>
 
-      <div className="flex flex-col gap-2">
-        <ButtonLink href="/contract" className="w-full text-center">
-          확인한 조건으로 근로조건 확인 요청서 만들기 →
-        </ButtonLink>
-        <ButtonLink href="/review" variant="secondary" className="w-full">
+      {/* ② 말하게 한다 — 판정과 서명 사이에 있는 단계.
+          문제가 없으면 카드가 스스로 아무것도 렌더하지 않는다. */}
+      <OwnerMessageCard terms={terms} workerBirthDate={workerBirthDate} />
+
+      {/* 다음 행동을 두 갈래로 나눈다.
+          ⚠️ 이전에는 곧바로 "요청서 만들기" 하나뿐이었다. 그래서 계약서를
+             이미 받은 사람도 "새 문서를 만들어 사장님에게 보내는" 길로
+             떠밀렸다. 열여섯 살이 사장님에게 서명을 요구하는 건 힘의
+             관계상 현실적이지 않다.
+             계약서를 받은 경우엔 위 문구가 주 산출물이고, 문서 발송은
+             계약서를 못 받았거나 수정을 거부당한 경우의 수단이다. */}
+      <Card className="flex flex-col gap-4">
+        <h2 className="text-sm font-extrabold text-ink">
+          <span aria-hidden="true">🧭 </span>
+          다음엔 무엇을 할까요
+        </h2>
+
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-bold text-ink-muted">
+            {isManual
+              ? "계약서를 아직 받지 못했다면"
+              : "계약서를 이미 받았다면"}
+          </p>
+          {isManual ? (
+            <>
+              <ButtonLink href="/contract" className="w-full text-center">
+                근로조건 확인 요청서 만들어 보내기 →
+              </ButtonLink>
+              <p className="text-xs leading-relaxed text-ink-muted">
+                근로계약서 교부는 사업주의 의무입니다(근로기준법 제17조).
+                들은 조건을 문서로 남겨 확인을 요청할 수 있어요.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs leading-relaxed text-ink-muted">
+              위 문구를 복사해 사장님께 먼저 여쭤보세요. 조건을 고쳐 새
+              계약서를 받는 것이 가장 깔끔한 결과입니다.
+            </p>
+          )}
+        </div>
+
+        {!isManual && (
+          <div className="flex flex-col gap-2 border-t border-brand-line pt-4">
+            <p className="text-xs font-bold text-ink-muted">
+              계약서를 못 받았거나, 말해도 고쳐주지 않는다면
+            </p>
+            <ButtonLink
+              href="/contract"
+              variant="secondary"
+              className="w-full text-center"
+            >
+              근로조건 확인 요청서 만들어 보내기 →
+            </ButtonLink>
+          </div>
+        )}
+
+        <ButtonLink href="/review" variant="ghost" className="w-full">
           조건 다시 수정
         </ButtonLink>
-      </div>
+      </Card>
 
       <LegalDisclaimer />
     </ScreenShell>
