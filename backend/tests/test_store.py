@@ -13,8 +13,12 @@ import pytest
 from app.schemas import DocumentStatus, EntryPath
 from app.store import (
     MemoryDocumentStore,
+    describe_database_url,
     normalize_database_url,
 )
+
+_HOST = "aws-1-ap-northeast-2.pooler.supabase.com"
+_SECRET = "s3cret-password"
 
 
 def _run(coro):
@@ -159,3 +163,48 @@ def test_접속_문자열에_async_드라이버를_붙인다(given, expected):
     Supabase 는 드라이버 없는 문자열을 주므로 우리가 붙인다.
     """
     assert normalize_database_url(given) == expected
+
+
+# ============================================================
+# 접속 실패 진단
+# ============================================================
+
+
+def test_진단_요약에_비밀번호가_들어가지_않는다():
+    """
+    ⚠️ 이 요약은 로그로 나간다. 자격증명이 섞이면
+       로그 파일이 그대로 유출 경로가 된다.
+       (AGENTS.md: "API 키, 계약서 내용, 개인정보를 로그에 남기지 않습니다")
+    """
+    url = f"postgresql://postgres.projectref:{_SECRET}@{_HOST}:6543/postgres"
+    summary = describe_database_url(url)
+
+    assert _SECRET not in summary
+    assert "postgres.projectref" not in summary
+    assert _HOST not in summary
+    # 그러면서도 진단에 필요한 구조는 남아야 한다.
+    assert "postgresql" in summary
+    assert "6543" in summary
+
+
+def test_포트가_숫자가_아니면_그렇다고_알려준다():
+    """
+    ValueError 의 유일한 원인이다. 로그가 error_type 만 남기면
+    여기까지 도달하는 데 시간이 걸린다.
+    """
+    summary = describe_database_url(f"postgresql://u:p@{_HOST}:PORT/postgres")
+    assert "포트가 숫자가 아니다" in summary
+
+
+@pytest.mark.parametrize(
+    "url,expected_hint",
+    [
+        (f'"postgresql://u:p@{_HOST}:6543/db"', "따옴표"),
+        (f"postgresql://u:[YOUR-PASSWORD]@{_HOST}:6543/db", "대괄호"),
+        (f"postgresql://{_HOST}:6543/db", "자격증명"),
+        (f"psql -h {_HOST} -p 6543", "스킴 구분자"),
+        ("", "빈 값"),
+    ],
+)
+def test_흔한_실수를_구체적으로_지목한다(url, expected_hint):
+    assert expected_hint in describe_database_url(url)

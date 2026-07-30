@@ -195,6 +195,55 @@ def normalize_database_url(url: str) -> str:
     return url
 
 
+def describe_database_url(url: str) -> str:
+    """
+    접속 문자열의 **구조만** 사람이 읽을 수 있게 요약한다.
+
+    ⚠️ 사용자 이름·비밀번호·호스트는 절대 담지 않는다.
+       연결 실패 원인은 대개 구조 문제(포트가 숫자가 아님, 따옴표가 붙음,
+       placeholder 를 안 바꿈)인데, 예외 메시지에는 접속 문자열 조각이
+       그대로 들어가 로그에 자격증명이 남는다. 그래서 우리가 직접 요약한다.
+
+    실제로 이 요약이 필요했다. 로그가 `error_type=ValueError` 만 남겨서
+    "포트 자리가 숫자가 아니다"라는 사실에 도달하는 데 시간이 걸렸다.
+    """
+    if not url:
+        return "빈 값"
+
+    notes: list[str] = []
+
+    if url[0] in "\"'" or url[-1] in "\"'":
+        notes.append("따옴표가 포함됨(제거할 것)")
+    if url != url.strip():
+        notes.append("앞뒤 공백 있음")
+    if "[" in url or "]" in url:
+        notes.append("대괄호 있음 — [YOUR-PASSWORD] 를 실제 비밀번호로 바꿨는지 확인")
+
+    scheme, _, rest = url.partition("://")
+    if not rest:
+        return f"스킴 구분자(://) 없음 · 앞부분={scheme[:12]!r} · " + (
+            " / ".join(notes) or "그 외 이상 없음"
+        )
+    notes.insert(0, f"스킴={scheme}")
+
+    # 자격증명과 호스트를 분리한다. 마지막 @ 가 경계다.
+    hostpart = rest.rpartition("@")[2]
+    hostpart = hostpart.partition("/")[0]  # 경로 제거
+
+    if ":" in hostpart:
+        port = hostpart.rpartition(":")[2]
+        notes.append(f"포트={port!r}")
+        if not port.isdigit():
+            notes.append("⚠️ 포트가 숫자가 아니다 — 이것이 ValueError 의 원인")
+    else:
+        notes.append("포트 없음(기본 5432 사용)")
+
+    notes.append(f"호스트 길이={len(hostpart)}")
+    notes.append("자격증명 있음" if "@" in rest else "⚠️ 자격증명(user:password@) 없음")
+
+    return " · ".join(notes)
+
+
 class PostgresDocumentStore:
     """
     Supabase(Postgres) 저장소.
@@ -367,11 +416,17 @@ async def init_store() -> str:
     try:
         set_store(await PostgresDocumentStore.connect(settings.database_url))
     except Exception as error:
-        # 접속 문자열에는 비밀번호가 들어 있다. 예외 원문을 로그에 남기지 않는다.
+        # 접속 문자열에는 비밀번호가 들어 있다. 예외 원문을 로그에 남기지 않고,
+        # 대신 자격증명을 뺀 구조 요약을 남긴다(describe_database_url 주석 참고).
         log.error(
-            "DATABASE_URL 이 설정됐지만 연결에 실패해 메모리로 폴백합니다: "
-            "error_type=%s",
+            "DATABASE_URL 이 설정됐지만 연결에 실패해 메모리로 폴백합니다.\n"
+            "  error_type : %s\n"
+            "  URL 구조   : %s\n"
+            "  확인할 것  : Supabase 대시보드 상단 [Connect] → Transaction pooler 의\n"
+            "               URI 를 그대로 쓰고, [YOUR-PASSWORD] 만 실제 비밀번호로\n"
+            "               바꿨는지. 따옴표로 감싸지 않았는지.",
             type(error).__name__,
+            describe_database_url(settings.database_url),
         )
         return get_store().backend
 
