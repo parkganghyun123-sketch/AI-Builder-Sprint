@@ -147,6 +147,17 @@ export interface ValidationState {
   issues: ValidationIssue[];
 }
 
+/**
+ * analyze-sign 이 성립하지 않는 값(임금 0원 등)으로 문서 생성 자체를
+ * 거부할 때(422). ValidationState 의 issues 와 같은 형태다.
+ */
+export interface InvalidContractValues {
+  code: "INVALID_CONTRACT_VALUES";
+  message: string;
+  blocking_fields: string[];
+  issues: ValidationIssue[];
+}
+
 // ============================================================
 // 2-3. "말 꺼내기" 문구 — bridge/templates.py 대응
 // ============================================================
@@ -269,6 +280,16 @@ export interface SignBlocked {
   hint: string;
   /** 확인/수정이 필요한 항목 라벨 */
   fields?: string[];
+  /**
+   * NAME_MISMATCH — 계약서에서 읽은 이름과 서명 요청에 입력한 이름이 다른 항목들.
+   * 어느 쪽이 맞는지 코드가 고르지 않는다(contracts.py:_name_conflicts).
+   */
+  conflicts?: {
+    field: string;
+    label: string;
+    on_contract: string;
+    typed: string;
+  }[];
 }
 
 export interface AnalyzeSignResponse {
@@ -291,4 +312,27 @@ export interface SignStatusResponse {
   signed: number;
   total: number;
   download_url: string | null;
+}
+
+// ============================================================
+// 5. 로그인 — backend/app/routers/auth.py 대응
+// ============================================================
+
+export type UserRole = "WORKER" | "EMPLOYER";
+
+export interface Me {
+  user_id: string;
+  nickname: string;
+  role: UserRole;
+}
+
+/** 보관함 목록 항목. GET /contracts — 다운로드 링크는 없다(유효시간 10분). */
+export interface ArchiveItem {
+  document_id: string;
+  title: string;
+  status: DocumentStatus;
+  signed: number;
+  total: number;
+  entry_path: EntryPath;
+  created_at: string;
 }
