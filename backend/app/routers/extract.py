@@ -65,7 +65,7 @@ def _reject_unsupported_file(file: UploadFile) -> None:
     log.info("지원하지 않는 업로드 형식: content_type=%s suffix=%s", content_type, suffix)
     raise HTTPException(
         status_code=400,
-        detail="JPG · PNG · PDF 파일만 올릴 수 있습니다.",
+        detail="JPG · PNG · PDF 파일만 올릴 수 있어요.",
     )
 
 
@@ -88,10 +88,10 @@ async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
         log.info("업로드 크기 초과로 거부: %d bytes 초과", MAX_UPLOAD_BYTES)
         raise HTTPException(
             status_code=413,
-            detail="파일이 너무 큽니다. 10MB 이하로 다시 시도해 주세요.",
+            detail="파일이 너무 커요. 10MB 이하로 올려 주세요.",
         )
     if not file_bytes:
-        raise HTTPException(status_code=400, detail="빈 파일입니다.")
+        raise HTTPException(status_code=400, detail="파일이 비어 있어요. 다시 골라 주세요.")
 
     try:
         terms = await extract_contract_terms(file_bytes, file.filename or "contract")
@@ -100,7 +100,7 @@ async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
         log.error("계약서 추출 실패: error_type=%s", type(error).__name__)
         raise HTTPException(
             status_code=502,
-            detail="계약서 추출 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+            detail="지금은 계약서를 읽을 수 없어요. 잠시 뒤 다시 시도해 주세요.",
         ) from None
 
     items = build_review_items(terms)

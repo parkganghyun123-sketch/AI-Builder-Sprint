@@ -59,7 +59,7 @@ export default function HomePage() {
 
         <p className="mx-auto mt-5 max-w-xl leading-relaxed text-ink-muted">
           계약서에서 읽은 조건을 사람이 확인하고, FairSign이 지원하는 법정
-          기준과 백엔드 코드로 비교해 근거와 함께 보여드려요.
+          기준과 하나씩 비교해 근거와 함께 보여드려요.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">

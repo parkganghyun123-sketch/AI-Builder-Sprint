@@ -31,7 +31,7 @@ export function ContractAssistant({ terms }: { terms: ContractTerms }) {
       setError(
         caught instanceof ApiError
           ? caught.message
-          : "질문을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          : "답변을 가져오지 못했어요. 잠시 뒤 다시 물어봐 주세요.",
       );
     } finally {
       setLoading(false);
@@ -46,7 +46,7 @@ export function ContractAssistant({ terms }: { terms: ContractTerms }) {
           내 계약서에 대해 물어보세요
         </h2>
         <p className="text-sm leading-relaxed text-ink-muted">
-          확인된 계약 조건과 검증 결과만 찾아 답합니다. 개별 분쟁이나 실제 근무기록이 필요한 질문은 안내하지 않습니다.
+          확인한 계약 조건과 검토 결과 안에서만 답해요. 개별 분쟁이나 실제 근무기록이 필요한 질문은 답하지 않습니다.
         </p>
       </div>
 

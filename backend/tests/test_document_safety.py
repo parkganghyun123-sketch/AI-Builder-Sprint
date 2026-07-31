@@ -278,7 +278,11 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     assert captured["worker_birth_date"] == "2009-07-31"
     assert "2009-07-31" not in captured["verification_note"]
     assert response.status == DocumentStatus.ON_PROCESSING
-    assert "체결 완료 여부" in response.message
+    # ⚠️ 발송을 체결로 말하지 않는다. 이 구분이 무너지면 사용자가 아직
+    #    효력 없는 문서를 근거로 행동하게 된다.
+    assert "체결 완료" in response.message
+    assert "체결이 완료됐" not in response.message
+    assert "체결되었" not in response.message
 
 
 def test_verification_note_preserves_minor_calculation_and_limit_details() -> None:
@@ -382,9 +386,8 @@ def test_analyze_sign_409_preserves_minor_details_without_sending(
             )
 
     assert caught.value.status_code == 409
-    assert caught.value.detail["message"] == (
-        "기본 기준 초과·누락 또는 추가 확인이 필요한 항목이 있습니다."
-    )
+    # 문구 자체보다 "막았고 이유를 말한다"는 사실이 중요하다.
+    assert "법정 기준" in caught.value.detail["message"]
     assert isinstance(caught.value.detail["problems"], list)
     details = {
         detail["code"]: detail for detail in caught.value.detail["problem_details"]
@@ -513,8 +516,9 @@ def test_extract_router_hides_private_upstream_error_from_response_and_log(
             asyncio.run(extract_router.extract_terms(upload))
 
     assert caught.value.status_code == 502
+    # ⚠️ 핵심은 문구가 아니라 **상류 오류 내용이 새지 않는 것**이다.
     assert caught.value.detail == (
-        "계약서 추출 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+        "지금은 계약서를 읽을 수 없어요. 잠시 뒤 다시 시도해 주세요."
     )
     assert caught.value.__suppress_context__ is True
     assert f"error_type={error_type.__name__}" in caplog.text

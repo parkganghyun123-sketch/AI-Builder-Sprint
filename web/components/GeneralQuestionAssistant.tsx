@@ -42,7 +42,7 @@ export function GeneralQuestionAssistant() {
       setError(
         caught instanceof ApiError
           ? caught.message
-          : "질문을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+          : "답변을 가져오지 못했어요. 잠시 뒤 다시 물어봐 주세요.",
       );
     } finally {
       setLoading(false);

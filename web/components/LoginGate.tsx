@@ -31,7 +31,7 @@ export function LoginGate({
       setError(
         caught instanceof Error
           ? caught.message
-          : "로그인 주소를 가져오지 못했습니다.",
+          : "카카오 로그인 화면을 열지 못했어요. 다시 시도해 주세요.",
       );
     }
   }
@@ -44,7 +44,7 @@ export function LoginGate({
       <h2 className="text-lg font-extrabold text-ink">{title}</h2>
       <p className="max-w-md leading-relaxed text-ink-muted">{description}</p>
       <Button onClick={handleClick} disabled={loading} className="mt-2">
-        {loading ? "이동하고 있어요…" : "카카오로 계속하기"}
+        {loading ? "이동하는 중" : "카카오로 계속하기"}
       </Button>
       {error && (
         <p role="alert" className="text-sm text-red-900">

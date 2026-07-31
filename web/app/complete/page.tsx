@@ -68,7 +68,7 @@ function CompleteContent() {
           setError(
             caught instanceof Error
               ? caught.message
-              : "서명 상태를 확인하지 못했습니다.",
+              : "서명 상태를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.",
           );
         }
       } finally {
@@ -88,7 +88,7 @@ function CompleteContent() {
       <ScreenShell step={fromArchive ? 6 : 5} title="서명 상태 준비 중">
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            문서 식별자를 확인하고 있어요.
+            문서를 확인하는 중이에요.
           </p>
         </Card>
         <LegalDisclaimer />
@@ -130,7 +130,7 @@ function CompleteContent() {
             ? "서명 요청 상태를 확인해 주세요"
             : "서명 진행 상태"
       }
-      description="백엔드가 모두싸인에서 조회한 실제 상태를 5초 간격으로 확인합니다."
+      description="모두싸인의 실제 서명 상태를 5초마다 확인하고 있어요."
     >
       {isCompleted && (
         <Card className="text-center">
@@ -138,10 +138,10 @@ function CompleteContent() {
             ✅
           </div>
           <p className="mt-4 text-xl font-extrabold tracking-tighter text-ink">
-            제공자 상태가 COMPLETED입니다
+            양쪽 서명이 모두 끝났어요
           </p>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-            다운로드 주소가 제공된 경우 아래 버튼으로 문서를 받을 수 있습니다.
+            아래 버튼으로 체결된 문서를 받을 수 있어요.
             FairSign 보관함에는 자동 저장되지 않습니다.
           </p>
         </Card>
@@ -194,7 +194,7 @@ function CompleteContent() {
             <h2 className="text-sm font-extrabold text-ink">실제 조회 결과</h2>
             <dl className="mt-3 flex flex-col gap-2 text-sm">
               <div className="flex justify-between gap-3">
-                <dt className="text-ink-muted">제공자 상태</dt>
+                <dt className="text-ink-muted">서명 상태</dt>
                 <dd className="font-bold text-ink">{status.status}</dd>
               </div>
               <div className="flex justify-between gap-3">
@@ -210,8 +210,8 @@ function CompleteContent() {
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
             {loading
-              ? "모두싸인 상태를 확인하고 있어요…"
-              : "아직 상태 응답을 받지 못했습니다."}
+              ? "서명 상태 확인하는 중"
+              : "아직 상태를 받지 못했어요."}
           </p>
         </Card>
       )}
@@ -221,7 +221,7 @@ function CompleteContent() {
           role="alert"
           className="rounded-field border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-          <p className="font-bold">상태 조회에 실패했어요</p>
+          <p className="font-bold">서명 상태를 확인하지 못했어요</p>
           <p className="mt-1">{error}</p>
           <Button
             variant="secondary"
@@ -236,7 +236,7 @@ function CompleteContent() {
 
       {!error && loading && status && !isCompleted && !isFailed && (
         <p aria-live="polite" className="text-center text-sm text-ink-muted">
-          다음 상태를 확인하고 있어요…
+          상태를 다시 확인하는 중
         </p>
       )}
 

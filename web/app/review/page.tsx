@@ -91,7 +91,7 @@ const SECTIONS: { title: string; description?: string; fields: FieldConfig[] }[]
     {
       title: "소정근로시간",
       description:
-        "시각과 근무일수를 바탕으로 백엔드 검증 코드가 근로시간을 계산합니다.",
+        "출퇴근 시각과 근무일수로 근로시간을 계산해요.",
       fields: [
         {
           key: "work_start_time",
@@ -369,7 +369,7 @@ function ReviewContent() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "검증 요청을 완료하지 못했습니다.",
+          : "조건을 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.",
       );
     } finally {
       setLoading(false);
@@ -381,7 +381,7 @@ function ReviewContent() {
       <ScreenShell
         step={2}
         title="조건 불러오는 중"
-        description="현재 브라우저 탭의 계약 조건을 확인하고 있어요."
+        description="입력한 조건을 불러오는 중이에요."
       >
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
@@ -460,7 +460,7 @@ function ReviewContent() {
           ? "정하신 근로조건을 입력하시면 법정 기준을 함께 확인해 드려요. 모르는 항목은 비워 두셔도 됩니다."
           : isManual
             ? "말로 들은 내용만 입력해 주세요. 모르는 항목은 비워 두면 정보 부족 또는 찾지 못함으로 확인합니다."
-            : "AI가 읽은 값과 원문 근거를 비교해 주세요. 여기서 확인한 조건만 백엔드 검증에 사용합니다."
+            : "AI가 읽은 값과 계약서 원문을 비교해 주세요. 여기서 확인한 조건만 검토에 씁니다."
       }
     >
       {isBlankForm && <DocumentStatusBadge status="DRAFTING" />}
@@ -480,7 +480,7 @@ function ReviewContent() {
       {!isBlankForm && lowCount > 0 && (
         <div className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <span aria-hidden="true">⚠️ </span>
-          확인이 필요한 추출 항목이 {lowCount}개 있습니다. 원문 근거와 함께
+          확인이 필요한 항목이 {lowCount}개 있어요. 계약서 원문과 함께
           확인해 주세요.
         </div>
       )}
@@ -497,7 +497,7 @@ function ReviewContent() {
             연령별 근로조건 확인
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            생년월일을 입력하면 백엔드 검증 코드가 계약 시작일을 기준으로
+            생년월일을 입력하면 계약 시작일을 기준으로
             15세 이상 18세 미만 근로시간과 야간근로 항목을 확인합니다.
             입력하지 않으면 해당 검사를 결과에 추가하지 않습니다.
           </p>
@@ -525,8 +525,8 @@ function ReviewContent() {
           >
             생년월일은 계약 조건이나 계약서·PDF에 넣지 않습니다. 브라우저에서는
             검증과 서명 요청을 이어가기 위해 현재 탭의 sessionStorage에만 임시
-            저장하고, 검증·서명 요청 때 백엔드로 전송합니다. 서명 요청이
-            성공하면 현재 탭의 저장값에서도 즉시 지우며, 409 응답이나 오류로
+            저장하고, 검토·서명 요청 때 서버로 보냅니다. 서명 요청이
+            성공하면 현재 탭의 저장값에서도 즉시 지우며, 발송이 막히거나 오류로
             재시도가 필요하면 탭을 닫을 때까지만 유지합니다. 브라우저
             자동완성은 사용하지 않고 결과 화면, 오류 메시지, 로그에도 표시하지
             않습니다. 서버의 보관·삭제 정책은 아직 검증되지 않았습니다.
@@ -667,7 +667,7 @@ function ReviewContent() {
           role="alert"
           className="rounded-field border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-          <p className="font-bold">검증 요청을 완료하지 못했어요</p>
+          <p className="font-bold">조건을 확인하지 못했어요</p>
           <p className="mt-1">{error}</p>
           <Button
             variant="secondary"
@@ -688,7 +688,7 @@ function ReviewContent() {
         >
           <p className="font-bold">
             <span aria-hidden="true">🚫 </span>
-            다음 단계로 갈 수 없습니다
+            먼저 고쳐야 넘어갈 수 있어요
           </p>
           <ul className="mt-2 flex flex-col gap-3">
             {blockingIssues.map((issue) => (
@@ -752,7 +752,7 @@ function ReviewContent() {
           className="w-full"
         >
           {loading
-            ? "검증 코드가 확인 중이에요…"
+            ? "확인하는 중"
             : blocked
               ? "고쳐야 할 항목이 있어요"
               : !allConfirmed

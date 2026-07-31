@@ -314,7 +314,11 @@ def test_확인_완료_후_위반_미강행이면_409로_안내한다(no_provide
     assert res.status_code == 409
     detail = res.json()["detail"]
     assert "최저임금" in detail["problems"]
-    assert "proceed_with_violations" in detail["hint"]
+    # ⚠️ 문구를 통째로 비교하지 않는다. 지켜야 하는 건 "그대로 진행할 수
+    #    있다"는 사실을 알려준다는 것이지 특정 표현이 아니다.
+    #    (예전에는 hint 에 API 파라미터명이 적혀 있었다 — 사용자에게는 무의미하다)
+    assert "진행" in detail["hint"]
+    assert "proceed_with_violations" not in detail["hint"]
 
 
 def test_발송한_문서는_이력에_남는다(fake_provider, memory_store):

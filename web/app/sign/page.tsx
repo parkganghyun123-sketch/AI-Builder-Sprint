@@ -148,7 +148,7 @@ export default function SignPage() {
       return "이메일 형식을 확인해 주세요.";
     }
     if (blockedProblems && !acknowledged) {
-      return "백엔드가 확인을 요청한 항목을 읽고 체크해 주세요.";
+      return "아래 항목을 읽고 확인에 체크해 주세요.";
     }
     return null;
   }
@@ -214,7 +214,7 @@ export default function SignPage() {
         setError(
           caught instanceof Error
             ? caught.message
-            : "서명 요청을 보내지 못했습니다.",
+            : "서명 요청을 보내지 못했어요. 잠시 뒤 다시 시도해 주세요.",
         );
       }
     } finally {
@@ -227,7 +227,7 @@ export default function SignPage() {
       <ScreenShell step={5} title="서명 단계 준비 중">
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            현재 세션의 조건을 불러오고 있어요.
+            조건을 불러오는 중
           </p>
         </Card>
         <LegalDisclaimer />
@@ -267,7 +267,7 @@ export default function SignPage() {
       <ScreenShell
         step={5}
         title="서명을 요청할 검증 결과가 없어요"
-        description="계약 조건을 확인하고 백엔드 검증을 먼저 완료해 주세요."
+        description="계약 조건 확인을 먼저 끝내 주세요."
       >
         <ButtonLink href="/review" className="w-full">
           조건 확인으로 돌아가기
@@ -291,7 +291,7 @@ export default function SignPage() {
     <ScreenShell
       step={5}
       title={`${title} 전자서명 발송`}
-      description="이 단계에서만 입력한 이메일로 모두싸인 서명 요청을 보냅니다. 발송 후에도 제공자 상태가 체결 완료로 확인되기 전까지는 완료로 표시하지 않습니다."
+      description="여기서 입력한 이메일로만 서명 요청을 보내요. 보낸 뒤에도 양쪽 서명이 확인되기 전까지는 체결 완료로 표시하지 않습니다."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
@@ -304,7 +304,7 @@ export default function SignPage() {
       </p>
       <p className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm leading-relaxed text-ink-muted">
         한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로 “조건 확인됨” 또는
-        “체결 완료” 상태를 만들지 않습니다. 상태는 모두싸인에서 직접 읽어옵니다.
+        “체결 완료”로 바꾸지 않아요. 상태는 모두싸인에서 직접 읽어옵니다.
       </p>
 
       {signBlock && (

@@ -39,7 +39,7 @@ def render_contract_pdf(*args, **kwargs) -> bytes:
     except OSError as exc:
         raise HTTPException(
             status_code=503,
-            detail="PDF 생성 환경을 준비하지 못했습니다. 계약 검증과 챗봇은 계속 사용할 수 있습니다.",
+            detail="지금은 계약서 파일을 만들 수 없어요. 조건 확인과 상담은 그대로 쓸 수 있어요.",
         ) from exc
     return render(*args, **kwargs)
 
@@ -143,7 +143,7 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
         log.error("모두싸인 서명 요청 실패: error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=502,
-            detail="서명 요청 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+            detail="지금은 서명 요청을 보낼 수 없어요. 잠시 뒤 다시 시도해 주세요.",
         ) from e
 
     doc_id = result["id"]
@@ -160,8 +160,8 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
         document_id=doc_id,
         status=status,
         message=(
-            "확인 전 초안 요청서를 서명 절차에 보냈습니다. "
-            "체결 완료 여부는 제공자 상태를 다시 확인한 뒤 표시합니다."
+            "확인 요청서를 보냈어요. "
+            "체결 완료는 양쪽이 서명한 게 확인되면 알려드릴게요."
         ),
     )
 
@@ -284,7 +284,12 @@ def _assert_owner(record: dict | None, user: dict) -> None:
     owner_id = record.get("owner_id")
     if owner_id and owner_id != user["user_id"]:
         log.warning("다른 사용자의 문서 접근 시도 — 거부")
-        raise HTTPException(status_code=404, detail="Not Found")
+        raise HTTPException(
+            status_code=404,
+            # ⚠️ "권한이 없습니다"라고 쓰지 않는다. 그렇게 쓰면 "그 문서는
+            #    존재한다"를 알려주는 셈이다. 계약서의 존재 자체가 개인정보다.
+            detail="문서를 찾을 수 없어요. 보관함에서 다시 선택해 주세요.",
+        )
 
 
 class ArchiveItem(BaseModel):
@@ -428,7 +433,7 @@ async def get_status(document_id: str, user: CurrentUser) -> dict:
         )
         raise HTTPException(
             status_code=502,
-            detail="서명 상태 조회 서비스를 사용할 수 없습니다.",
+            detail="지금은 서명 상태를 확인할 수 없어요. 잠시 뒤 다시 시도해 주세요.",
         ) from e
 
 
@@ -481,7 +486,12 @@ def _check_token(token: str | None) -> None:
         return
     if not token or not hmac.compare_digest(token, expected):
         log.warning("웹훅 토큰 불일치 — 요청 거부")
-        raise HTTPException(status_code=404, detail="Not Found")
+        raise HTTPException(
+            status_code=404,
+            # ⚠️ "권한이 없습니다"라고 쓰지 않는다. 그렇게 쓰면 "그 문서는
+            #    존재한다"를 알려주는 셈이다. 계약서의 존재 자체가 개인정보다.
+            detail="문서를 찾을 수 없어요. 보관함에서 다시 선택해 주세요.",
+        )
 
 
 @router.post("/webhooks/modusign/{token}")

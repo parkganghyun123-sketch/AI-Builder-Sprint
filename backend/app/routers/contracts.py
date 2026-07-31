@@ -49,7 +49,7 @@ def render_contract_pdf(*args, **kwargs) -> bytes:
     except OSError as exc:
         raise HTTPException(
             status_code=503,
-            detail="PDF 생성 환경을 준비하지 못했습니다. 계약 검증과 챗봇은 계속 사용할 수 있습니다.",
+            detail="지금은 계약서 파일을 만들 수 없어요. 조건 확인과 상담은 그대로 쓸 수 있어요.",
         ) from exc
     return render_contract_pdf(*args, **kwargs)
 
@@ -290,7 +290,9 @@ def _reject_if_blocking(terms: ContractTerms, worker_birth_date: str | None) -> 
         status_code=422,
         detail={
             "code": "INVALID_CONTRACT_VALUES",
-            "message": "계약서로 성립하지 않는 값이 있어 문서를 만들 수 없습니다.",
+            # ⚠️ 이 문장은 화면에 그대로 뜬다. 사용자가 "내가 뭘 잘못했나"가
+            #    아니라 "어디를 고치면 되나"를 알 수 있어야 한다.
+            "message": "계약서로 만들 수 없는 값이 있어요. 아래 항목을 고쳐 주세요.",
             "blocking_fields": state.blocking_fields,
             "issues": [i.to_dict() for i in state.blocking],
         },
@@ -439,12 +441,14 @@ async def analyze_and_sign(
             status_code=409,
             detail={
                 "code": "UNCONFIRMED_FIELDS",
-                "message": "확인이 필요한 항목이 남아 있습니다.",
+                "message": "아직 확인하지 않은 항목이 있어요.",
                 "fields": unconfirmed,
+                # ⚠️ 예전에는 여기에 API 경로와 필드명이 적혀 있었다.
+                #    사용자에게 "/contracts/review-items 로 목록을 받으세요"는
+                #    아무 의미가 없다. 화면에서 할 일만 적는다.
                 "hint": (
-                    "AI가 읽은 값이 정확한지 사용자가 확인해야 합니다. "
-                    "/contracts/review-items 로 목록을 받아 화면에서 확인한 뒤 "
-                    "confirmed_fields 에 담아 다시 요청하세요."
+                    "계약서에서 읽어낸 값이 맞는지 직접 확인해야 해요. "
+                    "앞 화면으로 돌아가 표시된 항목을 확인해 주세요."
                 ),
             },
         )
@@ -460,12 +464,13 @@ async def analyze_and_sign(
             status_code=409,
             detail={
                 "code": "NAME_MISMATCH",
-                "message": "계약서에 적힌 이름과 입력한 이름이 다릅니다.",
+                "message": "계약서에 적힌 이름과 입력한 이름이 달라요.",
                 "conflicts": conflicts,
+                # ⚠️ 어느 쪽이 맞는지 코드는 모른다. 고르지 말고 되묻는다.
                 "hint": (
-                    "어느 쪽이 맞는지 확인해 주세요. "
                     "계약서를 잘못 읽었을 수도, 입력이 잘못됐을 수도, "
-                    "계약서에 실제로 다른 이름이 적혀 있을 수도 있습니다."
+                    "계약서에 정말 다른 이름이 적혀 있을 수도 있어요. "
+                    "어느 쪽이 맞는지 확인해 주세요."
                 ),
             },
         )
@@ -490,7 +495,8 @@ async def analyze_and_sign(
             status_code=409,
             detail={
                 "message": (
-                    "기본 기준 초과·누락 또는 추가 확인이 필요한 항목이 있습니다."
+                    "법정 기준에 못 미치거나 빠진 항목이 있어요. "
+                    "확인하고도 그대로 보내려면 다시 눌러 주세요."
                 ),
                 "problems": [check.label for check in problem_checks],
                 "problem_details": [
@@ -502,7 +508,7 @@ async def analyze_and_sign(
                     }
                     for check in problem_checks
                 ],
-                "hint": "조건을 수정하거나 proceed_with_violations=true 로 다시 요청하세요.",
+                "hint": "조건을 고치거나, 알고도 이대로 보내려면 그대로 진행할 수 있어요.",
             },
         )
 
@@ -546,7 +552,7 @@ async def analyze_and_sign(
         log.error("서명 요청 실패: error_type=%s", type(e).__name__)
         raise HTTPException(
             status_code=502,
-            detail="서명 요청 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+            detail="지금은 서명 요청을 보낼 수 없어요. 잠시 뒤 다시 시도해 주세요.",
         ) from e
 
     document_id = result["id"]
@@ -579,9 +585,10 @@ async def analyze_and_sign(
         document_id=document_id,
         status=status,
         report=report,
+        # ⚠️ "체결됐다"고 쓰지 않는다. 부드럽게 다듬되 이 구분은 지킨다.
+        #    발송과 체결을 뭉뚱그리면 사용자가 효력 없는 문서를 믿게 된다.
         message=(
-            f"{title}를 서명 절차에 보냈습니다. "
-            f"{first_signer}부터 서명하며, 체결 완료 여부는 "
-            "제공자 상태를 다시 확인한 뒤 표시합니다."
+            f"{title}를 보냈어요. {first_signer}부터 서명합니다. "
+            "체결 완료는 양쪽이 서명한 게 확인되면 알려드릴게요."
         ),
     )

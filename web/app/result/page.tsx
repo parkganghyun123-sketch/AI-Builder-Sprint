@@ -47,7 +47,7 @@ export default function ResultPage() {
       <ScreenShell
         step={3}
         title="검증 결과 불러오는 중"
-        description="백엔드가 반환한 결과를 확인하고 있어요."
+        description="검토 결과를 불러오는 중이에요."
       >
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
@@ -100,7 +100,7 @@ export default function ResultPage() {
     <ScreenShell
       step={3}
       title="검증 결과"
-      description="사용자가 확인한 계약 조건을 백엔드 검증 코드가 지원하는 기준과 비교한 결과입니다."
+      description="직접 확인한 조건을 FairSign이 다루는 법정 기준과 비교한 결과예요."
     >
       <Card className="text-center">
         <div aria-hidden="true" className="text-3xl">
@@ -146,7 +146,7 @@ export default function ResultPage() {
           <div className="rounded-field bg-brand-tint/60 p-4">
             <dt className="font-bold text-ink-muted">검증 주체</dt>
             <dd className="mt-1 font-extrabold text-ink">
-              백엔드 결정론적 규칙
+              정해진 규칙으로 계산
             </dd>
           </div>
         </dl>
@@ -156,7 +156,7 @@ export default function ResultPage() {
         report.wage_shortfall !== null) && (
         <Card>
           <h2 className="text-sm font-extrabold text-ink">
-            백엔드 계산 결과
+            계산 결과
           </h2>
           <dl className="mt-3 flex flex-col gap-2">
             {report.estimated_monthly_pay !== null && (

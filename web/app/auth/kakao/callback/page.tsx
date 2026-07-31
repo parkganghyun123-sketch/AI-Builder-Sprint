@@ -21,7 +21,7 @@ function CallbackContent() {
 
     if (!code || !state) {
       setError(
-        "카카오 로그인 응답에 필요한 값이 없습니다. 처음부터 다시 시도해 주세요.",
+        "로그인 정보가 올바르지 않아요. 처음부터 다시 시도해 주세요.",
       );
       return;
     }
@@ -52,7 +52,7 @@ function CallbackContent() {
           setError(
             caught instanceof Error
               ? caught.message
-              : "로그인을 완료하지 못했습니다.",
+              : "로그인을 완료하지 못했어요. 다시 시도해 주세요.",
           );
         }
       }
@@ -76,7 +76,7 @@ function CallbackContent() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "로그인 주소를 가져오지 못했습니다.",
+          : "카카오 로그인 화면을 열지 못했어요. 다시 시도해 주세요.",
       );
     }
   }
@@ -91,12 +91,12 @@ function CallbackContent() {
             </p>
             <p className="text-sm leading-relaxed text-ink-muted">{error}</p>
             <Button onClick={retry} disabled={retrying} className="w-fit">
-              {retrying ? "이동하고 있어요…" : "다시 시도"}
+              {retrying ? "이동하는 중" : "다시 시도"}
             </Button>
           </div>
         ) : (
           <p aria-live="polite" className="text-sm text-ink-muted">
-            로그인을 완료하고 있어요…
+            로그인하는 중
           </p>
         )}
       </Card>

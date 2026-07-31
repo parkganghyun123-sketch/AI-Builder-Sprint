@@ -76,7 +76,7 @@ export default function UploadPage() {
       setError(
         caught instanceof Error
           ? caught.message
-          : "계약서를 읽지 못했습니다. 다시 시도해 주세요.",
+          : "계약서를 읽지 못했어요. 사진이 흐릿하면 다시 찍어 올려 주세요.",
       );
     } finally {
       setLoading(false);
@@ -183,7 +183,7 @@ export default function UploadPage() {
       <Card>
         <h2 className="text-sm font-extrabold text-ink">파일 처리 안내</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          선택한 파일은 계약 조건 추출을 위해 백엔드로 전송됩니다. 서버의 보관
+          선택한 파일은 계약 조건을 읽기 위해 서버로 보냅니다. 서버의 보관
           기간과 삭제 동작은 아직 검증되지 않았습니다. 추출된 텍스트와 이름·
           사업체 정보 등 개인정보가 포함될 수 있는 계약 조건은 현재 브라우저
           탭의 <code>sessionStorage</code>에 저장되며, 탭을 닫을 때까지 남을 수

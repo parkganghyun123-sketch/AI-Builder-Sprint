@@ -87,7 +87,7 @@ export default function ContractPage() {
           setError(
             caught instanceof Error
               ? caught.message
-              : "PDF 미리보기를 만들지 못했습니다.",
+              : "계약서 미리보기를 만들지 못했어요. 다시 시도해 주세요.",
           );
         }
       } finally {
@@ -116,7 +116,7 @@ export default function ContractPage() {
       <ScreenShell step={4} title="요청서 준비 중">
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            확인한 조건을 불러오고 있어요.
+            조건을 불러오는 중
           </p>
         </Card>
         <LegalDisclaimer />
@@ -150,13 +150,13 @@ export default function ContractPage() {
     <ScreenShell
       step={4}
       title={`${title} 미리보기 · 확인 전 초안`}
-      description="입력한 조건을 그대로 백엔드 PDF 생성기에 전달했습니다. 임금이나 다른 조건을 자동으로 바꾸지 않으며, 체결 완료 상태가 확인되기 전 문서입니다."
+      description="확인한 조건을 그대로 계약서로 옮겼어요. 임금이나 다른 조건을 임의로 바꾸지 않습니다. 아직 체결 전 문서예요."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
       <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
-        이 미리보기 PDF에는 “확인 전 초안” 워터마크가 있습니다. 미리보기나
-        한쪽의 발송만으로 양쪽이 조건을 확인했다고 표시하지 않습니다.
+        이 미리보기에는 “확인 전 초안” 표시가 있어요. 미리보기나
+        한쪽이 보냈다는 것만으로 양쪽이 합의했다고 표시하지 않아요.
         {/* 실제 서명용 문서에는 워터마크를 찍지 않는다. 체결된 계약서에
             '초안' 표기가 남으면 분쟁 시 빌미가 되고 제17조 교부 증거로도
             약해진다. 근거: backend analyze_and_sign 주석 */}
@@ -171,7 +171,7 @@ export default function ContractPage() {
             · 조건 출처:{" "}
             {entryPath === "PHOTO" ? "계약서 사진 추출 후 사람이 확인" : "직접 입력"}
           </li>
-          <li>· 검증 메모: 백엔드 판정 결과를 문서 하단에 포함</li>
+          <li>· 검증 메모: 확인 결과를 문서 아래쪽에 함께 넣어요</li>
           <li>· 서명 순서: {firstSignerLabel(entryPath)}부터</li>
         </ul>
       </Card>
@@ -209,8 +209,8 @@ export default function ContractPage() {
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
             {blockingIssues === null
-              ? "필수 항목을 확인하고 있어요…"
-              : "백엔드에서 PDF 초안을 만들고 있어요…"}
+              ? "확인하는 중"
+              : "계약서 만드는 중"}
           </p>
         </Card>
       )}
@@ -220,7 +220,7 @@ export default function ContractPage() {
           role="alert"
           className="rounded-field border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900"
         >
-          <p className="font-bold">PDF 미리보기를 만들지 못했어요</p>
+          <p className="font-bold">계약서 미리보기를 만들지 못했어요</p>
           <p className="mt-1">{error}</p>
           <Button
             variant="secondary"

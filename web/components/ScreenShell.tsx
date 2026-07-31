@@ -65,7 +65,7 @@ export function BrandHeader() {
     } catch (caught) {
       setLoggingIn(false);
       setLoginError(
-        caught instanceof Error ? caught.message : "로그인을 시작하지 못했어요.",
+        caught instanceof Error ? caught.message : "로그인 화면을 열지 못했어요. 다시 시도해 주세요.",
       );
     }
   }

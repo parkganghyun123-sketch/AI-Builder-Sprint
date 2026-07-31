@@ -159,7 +159,7 @@ export default function ArchivePage() {
           setError(
             caught instanceof Error
               ? caught.message
-              : "보관함 목록을 불러오지 못했습니다.",
+              : "보관함을 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.",
           );
         }
       });
@@ -173,7 +173,7 @@ export default function ArchivePage() {
       <ScreenShell step={6} title="보관함 불러오는 중">
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            로그인 상태를 확인하고 있어요.
+            로그인 확인하는 중
           </p>
         </Card>
         <LegalDisclaimer />
@@ -220,7 +220,7 @@ export default function ArchivePage() {
       {!error && items === null && (
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
-            목록을 불러오고 있어요…
+            보관함 불러오는 중
           </p>
         </Card>
       )}

@@ -50,7 +50,7 @@ export function OwnerMessageCard({
         setError(
           caught instanceof ApiError
             ? caught.message
-            : "문구를 불러오지 못했어요.",
+            : "문구를 만들지 못했어요. 잠시 뒤 다시 시도해 주세요.",
         );
       })
       .finally(() => {
@@ -79,7 +79,7 @@ export function OwnerMessageCard({
     return (
       <Card>
         <p aria-live="polite" className="text-sm text-ink-muted">
-          사장님께 어떻게 말할지 문구를 준비하고 있어요…
+          문구를 만드는 중
         </p>
       </Card>
     );
@@ -103,7 +103,7 @@ export function OwnerMessageCard({
     return (
       <Card>
         <p role="alert" className="text-sm text-ink-muted">
-          문구의 숫자를 판정 결과와 대조하지 못해 표시하지 않았습니다. 결과
+          문구 속 숫자를 검토 결과와 맞춰보지 못해 표시하지 않았어요. 결과
           내용을 직접 확인해 주세요.
         </p>
       </Card>
@@ -132,11 +132,11 @@ export function OwnerMessageCard({
         {copied ? "복사했어요" : "문구 복사하기"}
       </Button>
       <p aria-live="polite" className="sr-only">
-        {copied ? "문구를 클립보드에 복사했습니다." : ""}
+        {copied ? "문구를 복사했어요." : ""}
       </p>
 
       <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-        이 문구의 숫자는 모두 위 판정 결과에서 가져왔습니다. 대화가 잘 풀리지
+        이 문구의 숫자는 모두 위 검토 결과에서 가져왔어요. 대화가 잘 풀리지
         않으면 고용노동부 고객상담센터({MOEL_HOTLINE})에 문의할 수 있어요.
       </p>
     </Card>
