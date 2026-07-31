@@ -8,6 +8,7 @@ import {
   CHECK_SOURCE_FIELD,
 } from "@/components/CheckResultCard";
 import { ButtonLink, Card } from "@/components/ui";
+import { ContractAssistant } from "@/components/ContractAssistant";
 import { readSession } from "@/lib/session";
 import type { ContractTerms, ValidationReport } from "@/lib/types";
 
@@ -203,6 +204,8 @@ export default function ResultPage() {
           조건 다시 수정
         </ButtonLink>
       </div>
+
+      <ContractAssistant terms={terms} />
 
       <LegalDisclaimer />
     </ScreenShell>

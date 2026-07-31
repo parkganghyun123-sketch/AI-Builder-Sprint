@@ -57,6 +57,61 @@ export const validationReportSchema = z.object({
   wage_shortfall: z.number().nullable(),
 });
 
+export const chatIntentSchema = z.enum([
+  "FIELD_LOOKUP",
+  "CALCULATION",
+  "MISSING_CLAUSE",
+  "LEGAL_STANDARD",
+  "OUT_OF_SCOPE",
+  "NEEDS_CLARIFICATION",
+]);
+
+export const chatEvidenceKindSchema = z.enum([
+  "CONTRACT",
+  "VALIDATION",
+  "LEGAL_STANDARD",
+  "OFFICIAL_GUIDANCE",
+]);
+
+export const contractChatResponseSchema = z.object({
+  intent: chatIntentSchema,
+  answer: z.string(),
+  limitations: z.string(),
+  evidence: z.array(
+    z.object({
+      kind: chatEvidenceKindSchema,
+      label: z.string(),
+      value: z.string(),
+    }),
+  ),
+  action: z
+    .object({
+      label: z.string(),
+      href: z.string().startsWith("/"),
+    })
+    .nullable(),
+  suggestions: z.array(z.string()),
+});
+
+export const generalQuestionResponseSchema = z.object({
+  answer: z.string(),
+  limitations: z.string(),
+  evidence: z.array(
+    z.object({
+      kind: chatEvidenceKindSchema,
+      label: z.string(),
+      value: z.string(),
+    }),
+  ),
+  action: z
+    .object({
+      label: z.string(),
+      href: z.string().startsWith("/"),
+    })
+    .nullable(),
+  suggestions: z.array(z.string()),
+});
+
 // 입력값 유효성 + 진행 차단 판정. 백엔드 severity.py 의 Issue/ValidationState 와 1:1.
 export const validationSeveritySchema = z.enum(["error", "warning", "info"]);
 

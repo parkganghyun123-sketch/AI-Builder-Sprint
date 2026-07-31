@@ -233,6 +233,73 @@ class ValidationReport(BaseModel):
 
 
 # ============================================================
+# 2-1. 계약 비서 챗봇 — 근거 검색형 답변
+# ============================================================
+
+
+class ChatIntent(str, Enum):
+    """챗봇이 지원하는 질문 범주. 모호한 질문은 추측하지 않고 되묻는다."""
+
+    FIELD_LOOKUP = "FIELD_LOOKUP"
+    CALCULATION = "CALCULATION"
+    MISSING_CLAUSE = "MISSING_CLAUSE"
+    LEGAL_STANDARD = "LEGAL_STANDARD"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+
+
+class ChatEvidenceKind(str, Enum):
+    CONTRACT = "CONTRACT"
+    VALIDATION = "VALIDATION"
+    LEGAL_STANDARD = "LEGAL_STANDARD"
+    OFFICIAL_GUIDANCE = "OFFICIAL_GUIDANCE"
+
+
+class ChatEvidence(BaseModel):
+    """답변에서 실제로 꺼낸 값의 출처. 프런트는 이 값을 그대로 표시한다."""
+
+    kind: ChatEvidenceKind
+    label: str
+    value: str
+
+
+class ChatAction(BaseModel):
+    label: str
+    href: str
+
+
+class ContractChatRequest(BaseModel):
+    """원문 계약서는 받지 않고, 사용자가 확인한 구조화된 조건만 받는다."""
+
+    terms: ContractTerms
+    question: str = Field(min_length=1, max_length=500)
+    worker_birth_date: str | None = None
+
+
+class ContractChatResponse(BaseModel):
+    intent: ChatIntent
+    answer: str
+    limitations: str
+    evidence: list[ChatEvidence]
+    action: ChatAction | None = None
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class GeneralQuestionRequest(BaseModel):
+    """계약서 없이 묻는 일반 기준 질문. 개인 식별정보는 받지 않는다."""
+
+    question: str = Field(min_length=1, max_length=500)
+
+
+class GeneralQuestionResponse(BaseModel):
+    answer: str
+    limitations: str
+    evidence: list[ChatEvidence]
+    action: ChatAction | None = None
+    suggestions: list[str] = Field(default_factory=list)
+
+
+# ============================================================
 # 3. 계약 문서 상태 — C가 관리
 # ============================================================
 

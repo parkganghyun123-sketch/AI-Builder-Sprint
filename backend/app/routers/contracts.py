@@ -16,7 +16,6 @@ from pydantic import BaseModel
 
 from app.bridge.numbers import verify
 from app.bridge.templates import build_lines, build_message
-from app.pdf.generator import render_contract_pdf
 from app.review.fields import unconfirmed_high_priority
 from app.routers.sign import remember_document
 from app.schemas import (
@@ -35,6 +34,23 @@ from app.validation.severity import build_validation_state
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def render_contract_pdf(*args, **kwargs) -> bytes:
+    """PDF 기능을 실제로 쓸 때만 WeasyPrint를 불러온다.
+
+    Windows 로컬 개발 환경에는 Pango 같은 WeasyPrint 시스템 라이브러리가
+    없을 수 있다. 계약 조건 검증·챗봇까지 서버가 시작하지 못하게 하지 않고,
+    PDF 미리보기/서명 요청에서만 정확한 오류를 돌려준다.
+    """
+    try:
+        from app.pdf.generator import render_contract_pdf
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="PDF 생성 환경을 준비하지 못했습니다. 계약 검증과 챗봇은 계속 사용할 수 있습니다.",
+        ) from exc
+    return render_contract_pdf(*args, **kwargs)
 
 
 def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:

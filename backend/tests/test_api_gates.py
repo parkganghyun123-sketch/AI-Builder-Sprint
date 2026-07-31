@@ -383,3 +383,46 @@ def test_빈_파일은_400으로_거부한다():
         files={"file": ("empty.png", b"", "image/png")},
     )
     assert res.status_code == 400
+
+
+# ============================================================
+# 7. 계약 비서 — 확인된 조건과 검증 결과만 검색하는가
+# ============================================================
+
+
+def test_계약_비서는_법정_기준에_근거를_붙여_답한다():
+    res = client.post(
+        "/contracts/chat",
+        json={"terms": _terms(), "question": "최저임금 기준이 어떻게 되나요?"},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["intent"] == "LEGAL_STANDARD"
+    assert body["evidence"]
+    assert any(item["kind"] == "LEGAL_STANDARD" for item in body["evidence"])
+
+
+def test_계약_비서는_분쟁_질문을_고정_안내로_돌린다():
+    res = client.post(
+        "/contracts/chat",
+        json={"terms": _terms(), "question": "사장님을 신고할 수 있나요?"},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["intent"] == "OUT_OF_SCOPE"
+    assert "1350" in body["answer"]
+
+
+def test_계약서_없는_주휴_질문은_시간_요건과_한계를_함께_안내한다():
+    res = client.post(
+        "/questions/general",
+        json={"question": "1주일에 12시간 일하면 주휴수당을 받나요?"},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert "15시간 미만" in body["answer"]
+    assert body["evidence"][0]["kind"] == "LEGAL_STANDARD"
+    assert body["action"]["href"] == "/upload"

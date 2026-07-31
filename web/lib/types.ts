@@ -108,6 +108,58 @@ export interface ValidationReport {
 }
 
 // ============================================================
+// 2-1. 계약 비서 — 백엔드 근거 검색 응답
+// ============================================================
+
+export type ChatIntent =
+  | "FIELD_LOOKUP"
+  | "CALCULATION"
+  | "MISSING_CLAUSE"
+  | "LEGAL_STANDARD"
+  | "OUT_OF_SCOPE"
+  | "NEEDS_CLARIFICATION";
+
+export type ChatEvidenceKind =
+  | "CONTRACT"
+  | "VALIDATION"
+  | "LEGAL_STANDARD"
+  | "OFFICIAL_GUIDANCE";
+
+export interface ChatEvidence {
+  kind: ChatEvidenceKind;
+  label: string;
+  value: string;
+}
+
+export interface ChatAction {
+  label: string;
+  href: string;
+}
+
+export interface ContractChatResponse {
+  intent: ChatIntent;
+  answer: string;
+  limitations: string;
+  evidence: ChatEvidence[];
+  action: ChatAction | null;
+  suggestions: string[];
+}
+
+export interface ContractChatRequest {
+  terms: ContractTerms;
+  question: string;
+  worker_birth_date?: string | null;
+}
+
+export interface GeneralQuestionResponse {
+  answer: string;
+  limitations: string;
+  evidence: ChatEvidence[];
+  action: ChatAction | null;
+  suggestions: string[];
+}
+
+// ============================================================
 // 2-2. 입력값 유효성 + 진행 차단 — severity.py 대응
 // ============================================================
 

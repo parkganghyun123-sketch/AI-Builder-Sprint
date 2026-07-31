@@ -1,6 +1,8 @@
 import type { z } from "zod";
 import {
   analyzeSignResponseSchema,
+  contractChatResponseSchema,
+  generalQuestionResponseSchema,
   contractTermsSchema,
   reviewItemsResponseSchema,
   signBlockedEnvelopeSchema,
@@ -11,6 +13,7 @@ import {
 } from "./schemas";
 import type {
   AnalyzeSignRequest,
+  ContractChatRequest,
   PreviewRequest,
   SignBlocked,
   ValidateRequest,
@@ -242,6 +245,20 @@ export async function extractTerms(file: File) {
 /** 사용자가 확인한 조건 → 결정론적 법정 기준 판정. */
 export function validateTerms(body: ValidateRequest) {
   return postJson("/contracts/validate", body, validationReportSchema);
+}
+
+/** 확인된 계약 조건과 검증 결과만 검색하는 계약 비서. 원문 계약서는 전송하지 않는다. */
+export function askContractAssistant(body: ContractChatRequest) {
+  return postJson("/contracts/chat", body, contractChatResponseSchema);
+}
+
+/** 계약서 없이 묻는 일반 기준 질문. 개인 정보나 계약서 원문은 전송하지 않는다. */
+export function askGeneralQuestion(question: string) {
+  return postJson(
+    "/questions/general",
+    { question },
+    generalQuestionResponseSchema,
+  );
 }
 
 /**

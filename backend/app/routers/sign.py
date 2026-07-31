@@ -15,7 +15,6 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, ValidationError
 
 from app.config import settings
-from app.pdf.generator import render_contract_pdf
 from app.schemas import (
     ContractTerms,
     DocumentStatus,
@@ -29,6 +28,18 @@ from app.store import get_store
 
 log = logging.getLogger(__name__)
 router = APIRouter()
+
+
+def render_contract_pdf(*args, **kwargs) -> bytes:
+    """PDF 발송 시점에만 WeasyPrint를 불러 로컬 검증 서버를 살린다."""
+    try:
+        from app.pdf.generator import render_contract_pdf as render
+    except OSError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="PDF 생성 환경을 준비하지 못했습니다. 계약 검증과 챗봇은 계속 사용할 수 있습니다.",
+        ) from exc
+    return render(*args, **kwargs)
 
 async def remember_document(
     document_id: str,
