@@ -48,7 +48,7 @@ def build_authorize_url(state: str) -> str:
     query = urlencode(
         {
             "client_id": settings.kakao_rest_api_key,
-            "redirect_uri": settings.kakao_redirect_uri,
+            "redirect_uri": settings.kakao_callback_url,
             "response_type": "code",
             "scope": SCOPE,
             # ⚠️ state 는 CSRF 방어다. 우리가 서명한 토큰을 넣고
@@ -73,7 +73,7 @@ async def exchange_code(code: str) -> str:
         "grant_type": "authorization_code",
         "client_id": settings.kakao_rest_api_key,
         "client_secret": settings.kakao_client_secret,
-        "redirect_uri": settings.kakao_redirect_uri,
+        "redirect_uri": settings.kakao_callback_url,
         "code": code,
     }
 
@@ -110,8 +110,13 @@ async def fetch_profile(access_token: str) -> dict:
             res = await client.get(
                 PROFILE_URL,
                 headers={"Authorization": f"Bearer {access_token}"},
-                # 필요한 항목만 명시적으로 요청한다.
-                params={"property_keys": '["kakao_account.profile"]'},
+                # ⚠️ property_keys 로 필터하지 않는다.
+                #
+                #    처음에는 '["kakao_account.profile"]' 로 좁혔는데 닉네임이
+                #    빈 문자열로 왔다. 어차피 우리가 요청한 scope 는
+                #    profile_nickname 하나뿐이라, 필터가 없어도 카카오는
+                #    동의받지 않은 항목을 주지 않는다.
+                #    좁히는 대신 **scope 로 통제**하는 편이 안전하고 단순하다.
             )
     except httpx.HTTPError:
         raise KakaoError("카카오 사용자 정보를 가져오지 못했습니다") from None
@@ -126,10 +131,27 @@ async def fetch_profile(access_token: str) -> dict:
     except (ValueError, KeyError, TypeError):
         raise KakaoError("카카오 응답을 확인하지 못했습니다") from None
 
-    nickname = ""
+    return {"kakao_id": kakao_id, "nickname": _read_nickname(payload)}
+
+
+def _read_nickname(payload: dict) -> str:
+    """
+    응답에서 닉네임을 꺼낸다.
+
+    ⚠️ 카카오는 닉네임을 두 곳에 담는다.
+         kakao_account.profile.nickname   동의항목 기반(현재 방식)
+         properties.nickname              예전 방식. 여전히 함께 오는 경우가 많다
+       한 곳만 보면 앱 설정에 따라 비어 보인다. 둘 다 본다.
+
+    ⚠️ 없어도 예외를 내지 않는다. 닉네임은 인사말에만 쓰이고,
+       사용자가 선택 동의를 거부해도 로그인은 성립해야 한다.
+       화면은 빈 값을 받으면 기본 호칭을 쓴다.
+    """
     account = payload.get("kakao_account") or {}
     profile = account.get("profile") or {}
-    if isinstance(profile.get("nickname"), str):
-        nickname = profile["nickname"].strip()[:50]
+    properties = payload.get("properties") or {}
 
-    return {"kakao_id": kakao_id, "nickname": nickname}
+    for candidate in (profile.get("nickname"), properties.get("nickname")):
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()[:50]
+    return ""

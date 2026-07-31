@@ -284,3 +284,94 @@ def test_사용자_기록에_이메일이_없다(kakao_ok):
         "created_at",
         "last_login_at",
     }
+
+
+# ============================================================
+# 설정 방어 — KAKAO_REDIRECT_URI 는 하나여야 한다
+# ============================================================
+
+
+def test_리다이렉트_주소를_쉼표로_여러_개_넣어도_로그인이_막히지_않는다(
+    monkeypatch, caplog
+):
+    """
+    ⚠️ 실제로 겪은 사고다.
+
+    CORS_ORIGINS 는 쉼표로 여러 개를 받는다. 그래서 KAKAO_REDIRECT_URI 에도
+    두 도메인을 쉼표로 이어 넣었고, 카카오는 "a,b" 라는 주소를 모르므로
+    KOE006(Redirect URI 불일치)이 났다. 로그인이 통째로 막혔다.
+
+    설정 실수로 기능이 죽는 것보다는 첫 번째를 쓰고 경고를 남기는 편이 낫다.
+    다만 **조용히** 고치지는 않는다 — 로그와 /health 에 드러낸다.
+    """
+    import logging
+
+    first = "https://a.vercel.app/auth/kakao/callback"
+    monkeypatch.setattr(
+        settings,
+        "kakao_redirect_uri",
+        f"{first},https://b.vercel.app/auth/kakao/callback",
+    )
+
+    with caplog.at_level(logging.WARNING):
+        url = client.get("/auth/login-url").json()["authorize_url"]
+
+    # 카카오에는 하나만 나간다
+    assert "%2C" not in url, "쉼표가 그대로 나가면 KOE006"
+    assert "b.vercel.app" not in url
+    # 무엇이 잘못됐는지 알려준다
+    assert "여러 개" in caplog.text
+
+
+def test_health_가_실제_리다이렉트_주소를_보여준다(monkeypatch):
+    """
+    카카오 콘솔 등록값과 한 글자라도 다르면 KOE006 이 난다.
+    로그인 화면까지 가지 않고 여기서 대조할 수 있어야 한다.
+
+    ⚠️ 비밀값이 아니다. 이 주소는 어차피 사용자 브라우저로 나간다.
+    """
+    monkeypatch.setattr(
+        settings, "kakao_redirect_uri", "https://x.vercel.app/auth/kakao/callback"
+    )
+
+    body = client.get("/health").json()
+
+    assert body["kakao_redirect_uri"] == "https://x.vercel.app/auth/kakao/callback"
+    # 비밀값은 여전히 노출하지 않는다
+    assert "test-client-secret" not in str(body)
+    assert "jwt" not in str(body).lower()
+
+
+# ============================================================
+# 닉네임 읽기 — 카카오는 두 곳에 담는다
+# ============================================================
+
+
+@pytest.mark.parametrize(
+    "payload,expected",
+    [
+        # 동의항목 기반 (현재 방식)
+        ({"kakao_account": {"profile": {"nickname": "가상닉"}}}, "가상닉"),
+        # 예전 방식. 앱 설정에 따라 이쪽에만 오는 경우가 있다
+        ({"properties": {"nickname": "가상닉"}}, "가상닉"),
+        # 둘 다 오면 동의항목 쪽을 쓴다
+        (
+            {
+                "kakao_account": {"profile": {"nickname": "새이름"}},
+                "properties": {"nickname": "옛이름"},
+            },
+            "새이름",
+        ),
+        # 동의를 거부하면 없다 — 그래도 로그인은 성립해야 한다
+        ({}, ""),
+        ({"kakao_account": {"profile": {}}}, ""),
+        ({"kakao_account": {"profile": {"nickname": "   "}}}, ""),
+        ({"properties": {"nickname": None}}, ""),
+    ],
+)
+def test_닉네임을_두_위치에서_모두_찾는다(payload, expected):
+    """
+    ⚠️ 한 곳만 보면 앱 설정에 따라 닉네임이 비어 보인다.
+       실제로 kakao_account.profile 만 읽다가 화면에 "님" 만 뜬 적이 있다.
+    """
+    assert kakao._read_nickname(payload) == expected

@@ -102,6 +102,11 @@ async def health() -> dict:
         "store": get_store().backend,
         "webhook_token": bool(settings.webhook_path_token),
         "kakao_login": settings.kakao_configured,
+        # ⚠️ 비밀값이 아니다. 이 주소는 어차피 사용자 브라우저로 나간다.
+        #    카카오 콘솔에 등록한 값과 **한 글자라도** 다르면 KOE006 이 나는데,
+        #    로그인 화면까지 가봐야 알 수 있어서 진단이 오래 걸렸다.
+        #    여기서 눈으로 대조할 수 있게 그대로 보여준다.
+        "kakao_redirect_uri": settings.kakao_callback_url,
         "cors_origins": settings.allowed_origins,
     }
 

@@ -63,8 +63,11 @@ export function BrandHeader() {
         <div className="flex items-center gap-1">
           {me ? (
             <>
+              {/* ⚠️ 닉네임은 없을 수 있다.
+                  카카오 동의항목을 '선택 동의'로 두면 사용자가 거부할 수 있고,
+                  거부해도 로그인은 성립한다. 그대로 두면 "님" 만 남는다. */}
               <span className="px-2 text-sm font-semibold text-ink-muted">
-                {me.nickname}님
+                {me.nickname.trim() ? `${me.nickname}님` : "로그인됨"}
               </span>
               <Link
                 href="/archive"
