@@ -93,31 +93,51 @@ async def request_signature(
     worker_email: str,
     employer_name: str,
     employer_email: str,
+    *,
+    employer_first: bool = False,
 ) -> dict:
     """
-    서명 요청 발송. 근로자 → 사업주 순서로 서명한다.
+    서명 요청 발송.
+
     반환: {"id": 문서ID, "status": ...}
+
+    --- 서명 순서 ---
+
+    ``employer_first=False`` (기본): 근로자 → 사업주
+        근로자가 만든 문서다. 경로 A·B. 근로자가 먼저 서명하고
+        사업주에게 확인·서명을 요청한다.
+
+    ``employer_first=True``: 사업주 → 근로자
+        사업주가 만든 문서다(경로 C). 문서를 만든 쪽이 먼저 서명하고
+        상대에게 보내는 것이 계약 관행이고, 근로자가 마지막에 서명해야
+        조건을 확인한 뒤 결정할 수 있다.
+
+    ⚠️ 순서만 바꾼다. anchor 텍스트와 참여자의 매핑은 바꾸지 않는다.
+       ``(근로자 서명)`` 자리에는 항상 근로자가, ``(사업주 서명)`` 자리에는
+       항상 사업주가 들어간다. 이걸 섞으면 서명란이 뒤바뀐 계약서가 나간다.
     """
+    worker = {
+        "name": worker_name,
+        "signingOrder": 2 if employer_first else 1,
+        "signingMethod": {"type": "EMAIL", "value": worker_email},
+        "fields": [_signature_field(ANCHOR_WORKER)],
+    }
+    employer = {
+        "name": employer_name,
+        "signingOrder": 1 if employer_first else 2,
+        "signingMethod": {"type": "EMAIL", "value": employer_email},
+        "fields": [_signature_field(ANCHOR_EMPLOYER)],
+    }
+
     payload = {
         "title": title,
         "file": {
             "base64": base64.b64encode(pdf_bytes).decode("ascii"),
             "extension": "pdf",
         },
-        "participants": [
-            {
-                "name": worker_name,
-                "signingOrder": 1,
-                "signingMethod": {"type": "EMAIL", "value": worker_email},
-                "fields": [_signature_field(ANCHOR_WORKER)],
-            },
-            {
-                "name": employer_name,
-                "signingOrder": 2,
-                "signingMethod": {"type": "EMAIL", "value": employer_email},
-                "fields": [_signature_field(ANCHOR_EMPLOYER)],
-            },
-        ],
+        # 배열 순서와 무관하게 signingOrder 가 순서를 정하지만,
+        # 사람이 페이로드를 읽을 때 헷갈리지 않도록 순서대로 담는다.
+        "participants": [employer, worker] if employer_first else [worker, employer],
     }
 
     # ⚠️ 인증 헤더를 먼저 만든다.

@@ -30,6 +30,16 @@ from app.schemas import (  # noqa: E402
 )
 from app.store import MemoryDocumentStore, get_store, set_store  # noqa: E402
 
+# 서명 발송은 로그인이 필요하다(익명 발송을 허용하면 스팸 도구가 된다).
+# 이 파일은 문서 안전성을 검증하므로 로그인은 통과한 상태로 둔다.
+# 로그인 관문 자체는 tests/test_api_gates.py 가 검증한다.
+TEST_USER = {
+    "user_id": "kakao:safety-test",
+    "provider": "kakao",
+    "nickname": "가상 사용자",
+    "role": "WORKER",
+}
+
 
 def fresh_store() -> MemoryDocumentStore:
     """
@@ -247,7 +257,8 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
                 worker_birth_date="2009-07-31",
                 entry_path="PHOTO",
                 confirmed_fields=_all_must_confirm(_terms()),
-            )
+            ),
+            TEST_USER,
         )
     )
 
@@ -257,7 +268,12 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
     # 경로 B의 투명성은 검증 문단의 출처 표시로 확보한다.
     assert captured["is_draft"] is False
     # 제목에 이름을 넣지 않는다 — 모두싸인 문서 목록·메일 제목에 노출된다.
-    assert captured["title"] == "근로계약서"
+    assert "가상 근로자" not in captured["title"]
+    assert "가상 사업주" not in captured["title"]
+    # 근로자가 만든 문서는 '확인 요청서'다. 이미 합의된 계약서로
+    # 오해하지 않도록 제목을 구분한다(contracts.DOCUMENT_TITLES).
+    assert captured["title"] == "근로조건 확인 요청서"
+    assert captured["employer_first"] is False
     assert captured["terms"].worker_contact.value is None
     assert captured["worker_birth_date"] == "2009-07-31"
     assert "2009-07-31" not in captured["verification_note"]
@@ -315,7 +331,8 @@ def test_analyze_sign_pdf_note_preserves_minor_limits_with_mock_provider(
                 entry_path="PHOTO",
                 proceed_with_violations=True,
                 confirmed_fields=_all_must_confirm(_minor_problem_terms()),
-            )
+            ),
+            TEST_USER,
         )
     )
 
@@ -359,8 +376,9 @@ def test_analyze_sign_409_preserves_minor_details_without_sending(
                         employer_email="employer@example.com",
                         entry_path="PHOTO",
                         confirmed_fields=_all_must_confirm(_minor_problem_terms()),
-                    )
-                )
+                    ),
+            TEST_USER,
+        )
             )
 
     assert caught.value.status_code == 409

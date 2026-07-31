@@ -31,6 +31,7 @@ _pdf_stub.render_contract_pdf = lambda *a, **k: b"%PDF-stub"
 _pdf_stub.verify_anchors = lambda pdf: {}
 sys.modules.setdefault("app.pdf.generator", _pdf_stub)
 
+from app.auth.deps import require_user  # noqa: E402
 from app.main import app  # noqa: E402
 from app.review.fields import build_review_items  # noqa: E402
 from app.routers import contracts  # noqa: E402
@@ -41,6 +42,30 @@ client = TestClient(app)
 
 WORKER = "김가상"
 EMPLOYER = "홍길동"
+
+TEST_USER = {
+    "user_id": "kakao:test-1",
+    "provider": "kakao",
+    "nickname": "가상 사용자",
+    "role": "WORKER",
+}
+
+
+@pytest.fixture(autouse=True)
+def logged_in():
+    """
+    로그인한 상태를 기본으로 둔다.
+
+    이 파일의 테스트는 **관문 로직**을 검증한다. 로그인 자체는
+    tests/test_auth.py 가 검증하므로 여기서는 의존성을 대체한다.
+
+    ⚠️ 그렇다고 "로그인 없이도 통과한다"를 놓치면 안 된다.
+       아래 test_로그인_없이는_서명을_보낼_수_없다 가 오버라이드를 걷어내고
+       확인한다.
+    """
+    app.dependency_overrides[require_user] = lambda: dict(TEST_USER)
+    yield
+    app.dependency_overrides.pop(require_user, None)
 
 
 def _f(value=None, confidence: str | None = None) -> dict:
@@ -324,6 +349,87 @@ def test_발송한_문서는_이력에_남는다(fake_provider, memory_store):
 
 
 # ============================================================
+# 4-2. 사업주 경로 (경로 C)
+# ============================================================
+
+
+def test_사업주가_만든_문서는_사업주가_먼저_서명한다(fake_provider):
+    """
+    문서를 만든 쪽이 먼저 서명한다.
+
+    사업주가 작성한 계약서는 사업주가 서명해 근로자에게 보낸다.
+    근로자가 마지막에 서명해야 조건을 확인한 뒤 결정할 수 있다.
+
+    ⚠️ 순서만 바뀐다. anchor 와 참여자 매핑은 절대 바뀌지 않는다.
+       섞이면 서명란이 뒤바뀐 계약서가 나간다.
+    """
+    terms = _terms()
+    res = client.post(
+        "/contracts/analyze-sign",
+        json=_body(
+            terms,
+            entry_path="EMPLOYER",
+            confirmed_fields=_must_confirm(terms),
+            proceed_with_violations=True,
+        ),
+    )
+
+    assert res.status_code == 200, res.text
+    assert fake_provider[0]["employer_first"] is True
+
+
+def test_근로자가_만든_문서는_근로자가_먼저_서명한다(fake_provider):
+    terms = _terms()
+    for path in ("PHOTO", "MANUAL"):
+        fake_provider.clear()
+        res = client.post(
+            "/contracts/analyze-sign",
+            json=_body(
+                terms,
+                entry_path=path,
+                confirmed_fields=_must_confirm(terms),
+                proceed_with_violations=True,
+            ),
+        )
+        assert res.status_code == 200, res.text
+        assert fake_provider[0]["employer_first"] is False, path
+
+
+@pytest.mark.parametrize(
+    "entry_path,expected",
+    [
+        ("EMPLOYER", "사업주가 작성한 것입니다"),
+        ("MANUAL", "근로자가 구두로 안내받은 내용을 직접 입력한 것입니다"),
+    ],
+)
+def test_문서에_작성자를_밝힌다(entry_path, expected):
+    """
+    ⚠️ 상대방이 무엇에 서명하는지 알아야 한다.
+
+    양쪽 모두에 출처를 붙인다. 근로자가 만든 문서에만 출처를 밝히고
+    사업주가 만든 문서에는 안 밝히면, 그 자체가 한쪽을 덜 신뢰하는
+    설계가 된다.
+    """
+    from app.schemas import EntryPath, ValidationReport
+
+    note = contracts.build_verification_note(
+        ValidationReport(checks=[]), EntryPath(entry_path)
+    )
+    assert expected in note
+
+
+def test_계약서_사진_경로는_출처_문구를_붙이지_않는다():
+    """출처가 계약서 원본이므로 별도 표시가 필요 없다."""
+    from app.schemas import EntryPath, ValidationReport
+
+    note = contracts.build_verification_note(
+        ValidationReport(checks=[]), EntryPath.PHOTO
+    )
+    assert "직접 입력한 것입니다" not in note
+    assert "사업주가 작성한 것입니다" not in note
+
+
+# ============================================================
 # 5. 이메일·이름 형식 검증 (Pydantic)
 # ============================================================
 
@@ -349,6 +455,105 @@ def test_잘못된_이메일과_이름은_발송_전에_422로_막는다(
     """
     res = client.post("/contracts/analyze-sign", json=_body(**{field: value}))
     assert res.status_code == 422
+
+
+# ============================================================
+# 5-2. 로그인 관문 — 어디서부터 로그인이 필요한가
+# ============================================================
+
+
+def test_로그인_없이는_서명을_보낼_수_없다(no_provider_call):
+    """
+    ⚠️ 익명 발송을 허용하면 이 서비스가 스팸 도구가 된다.
+       아무 이메일이나 넣고 "근로계약서 서명 요청"을 보낼 수 있게 된다.
+    """
+    app.dependency_overrides.pop(require_user, None)  # 로그인 상태를 걷어낸다
+
+    res = client.post("/contracts/analyze-sign", json=_body())
+
+    assert res.status_code == 401
+    assert res.json()["detail"]["code"] == "LOGIN_REQUIRED"
+
+
+def test_로그인_없이는_보관함을_볼_수_없다():
+    app.dependency_overrides.pop(require_user, None)
+    assert client.get("/contracts").status_code == 401
+
+
+@pytest.mark.parametrize(
+    "path,payload",
+    [
+        ("/contracts/validate", {"terms": _terms()}),
+        ("/contracts/validation-state", {"terms": _terms()}),
+        ("/contracts/message", {"terms": _terms()}),
+        ("/contracts/review-items", {"terms": _terms()}),
+    ],
+)
+def test_판정과_문구는_로그인_없이_된다(path, payload):
+    """
+    ⚠️ 이 테스트가 깨지면 제품의 전제가 무너진 것이다.
+
+    열여섯 살이 첫 계약서를 확인하려고 회원가입부터 해야 한다면
+    그 벽을 넘지 못한다. 로그인은 "내 문서"를 구분해야 하는
+    시점(서명 발송·보관함)에서 처음 필요해진다.
+    """
+    app.dependency_overrides.pop(require_user, None)
+
+    res = client.post(path, json=payload)
+
+    assert res.status_code == 200, res.text
+
+
+def test_남의_문서_상태는_볼_수_없다(memory_store):
+    """
+    ⚠️ 403 이 아니라 404 를 낸다.
+
+    403 은 "그 문서는 존재하지만 네 것이 아니다"를 알려주는 셈이라,
+    문서 ID 를 넣어보며 존재 여부를 알아낼 수 있다.
+    계약서의 존재 자체가 개인정보다.
+    """
+    import asyncio
+
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "SOMEONE-ELSE-DOC",
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id="kakao:다른사람",
+        )
+    )
+
+    res = client.get("/contracts/SOMEONE-ELSE-DOC/status")
+
+    assert res.status_code == 404
+
+
+def test_보관함은_내_문서만_보여준다(memory_store):
+    """
+    ⚠️ owner_id 조건이 빠지면 보관함이 전체 사용자의 계약서 목록이 된다.
+    """
+    import asyncio
+
+    from app.schemas import DocumentStatus, EntryPath
+
+    async def seed(doc_id: str, owner: str) -> None:
+        await memory_store.remember(
+            doc_id,
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=owner,
+        )
+
+    asyncio.run(seed("MINE", TEST_USER["user_id"]))
+    asyncio.run(seed("THEIRS", "kakao:다른사람"))
+
+    ids = [item["document_id"] for item in client.get("/contracts").json()]
+
+    assert ids == ["MINE"]
 
 
 # ============================================================

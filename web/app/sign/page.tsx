@@ -5,13 +5,18 @@ import { useRouter } from "next/navigation";
 import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
+import { LoginGate } from "@/components/LoginGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import {
   analyzeAndSign,
+  getMe,
   getValidationState,
+  InvalidContractValuesError,
+  LoginRequiredError,
   SignBlockedError,
   ViolationBlockedError,
 } from "@/lib/api";
+import { documentTitle, firstSignerLabel } from "@/lib/constants";
 import { readSession, updateSession } from "@/lib/session";
 import type {
   ContractTerms,
@@ -57,6 +62,33 @@ export default function SignPage() {
   const [signBlock, setSignBlock] = useState<SignBlockedError["detail"] | null>(
     null,
   );
+  // 서명 발송에서 처음 로그인을 요구한다. 그 전 단계는 로그인 없이 완주된다.
+  const [authState, setAuthState] = useState<
+    "checking" | "authed" | "guest" | "session-invalid"
+  >("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then(() => {
+        if (!cancelled) setAuthState("authed");
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        if (caught instanceof LoginRequiredError) {
+          setAuthState(
+            caught.reason === "SESSION_INVALID" ? "session-invalid" : "guest",
+          );
+        } else {
+          // 로그인 여부를 확인하지 못했다고 사용자를 막지 않는다.
+          // 실제로 로그인이 안 됐다면 서명 요청 자체가 401로 다시 막는다.
+          setAuthState("authed");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const session = readSession();
@@ -169,6 +201,15 @@ export default function SignPage() {
       } else if (caught instanceof SignBlockedError) {
         // 값 확인 누락·이름 불일치 — 돌아가서 고쳐야 한다(진행 강행 불가).
         setSignBlock(caught.detail);
+      } else if (caught instanceof InvalidContractValuesError) {
+        // 서버 재검증에서 성립하지 않는 값을 발견 — 사전 점검과 같은
+        // 형태(issues)이므로 같은 UI(blockingIssues)로 이유·해결법을 보여준다.
+        setBlockingIssues(caught.detail.issues);
+      } else if (caught instanceof LoginRequiredError) {
+        // 로그인 확인 뒤 발송 사이에 세션이 만료된 경우. 폼 대신 안내로 되돌린다.
+        setAuthState(
+          caught.reason === "SESSION_INVALID" ? "session-invalid" : "guest",
+        );
       } else {
         setError(
           caught instanceof Error
@@ -181,7 +222,7 @@ export default function SignPage() {
     }
   }
 
-  if (!ready) {
+  if (!ready || authState === "checking") {
     return (
       <ScreenShell step={5} title="서명 단계 준비 중">
         <Card>
@@ -189,6 +230,33 @@ export default function SignPage() {
             현재 세션의 조건을 불러오고 있어요.
           </p>
         </Card>
+        <LegalDisclaimer />
+      </ScreenShell>
+    );
+  }
+
+  // 서명 발송에서 처음 로그인을 요구한다. 폼 대신 안내를 먼저 보여준다.
+  if (authState === "guest" || authState === "session-invalid") {
+    return (
+      <ScreenShell step={5} title="전자서명 발송">
+        <LoginGate
+          title={
+            authState === "session-invalid"
+              ? "세션이 만료됐어요"
+              : "서명 요청을 보내려면 로그인이 필요해요"
+          }
+          description={
+            authState === "session-invalid" ? (
+              "다시 로그인해 주세요. 지금까지 입력한 내용은 그대로 남아 있어요."
+            ) : (
+              <>
+                여기까지는 로그인 없이 확인하셨어요. 서명 요청은 상대방에게
+                실제로 메일이 가고, 나중에 이 계약서를 다시 찾을 수 있어야
+                해서 로그인이 필요합니다.
+              </>
+            )
+          }
+        />
         <LegalDisclaimer />
       </ScreenShell>
     );
@@ -214,18 +282,29 @@ export default function SignPage() {
       check.status === "VIOLATION" || check.status === "MISSING",
   );
 
+  // 문서 종류와 서명 순서는 경로가 결정한다.
+  // ⚠️ 백엔드 DOCUMENT_TITLES / employer_first 와 같은 기준을 쓴다.
+  const title = documentTitle(entryPath);
+  const firstSigner = firstSignerLabel(entryPath);
+
   return (
     <ScreenShell
       step={5}
-      title="근로조건 확인 요청서 전자서명 발송"
+      title={`${title} 전자서명 발송`}
       description="이 단계에서만 입력한 이메일로 모두싸인 서명 요청을 보냅니다. 발송 후에도 제공자 상태가 체결 완료로 확인되기 전까지는 완료로 표시하지 않습니다."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
       <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
-        발송되는 PDF는 “확인 전 초안” 워터마크가 있는 근로조건 확인
-        요청서입니다. 한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로
-        “조건 확인됨” 또는 “체결 완료” 상태를 만들지 않습니다.
+        <strong>{firstSigner}부터 서명</strong>하고, 그다음 상대방에게 서명
+        요청이 갑니다. 서명할 문서에는 “확인 전 초안” 워터마크를 찍지 않습니다
+        — 체결된 문서에 초안 표기가 남으면 나중에 “초안인 줄 알았다”는 주장의
+        빌미가 되고, 근로기준법 제17조 교부 의무를 이행한 증거로도 약해집니다.
+        조건의 출처는 문서 하단에 문장으로 밝힙니다.
+      </p>
+      <p className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm leading-relaxed text-ink-muted">
+        한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로 “조건 확인됨” 또는
+        “체결 완료” 상태를 만들지 않습니다. 상태는 모두싸인에서 직접 읽어옵니다.
       </p>
 
       {signBlock && (
@@ -237,6 +316,36 @@ export default function SignPage() {
             <span aria-hidden="true">↩️ </span>
             {signBlock.message}
           </p>
+          {signBlock.conflicts && signBlock.conflicts.length > 0 && (
+            <>
+              <ul className="mt-3 flex flex-col gap-3">
+                {signBlock.conflicts.map((conflict) => (
+                  <li
+                    key={conflict.field}
+                    className="rounded-field border border-amber-300 bg-white p-3"
+                  >
+                    <p className="font-bold">{conflict.label}</p>
+                    <dl className="mt-1.5 flex flex-col gap-1 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-amber-800">계약서에서 읽음</dt>
+                        <dd className="font-bold">{conflict.on_contract}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-amber-800">입력하신 이름</dt>
+                        <dd className="font-bold">{conflict.typed}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+              {/* ⚠️ 어느 쪽이 맞는지 코드가 고르지 않는다(contracts.py:_name_conflicts).
+                  두 값을 나란히 보여주고 선택은 사용자에게 되돌린다. */}
+              <p className="mt-3 leading-relaxed">
+                어느 쪽이 맞나요? 맞는 이름으로 위 입력칸을 고쳐 다시 보내
+                주세요.
+              </p>
+            </>
+          )}
           {signBlock.fields && signBlock.fields.length > 0 && (
             <ul className="mt-2 list-inside list-disc">
               {signBlock.fields.map((field, index) => (

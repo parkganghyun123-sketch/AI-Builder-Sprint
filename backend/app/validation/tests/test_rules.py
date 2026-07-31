@@ -138,8 +138,20 @@ def test_weekly_hours_14_point_9_does_not_meet_time_threshold() -> None:
     )
 
     assert result.status == CheckStatus.OK
-    assert "14.9시간 < 15시간" in result.calculation
-    assert "충족하지 않습니다" in result.detail
+    # 시간은 분 단위로 끊어 표시한다. 이 문자열이 사용자가 사장님에게 보낼
+    # 문구에 그대로 들어가므로 부동소수점(14.9000000000001)이 새면 안 된다.
+    # 근거: app/validation/rules.py _hours()
+    assert "14시간 54분 < 15시간" in result.calculation
+
+    # ⚠️ "충족하지 않습니다" 로 끝내지 않는다.
+    #    주 15시간 미만이면 주휴수당뿐 아니라 연차·퇴직금까지 함께 빠진다.
+    #    무엇을 못 받는지, 얼마나 모자란지를 알려줘야 사용자가 대응할 수 있다.
+    #    (30분 모자란 것과 5시간 모자란 것은 대응이 완전히 다르다)
+    assert "6분 모자람" in result.calculation
+    assert "연차유급휴가" in result.detail
+    assert "퇴직금" in result.detail
+    # 주 15시간 미만 계약 자체는 위법이 아니다. 사업주를 탓하지 않는다.
+    assert "위법한 것은 아니며" in result.detail
 
 
 def test_weekly_hours_missing_is_unknown() -> None:

@@ -17,6 +17,7 @@ sqlalchemy[asyncio]==2.0.36
 #    고정하므로 여기에도 명시한다. 진단은 scripts/check_database_url.py 참고.
 greenlet==3.1.1
 psycopg[binary]==3.2.3
+PyJWT==2.10.1
 python-dotenv==1.0.1
 
 # 개발용

@@ -151,6 +151,39 @@ export const validationStateSchema = z.object({
   issues: z.array(validationIssueSchema),
 });
 
+// "말 꺼내기" 문구 — bridge/templates.py + bridge/numbers.py 대응.
+export const ownerMessageSchema = z.object({
+  message: z.string().nullable(),
+  lines: z.array(z.string()),
+  numbers_verified: z.boolean(),
+});
+
+// "몰라서 못 받는 것들" — backend/app/validation/entitlements.py 대응.
+export const audienceSchema = z.enum([
+  "EVERYONE",
+  "MINOR",
+  "PREGNANT",
+  "POSTPARTUM",
+  "FEMALE",
+  "DISABILITY",
+]);
+
+export const entitlementSchema = z.object({
+  code: z.string(),
+  label: z.string(),
+  audience: audienceSchema,
+  summary: z.string(),
+  detail: z.string(),
+  legal_basis: z.string(),
+  /** 계약서 값으로 판정할 수 있는가. false면 안내만 — 위반처럼 표시하지 말 것 */
+  verifiable: z.boolean(),
+  employer_penalty: z.string().nullable(),
+});
+
+export const entitlementsResponseSchema = z.object({
+  items: z.array(entitlementSchema),
+});
+
 export const documentStatusSchema = z.enum([
   "DRAFTING",
   "REVIEW_REQUESTED",
@@ -162,7 +195,7 @@ export const documentStatusSchema = z.enum([
   "PROCESSING_FAILED",
 ]);
 
-export const entryPathSchema = z.enum(["PHOTO", "MANUAL"]);
+export const entryPathSchema = z.enum(["PHOTO", "MANUAL", "EMPLOYER"]);
 
 export const analyzeSignResponseSchema = z.object({
   document_id: z.string().min(1),
@@ -191,6 +224,18 @@ export const signBlockedEnvelopeSchema = z.object({
     .passthrough(),
 });
 
+// analyze-sign 이 성립하지 않는 값(임금 0원 등)으로 문서 생성 자체를 거부할 때(422).
+// backend/app/routers/contracts.py:_reject_if_blocking — validation-state 의
+// issues 와 같은 형태(reason·fix)라 화면도 blockingIssues 와 같은 UI로 보여준다.
+export const invalidContractValuesEnvelopeSchema = z.object({
+  detail: z.object({
+    code: z.literal("INVALID_CONTRACT_VALUES"),
+    message: z.string(),
+    blocking_fields: z.array(z.string()),
+    issues: z.array(validationIssueSchema),
+  }),
+});
+
 // review-items — 확인이 필요한 항목 목록.
 export const reviewItemSchema = z.object({
   field: z.string(),
@@ -216,3 +261,47 @@ export const signStatusResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   download_url: z.string().url().nullable(),
 });
+
+// ============================================================
+// 5. 로그인 — backend/app/routers/auth.py 대응
+// ============================================================
+
+export const userRoleSchema = z.enum(["WORKER", "EMPLOYER"]);
+
+export const meResponseSchema = z.object({
+  user_id: z.string().min(1),
+  nickname: z.string(),
+  role: userRoleSchema,
+});
+
+export const loginUrlResponseSchema = z.object({
+  authorize_url: z.string().min(1),
+});
+
+export const callbackResponseSchema = z.object({
+  access_token: z.string().min(1),
+  user: meResponseSchema,
+});
+
+// 401 응답 본문. code 로 "로그인 필요"와 "세션 만료"를 구분한다.
+export const authErrorEnvelopeSchema = z.object({
+  detail: z
+    .object({
+      code: z.string().optional(),
+      message: z.string().default("로그인이 필요합니다."),
+    })
+    .passthrough(),
+});
+
+// 보관함 목록 — backend/app/routers/sign.py ArchiveItem 대응.
+export const archiveItemSchema = z.object({
+  document_id: z.string().min(1),
+  title: z.string(),
+  status: documentStatusSchema,
+  signed: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  entry_path: entryPathSchema,
+  created_at: z.string(),
+});
+
+export const archiveListSchema = z.array(archiveItemSchema);

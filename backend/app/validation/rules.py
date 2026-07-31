@@ -77,6 +77,31 @@ def _is_unreliable(field: ExtractedField) -> bool:
     return _is_missing(field) or field.confidence == Confidence.LOW
 
 
+def _hours(value: float) -> str:
+    """
+    근로시간을 사람이 읽는 형태로 만든다. 5.833333… → '5시간 50분'
+
+    ⚠️ 계산식(``CheckResult.calculation``)은 화면에만 쓰이는 게 아니다.
+       app/bridge/templates.py 가 이 문자열에서 숫자를 꺼내
+       **사용자가 사장님에게 보낼 문구**를 만든다.
+
+       예전에는 ``f"{hours:g}"`` 를 썼고, 09:00~15:00 에 휴게 10분이면
+       "1일 소정근로시간 5.83333시간" 이 그대로 사장님에게 갈 문장에 들어갔다.
+       열여섯 살이 보낼 메시지에 부동소수점이 새어 나오면 안 된다.
+
+       분 단위로 끊어 쓰면 계약서 기재 방식(시각)과도 자연스럽게 이어진다.
+    """
+    total_minutes = round(value * 60)
+    hours, minutes = divmod(total_minutes, 60)
+    if hours == 0:
+        # "0시간 6분" 이 아니라 "6분". 15시간에서 얼마나 모자란지
+        # 알려줄 때 한 시간이 안 되는 경우가 자주 나온다.
+        return f"{minutes}분"
+    if minutes == 0:
+        return f"{hours}시간"
+    return f"{hours}시간 {minutes}분"
+
+
 def _minimum_break_minutes(hours_per_day: float) -> int:
     for minimum_hours, minimum_minutes in BREAK_RULES:
         if hours_per_day >= minimum_hours:
@@ -288,13 +313,13 @@ def check_minor_working_hours(
     calculation_parts = [
         context_text,
         (
-            f"1일 {hours_per_day:g}시간 "
+            f"1일 {_hours(hours_per_day)} "
             f"{'>' if daily_over else '≤'} 기본 {MINOR_DAILY_HOURS:g}시간"
         ),
     ]
     if weekly_hours is not None:
         calculation_parts.append(
-            f"1주 {weekly_hours:g}시간 "
+            f"1주 {_hours(weekly_hours)} "
             f"{'>' if weekly_over else '≤'} 기본 {MINOR_WEEKLY_HOURS:g}시간"
         )
 
@@ -509,22 +534,42 @@ def check_weekly_holiday(terms: ContractTerms) -> CheckResult:
         )
 
     calculation = (
-        f"주 소정근로시간 {weekly_hours:g}시간 "
+        f"주 소정근로시간 {_hours(weekly_hours)} "
         f"{'≥' if weekly_hours >= WEEKLY_HOLIDAY_MIN_HOURS else '<'} "
         f"{WEEKLY_HOLIDAY_MIN_HOURS:g}시간"
     )
 
     if weekly_hours < WEEKLY_HOLIDAY_MIN_HOURS:
+        # ⚠️ 여기가 "몰라서 못 받는 것"이 가장 크게 생기는 지점이다.
+        #
+        #    주 15시간 미만이면 주휴수당(제18조제3항)뿐 아니라
+        #    연차유급휴가와 퇴직금(퇴직급여법 제4조제1항 단서)까지 제외된다.
+        #    세 가지가 한꺼번에 빠지는데, 계약서에는 그런 말이 한 줄도 없다.
+        #
+        #    예전에는 "충족하지 않습니다" 한 줄로 끝냈다. 그러면 사용자는
+        #    무엇을 못 받는지도, 얼마나 모자란지도 모른 채 넘어간다.
+        #    30분 모자란 것과 5시간 모자란 것은 대응이 완전히 다르다.
+        #
+        #    ⚠️ 다만 주 15시간 미만 계약 자체는 **위법이 아니다.**
+        #       그래서 status 는 OK 로 둔다. 사장님을 탓하는 문구를 쓰지 않는다.
+        #       사실을 알려주고 판단은 사용자가 한다.
+        shortfall = WEEKLY_HOLIDAY_MIN_HOURS - weekly_hours
         return CheckResult(
             code="WEEKLY_HOLIDAY",
             label="주휴 시간 요건",
             status=CheckStatus.OK,
             legal_basis=WEEKLY_HOLIDAY_BASIS,
             standard_year=STANDARD_YEAR,
-            calculation=calculation,
+            calculation=(
+                f"{calculation} — {_hours(shortfall)} 모자람"
+            ),
             detail=(
-                "계약상 4주 평균 주 소정근로시간이 15시간 미만으로, "
-                "주휴 관련 시간 요건을 충족하지 않습니다."
+                f"계약상 주 소정근로시간이 15시간에서 {_hours(shortfall)} "
+                "모자랍니다. 주 15시간 미만이면 주휴수당·연차유급휴가·퇴직금이 "
+                "모두 적용되지 않습니다(근로기준법 제18조제3항, "
+                "근로자퇴직급여 보장법 제4조제1항). "
+                "주 15시간 미만 계약 자체가 위법한 것은 아니며, "
+                "근무시간 조정이 가능한지는 사업주와 논의할 사항입니다."
             ),
         )
 
@@ -599,7 +644,7 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
             legal_basis=BREAK_TIME_BASIS,
             standard_year=STANDARD_YEAR,
             calculation=(
-                f"1일 소정근로시간 {hours_per_day:g}시간 < 4시간 — "
+                f"1일 소정근로시간 {_hours(hours_per_day)} < 4시간 — "
                 "법정 최소 휴게시간 비교 대상 아님"
             ),
             detail="계약서에 기재된 시각을 기준으로 계산했습니다.",
@@ -613,7 +658,7 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
             legal_basis=BREAK_TIME_BASIS,
             standard_year=STANDARD_YEAR,
             calculation=(
-                f"1일 소정근로시간 {hours_per_day:g}시간 → "
+                f"1일 소정근로시간 {_hours(hours_per_day)} → "
                 f"최소 휴게 {required_minutes}분 필요"
             ),
             detail="휴게 시작 또는 종료 시각을 확인할 수 없습니다.",
@@ -628,7 +673,7 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
             legal_basis=BREAK_TIME_BASIS,
             standard_year=STANDARD_YEAR,
             calculation=(
-                f"1일 소정근로시간 {hours_per_day:g}시간 → "
+                f"1일 소정근로시간 {_hours(hours_per_day)} → "
                 f"최소 휴게 {required_minutes}분 필요"
             ),
             detail="휴게 시각 형식을 해석할 수 없습니다.",
@@ -645,7 +690,7 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
         legal_basis=BREAK_TIME_BASIS,
         standard_year=STANDARD_YEAR,
         calculation=(
-            f"1일 소정근로시간 {hours_per_day:g}시간: "
+            f"1일 소정근로시간 {_hours(hours_per_day)}: "
             f"휴게 {break_minutes}분 {operator} 최소 {required_minutes}분"
         ),
         detail=(

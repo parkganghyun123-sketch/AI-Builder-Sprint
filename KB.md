@@ -193,6 +193,55 @@
 > {result}합니다. 실제 적용 여부는 계약서만으로 확인되지 않는 사실관계에 따라
 > 달라질 수 있습니다.
 
+### KB-ENTITLEMENTS: 권리 안내 ("몰라서 못 받는 것들")
+
+`app/validation/entitlements.py`가 사용자에게 옮기는 조문 목록입니다.
+
+**⚠️ 판정(`rules.py`)과 안내(`entitlements.py`)는 다릅니다.**
+
+| | 판정 `CheckResult` | 안내 `Entitlement` |
+|---|---|---|
+| 하는 일 | 계약서 값을 법정 기준과 대조 | 법이 정한 권리를 알려줌 |
+| 결과 | OK / VIOLATION / MISSING / UNKNOWN | 위반 여부를 말하지 않음 |
+| 근거 | 계약서에 적힌 값 | 조문 자체 |
+
+친권자 동의서 비치 여부처럼 **계약서로 확인할 수 없는 것을 VIOLATION으로 표시하면
+확인하지도 않은 사실을 단정하는 것**입니다. 그래서 `verifiable=False`로 구분합니다.
+
+| 코드 | 대상 | 조문 | 출처 | 계약서로 판정 |
+|---|---|---|---|---|
+| `MINOR_GUARDIAN_CONSENT` | 18세 미만 | 제66조 (증명서·동의서 비치) | `SRC-LSA-66` | ❌ |
+| `MINOR_OWN_CONTRACT` | 18세 미만 | 제67조·제68조 (대리 금지, 임금 직접 청구) | `SRC-LSA-67`, `SRC-LSA-68` | ❌ |
+| `MINOR_WORKING_HOURS` | 18세 미만 | 제69조 | `SRC-LSA-69` | ✅ |
+| `MINOR_NIGHT_WORK` | 18세 미만 | 제70조제2항 | `SRC-LSA-70` | ✅ |
+| `PREGNANT_NO_OVERTIME_NIGHT` | 임신 중 | 제70조제2항·제71조 | `SRC-LSA-70`, `SRC-LSA-71` | ✅ |
+| `PREGNANT_REDUCED_HOURS` | 임신 중 | 제74조제7·8항 (12주 이내/**32주** 이후 1일 2시간) | `SRC-LSA-74` | ❌ |
+| `PREGNANT_SCHEDULE_CHANGE` | 임신 중 | 제74조제9항 (출퇴근 시각 변경) | `SRC-LSA-74` | ❌ |
+| `PREGNANT_CHECKUP_TIME` | 임신 중 | 제74조의2 (태아검진 시간) | `SRC-LSA-74-2` | ❌ |
+| `POSTPARTUM_NURSING_TIME` | 출산 후 1년 미만 | 제75조 (1일 2회 각 30분 유급) | `SRC-LSA-75` | ❌ |
+| `MENSTRUAL_LEAVE` | 여성 | 제73조 (월 1일) | `SRC-LSA-73` | ❌ |
+| `DISABILITY_REASONABLE_ACCOMMODATION` | 장애 | 장애인차별금지법 제11조 | `SRC-ADA-11` | ❌ |
+| `SHORT_TIME_EXCLUSIONS` | 모든 근로자 | 제18조제3항 + 퇴직급여법 제4조제1항 | `SRC-LSA-18`, `SRC-ERBA-4` | ✅ |
+| `CONTRACT_COPY` | 모든 근로자 | 제17조 | `SRC-LSA-17` | ❌ |
+
+**시행일 주의**
+
+- 임신기 근로시간 단축의 후기 구간은 **2025-02-23 시행**으로 `36주 이후` → `32주 이후`로
+  확대되었습니다. 2026년 현재 **32주 기준이 시행 중**입니다.
+- 확인일: 2026-07-31
+
+**개인정보**
+
+- 임신 여부·장애 여부는 민감정보입니다. **서버에 저장하지 않습니다.**
+- `GET /entitlements`는 **전체 목록**을 주고 화면이 필터링합니다. 그래서 서버는
+  사용자가 어느 대상에 해당하는지 알지 못합니다.
+
+**금지 문구**
+
+- "신고하세요" / "신고할 수 있습니다" / "위법입니다" / "처벌받습니다" — 확정적 법률 결론
+- 근로자를 탓하는 표현. 사업주 의무 위반은 **사업주의 제재**로만 표시합니다
+- `tests/test_entitlements.py`가 위 금지어를 검사합니다
+
 ### KB-EXTRA-WORK: 연장·야간·휴일근로
 
 근로기준법 제56조는 연장근로, 야간근로, 휴일근로에 대한 가산임금을 규정합니다.
@@ -339,6 +388,17 @@
 | `SRC-LSA-54-FUTURE` | [근로기준법 일부개정 (제54조 단서, 2026-12-10 시행)](https://www.law.go.kr/LSW/lsInfoP.do?lsiSeq=283457) | 향후 휴게시간 예외 — **시행 전** |
 | `SRC-LSA-69` | [근로기준법 제69조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0069&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 15세 이상 18세 미만 근로시간과 합의 연장 한도 |
 | `SRC-LSA-70` | [근로기준법 제70조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0070&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 18세 미만 야간·휴일근로 제한과 예외 요건 |
+| `SRC-LSA-66` | [근로기준법 제66조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0066&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 연소자 증명서·친권자 동의서 비치 의무 |
+| `SRC-LSA-67` | [근로기준법 제67조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0067&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 미성년자 근로계약 대리 금지 |
+| `SRC-LSA-68` | [근로기준법 제68조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0068&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 미성년자의 임금 독자 청구 |
+| `SRC-LSA-71` | [근로기준법 제71조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0071&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 임신 중 여성의 시간외근로 금지 |
+| `SRC-LSA-73` | [근로기준법 제73조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0073&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 생리휴가 |
+| `SRC-LSA-74` | [근로기준법 제74조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0074&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 임산부 보호 — 근로시간 단축(12주 이내/32주 이후), 출퇴근 시각 변경 |
+| `SRC-LSA-74-2` | [근로기준법 제74조의2](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=02&joNo=0074&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 태아검진 시간 보장, 임금 삭감 금지 |
+| `SRC-LSA-75` | [근로기준법 제75조](https://www.law.go.kr/LSW/lsSideInfoP.do?docCls=jo&joBrNo=00&joNo=0075&lsiSeq=265959&urlMode=lsScJoRltInfoR) | 육아 시간 — 1일 2회 각 30분 유급 |
+| `SRC-ERBA-4` | [근로자퇴직급여 보장법 제4조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1000103545) | 주 15시간 미만 퇴직급여 적용 제외 |
+| `SRC-ADA-11` | [장애인차별금지 및 권리구제 등에 관한 법률 제11조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1000282866) | 고용에서의 정당한 편의 제공 의무 |
+| `SRC-MOEL-PREGNANT-2025` | [고용노동부 — 임신기 근로시간 단축 사용기간 계산표(2025-02-23 시행)](https://www.moel.go.kr/policy/policydata/view.do?bbs_seq=20250201644) | 36주 → 32주 확대 시행 확인 |
 | `SRC-LSA-11` | [근로기준법 제11조](https://www.law.go.kr/LSW/lsLinkCommonInfo.do?lsJoLnkSeq=1029727821) | 상시 근로자 수에 따른 적용 범위 |
 | `SRC-LSA-56` | [근로기준법 제56조](https://www.law.go.kr/lsLinkCommonInfo.do?lsJoLnkSeq=1025589869) | 연장·야간·휴일근로 가산 |
 | `SRC-MOEL-UNDER-5` | [고용노동부 1350 — 5인 미만 적용 안내](https://1350.moel.go.kr/rtmview.do?id=1000000868) | 5인 미만 사업장 미적용 규정 |

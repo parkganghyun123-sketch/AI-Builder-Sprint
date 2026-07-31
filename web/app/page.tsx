@@ -70,8 +70,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 두 경로 선택 */}
-      <section className="mx-auto w-full max-w-3xl px-5 py-6">
+      {/* 진입 경로 선택
+          ⚠️ 회원가입으로 역할을 묻지 않는다. 열여섯 살이 첫 계약서를
+             확인하려고 가입부터 해야 한다면 그 벽을 넘지 못한다.
+             역할은 여기서 고르고 세션에만 둔다. */}
+      <section
+        id="start"
+        className="mx-auto w-full max-w-3xl px-5 py-6"
+        aria-label="시작하기"
+      >
+        <h2 className="mb-4 text-center text-sm font-extrabold text-ink-muted">
+          어떤 상황이신가요?
+        </h2>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Link href="/upload" className="group">
             <Card className="h-full transition group-hover:border-brand/50 group-hover:shadow-cta">
@@ -103,6 +114,29 @@ export default function HomePage() {
             </Card>
           </Link>
         </div>
+
+        {/* 사업주 경로.
+            근거: 미작성 이유 1위가 "작성해야 하는지 몰라서"(40.4%)다.
+            나쁜 마음이 아니라 무지가 원인이고, 그건 사장님 쪽도 마찬가지다.
+            그래서 고발 도구가 아니라 양쪽이 같은 기준을 보게 만든다. */}
+        <Link href="/review?path=EMPLOYER" className="group mt-4 block">
+          <Card className="flex items-center gap-4 transition group-hover:border-brand/50 group-hover:shadow-cta">
+            <div aria-hidden="true" className="text-2xl">
+              🏪
+            </div>
+            <div className="flex-1">
+              <div className="font-extrabold text-ink">
+                사람을 고용하려는 사장님이세요?
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                법정 기준을 함께 확인하면서 계약서를 만들어 보내드려요.
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-bold text-brand">
+              계약서 만들기 →
+            </span>
+          </Card>
+        </Link>
       </section>
 
       {/* 1. 문제의식 */}

@@ -52,10 +52,22 @@ CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
     total       INTEGER     NOT NULL DEFAULT 2,
     entry_path  TEXT        NOT NULL,
     title       TEXT        NOT NULL,
+    owner_id    TEXT,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
+
+# 이미 만들어진 표에 컬럼을 더한다.
+#
+# ⚠️ CREATE TABLE IF NOT EXISTS 는 표가 있으면 아무것도 하지 않는다.
+#    소유자 컬럼을 나중에 추가했으므로 이 문장이 없으면
+#    "로컬은 되는데 배포는 컬럼이 없다" 가 된다.
+_MIGRATIONS = (
+    f"ALTER TABLE {TABLE_NAME} ADD COLUMN IF NOT EXISTS owner_id TEXT",
+    f"CREATE INDEX IF NOT EXISTS {TABLE_NAME}_owner_idx"
+    f" ON {TABLE_NAME} (owner_id, created_at DESC)",
+)
 
 # 마이그레이션 도구(Alembic)를 두지 않는다.
 #
@@ -87,9 +99,12 @@ class DocumentStore(Protocol):
         entry_path: EntryPath,
         title: str,
         total: int = 2,
+        owner_id: str | None = None,
     ) -> None: ...
 
     async def get(self, document_id: str) -> DocumentRecord | None: ...
+
+    async def list_for_owner(self, owner_id: str) -> list[DocumentRecord]: ...
 
     async def update_progress(
         self,
@@ -129,6 +144,7 @@ class MemoryDocumentStore:
         entry_path: EntryPath,
         title: str,
         total: int = 2,
+        owner_id: str | None = None,
     ) -> None:
         now = datetime.now(timezone.utc)
         self._rows[document_id] = DocumentRecord(
@@ -138,9 +154,14 @@ class MemoryDocumentStore:
             total=total,
             entry_path=entry_path,
             title=title,
+            owner_id=owner_id,
             created_at=now,
             updated_at=now,
         )
+
+    async def list_for_owner(self, owner_id: str) -> list[DocumentRecord]:
+        rows = [r for r in self._rows.values() if r.get("owner_id") == owner_id]
+        return sorted(rows, key=lambda r: r["created_at"], reverse=True)
 
     async def get(self, document_id: str) -> DocumentRecord | None:
         return self._rows.get(document_id)
@@ -244,6 +265,14 @@ def describe_database_url(url: str) -> str:
     return " · ".join(notes)
 
 
+def _row_to_record(row) -> DocumentRecord:
+    """DB 행을 레코드로. 문자열로 저장된 enum 을 되돌린다."""
+    data = dict(row)
+    data["status"] = DocumentStatus(data["status"])
+    data["entry_path"] = EntryPath(data["entry_path"])
+    return DocumentRecord(**data)
+
+
 class PostgresDocumentStore:
     """
     Supabase(Postgres) 저장소.
@@ -276,6 +305,8 @@ class PostgresDocumentStore:
         )
         async with engine.begin() as conn:
             await conn.execute(text(_CREATE_TABLE))
+            for statement in _MIGRATIONS:
+                await conn.execute(text(statement))
         return cls(engine)
 
     async def remember(
@@ -286,6 +317,7 @@ class PostgresDocumentStore:
         entry_path: EntryPath,
         title: str,
         total: int = 2,
+        owner_id: str | None = None,
     ) -> None:
         from sqlalchemy import text
 
@@ -294,8 +326,8 @@ class PostgresDocumentStore:
         sql = text(
             f"""
             INSERT INTO {TABLE_NAME}
-                (document_id, status, signed, total, entry_path, title)
-            VALUES (:document_id, :status, 0, :total, :entry_path, :title)
+                (document_id, status, signed, total, entry_path, title, owner_id)
+            VALUES (:document_id, :status, 0, :total, :entry_path, :title, :owner_id)
             ON CONFLICT (document_id) DO UPDATE SET
                 status = EXCLUDED.status,
                 total = EXCLUDED.total,
@@ -311,6 +343,7 @@ class PostgresDocumentStore:
                     "total": total,
                     "entry_path": entry_path.value,
                     "title": title,
+                    "owner_id": owner_id,
                 },
             )
 
@@ -319,18 +352,13 @@ class PostgresDocumentStore:
 
         sql = text(
             f"SELECT document_id, status, signed, total, entry_path, title,"
-            f" created_at, updated_at FROM {TABLE_NAME} WHERE document_id = :d"
+            f" owner_id, created_at, updated_at"
+            f" FROM {TABLE_NAME} WHERE document_id = :d"
         )
         async with self._engine.connect() as conn:
             row = (await conn.execute(sql, {"d": document_id})).mappings().first()
 
-        if row is None:
-            return None
-
-        data = dict(row)
-        data["status"] = DocumentStatus(data["status"])
-        data["entry_path"] = EntryPath(data["entry_path"])
-        return DocumentRecord(**data)
+        return _row_to_record(row) if row is not None else None
 
     async def update_progress(
         self,
@@ -361,6 +389,26 @@ class PostgresDocumentStore:
                 },
             )
 
+    async def list_for_owner(self, owner_id: str) -> list[DocumentRecord]:
+        """
+        내가 만든 문서 목록. 최신순.
+
+        ⚠️ owner_id 가 반드시 조건에 들어가야 한다. 이 한 줄이 빠지면
+           보관함이 전체 사용자의 계약서를 보여주는 화면이 된다.
+        """
+        from sqlalchemy import text
+
+        sql = text(
+            f"SELECT document_id, status, signed, total, entry_path, title,"
+            f" owner_id, created_at, updated_at"
+            f" FROM {TABLE_NAME} WHERE owner_id = :owner_id"
+            f" ORDER BY created_at DESC LIMIT 100"
+        )
+        async with self._engine.connect() as conn:
+            rows = (await conn.execute(sql, {"owner_id": owner_id})).mappings().all()
+
+        return [_row_to_record(row) for row in rows]
+
     async def exists(self, document_id: str) -> bool:
         from sqlalchemy import text
 
@@ -378,6 +426,17 @@ class PostgresDocumentStore:
 # ⚠️ 모듈 최상단에서 DB 에 붙지 않는다. import 시점에 네트워크를 타면
 #    테스트가 느려지고, DB 가 죽어 있을 때 앱이 아예 뜨지 않는다.
 _active: DocumentStore = MemoryDocumentStore()
+
+
+def get_engine():
+    """
+    Postgres 엔진. 메모리 저장소를 쓰는 중이면 None.
+
+    ⚠️ 같은 연결 풀을 다른 표(사용자 등)와 나눠 쓰기 위해 노출한다.
+       모듈마다 엔진을 새로 만들면 Supabase 연결 수를 금방 소진한다
+       (Transaction pooler 라도 상한이 있다).
+    """
+    return getattr(get_store(), "_engine", None)
 
 
 def get_store() -> DocumentStore:

@@ -210,6 +210,76 @@ export interface ValidationState {
   issues: ValidationIssue[];
 }
 
+/**
+ * analyze-sign 이 성립하지 않는 값(임금 0원 등)으로 문서 생성 자체를
+ * 거부할 때(422). ValidationState 의 issues 와 같은 형태다.
+ */
+export interface InvalidContractValues {
+  code: "INVALID_CONTRACT_VALUES";
+  message: string;
+  blocking_fields: string[];
+  issues: ValidationIssue[];
+}
+
+// ============================================================
+// 2-3. "말 꺼내기" 문구 — bridge/templates.py 대응
+// ============================================================
+
+/**
+ * 판정 결과를 사장님께 보낼 문의 메시지로 바꾼 것.
+ *
+ * ⚠️ 문장의 숫자는 백엔드가 ValidationReport 에서 그대로 꺼내 쓰고,
+ *    반환 전에 app/bridge/numbers.py 로 한 번 더 대조한다.
+ *    LLM 이 만들지 않으므로 환각이 구조적으로 불가능하다.
+ *
+ * ⚠️ numbers_verified 가 false 면 화면에 표시하지 말 것.
+ *    대조에 실패했다는 뜻이고, 근거 없는 숫자를 사용자가 사장님에게
+ *    보내면 이 기능의 신뢰가 한 번에 무너진다.
+ */
+export interface OwnerMessage {
+  /** 전체 메시지. 문제가 없으면 null */
+  message: string | null;
+  /** 문제 항목별 한 줄 문장 */
+  lines: string[];
+  /** 문장의 숫자가 판정 결과와 일치하는가 */
+  numbers_verified: boolean;
+}
+
+// ============================================================
+// 2-4. 권리 안내 — entitlements.py 대응
+// ============================================================
+
+export type Audience =
+  | "EVERYONE"
+  | "MINOR" // 만 18세 미만
+  | "PREGNANT" // 임신 중
+  | "POSTPARTUM" // 출산 후 1년 미만
+  | "FEMALE"
+  | "DISABILITY";
+
+/**
+ * "몰라서 못 받는 것들" 한 건.
+ *
+ * ⚠️ 판정(CheckResult)이 아니다. 위반 여부를 말하지 않는다.
+ *    verifiable 이 false 인 항목을 위반처럼 보이게 만들면
+ *    확인하지도 않은 사실을 단정하는 셈이 된다.
+ *
+ * ⚠️ 대상 선택(임신·장애 여부)은 **화면에서만** 쓴다. 서버로 보내지 않는다.
+ *    민감정보를 다루는 가장 안전한 방법은 받지 않는 것이다.
+ */
+export interface Entitlement {
+  code: string;
+  label: string;
+  audience: Audience;
+  summary: string;
+  detail: string;
+  legal_basis: string;
+  /** 계약서 값으로 판정 가능한가 */
+  verifiable: boolean;
+  /** 사업주에게 부과되는 제재. 근로자를 탓하는 표시로 쓰지 말 것 */
+  employer_penalty: string | null;
+}
+
 // ============================================================
 // 3. 문서 상태 — C가 관리 (모두싸인 상태와 대응)
 // ============================================================
@@ -224,9 +294,14 @@ export type DocumentStatus =
   | "ABORTED" // 중단
   | "PROCESSING_FAILED"; // 처리 실패
 
+/**
+ * 조건이 어디서 왔는가. 문서의 출처 표시와 서명 순서를 결정한다.
+ * backend/app/schemas.py EntryPath 와 1:1.
+ */
 export type EntryPath =
-  | "PHOTO" // 경로 A — 계약서 사진 업로드
-  | "MANUAL"; // 경로 B — 직접 입력 (구두계약 / OCR 실패)
+  | "PHOTO" // 경로 A — 근로자가 받은 계약서 사진
+  | "MANUAL" // 경로 B — 근로자가 직접 입력 (구두계약 / OCR 실패)
+  | "EMPLOYER"; // 경로 C — 사업주가 계약서를 작성
 
 // ============================================================
 // 4. API 요청·응답
@@ -303,6 +378,16 @@ export interface SignBlocked {
   hint: string;
   /** 확인/수정이 필요한 항목 라벨 */
   fields?: string[];
+  /**
+   * NAME_MISMATCH — 계약서에서 읽은 이름과 서명 요청에 입력한 이름이 다른 항목들.
+   * 어느 쪽이 맞는지 코드가 고르지 않는다(contracts.py:_name_conflicts).
+   */
+  conflicts?: {
+    field: string;
+    label: string;
+    on_contract: string;
+    typed: string;
+  }[];
 }
 
 export interface AnalyzeSignResponse {
@@ -325,4 +410,27 @@ export interface SignStatusResponse {
   signed: number;
   total: number;
   download_url: string | null;
+}
+
+// ============================================================
+// 5. 로그인 — backend/app/routers/auth.py 대응
+// ============================================================
+
+export type UserRole = "WORKER" | "EMPLOYER";
+
+export interface Me {
+  user_id: string;
+  nickname: string;
+  role: UserRole;
+}
+
+/** 보관함 목록 항목. GET /contracts — 다운로드 링크는 없다(유효시간 10분). */
+export interface ArchiveItem {
+  document_id: string;
+  title: string;
+  status: DocumentStatus;
+  signed: number;
+  total: number;
+  entry_path: EntryPath;
+  created_at: string;
 }

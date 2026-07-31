@@ -1,5 +1,11 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { getMe } from "@/lib/api";
+import { clearToken } from "@/lib/auth";
+import type { Me } from "@/lib/types";
 
 /**
  * 화면 공통 셸 — 상단 브랜드 헤더 + 진행 스텝퍼 + 제목.
@@ -11,13 +17,40 @@ const STEPS = [
   { href: "/result", label: "결과" },
   { href: "/contract", label: "요청서" },
   { href: "/sign", label: "서명" },
-  { href: "/archive", label: "보관(준비 중)" },
+  { href: "/archive", label: "보관함" },
 ];
 
 /** 스텝 번호 (1~6) */
 export type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 export function BrandHeader() {
+  const [me, setMe] = useState<Me | null>(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then((user) => {
+        if (!cancelled) setMe(user);
+      })
+      .catch(() => {
+        if (!cancelled) setMe(null);
+      })
+      .finally(() => {
+        if (!cancelled) setChecked(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  function logout() {
+    clearToken();
+    // 서버에 남은 상태는 없다 — 토큰만 지우면 로그아웃이다.
+    // 홈으로 이동하며 새로 불러 헤더 상태를 확실히 초기화한다.
+    window.location.href = "/";
+  }
+
   return (
     <header className="sticky top-0 z-10 border-b border-brand-line/60 bg-white/80 backdrop-blur">
       <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-5">
@@ -27,12 +60,38 @@ export function BrandHeader() {
           </span>{" "}
           페어사인
         </Link>
-        <Link
-          href="/archive"
-          className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
-        >
-          보관함 준비 중
-        </Link>
+        <div className="flex items-center gap-1">
+          {me ? (
+            <>
+              {/* ⚠️ 닉네임은 없을 수 있다.
+                  카카오 동의항목을 '선택 동의'로 두면 사용자가 거부할 수 있고,
+                  거부해도 로그인은 성립한다. 그대로 두면 "님" 만 남는다. */}
+              <span className="px-2 text-sm font-semibold text-ink-muted">
+                {me.nickname.trim() ? `${me.nickname}님` : "로그인됨"}
+              </span>
+              <Link
+                href="/archive"
+                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                보관함
+              </Link>
+              <button
+                type="button"
+                onClick={logout}
+                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+              >
+                로그아웃
+              </button>
+            </>
+          ) : checked ? (
+            <Link
+              href="/archive"
+              className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+            >
+              로그인
+            </Link>
+          ) : null}
+        </div>
       </div>
     </header>
   );

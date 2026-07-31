@@ -83,6 +83,7 @@ def test_개인정보를_저장하지_않는다(store):
         "total",
         "entry_path",
         "title",
+        "owner_id",  # 누가 만들었는가. 접근 통제에 쓴다
         "created_at",
         "updated_at",
     }
