@@ -172,6 +172,41 @@ export interface OwnerMessage {
 }
 
 // ============================================================
+// 2-4. 권리 안내 — entitlements.py 대응
+// ============================================================
+
+export type Audience =
+  | "EVERYONE"
+  | "MINOR" // 만 18세 미만
+  | "PREGNANT" // 임신 중
+  | "POSTPARTUM" // 출산 후 1년 미만
+  | "FEMALE"
+  | "DISABILITY";
+
+/**
+ * "몰라서 못 받는 것들" 한 건.
+ *
+ * ⚠️ 판정(CheckResult)이 아니다. 위반 여부를 말하지 않는다.
+ *    verifiable 이 false 인 항목을 위반처럼 보이게 만들면
+ *    확인하지도 않은 사실을 단정하는 셈이 된다.
+ *
+ * ⚠️ 대상 선택(임신·장애 여부)은 **화면에서만** 쓴다. 서버로 보내지 않는다.
+ *    민감정보를 다루는 가장 안전한 방법은 받지 않는 것이다.
+ */
+export interface Entitlement {
+  code: string;
+  label: string;
+  audience: Audience;
+  summary: string;
+  detail: string;
+  legal_basis: string;
+  /** 계약서 값으로 판정 가능한가 */
+  verifiable: boolean;
+  /** 사업주에게 부과되는 제재. 근로자를 탓하는 표시로 쓰지 말 것 */
+  employer_penalty: string | null;
+}
+
+// ============================================================
 // 3. 문서 상태 — C가 관리 (모두싸인 상태와 대응)
 // ============================================================
 

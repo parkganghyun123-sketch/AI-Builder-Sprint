@@ -20,6 +20,7 @@ from app.ai.document_parse import DocumentParseError
 from app.ai.extract import ExtractError, extract_contract_terms
 from app.review.fields import build_review_items
 from app.schemas import ContractTerms
+from app.validation.entitlements import all_entitlements
 
 log = logging.getLogger(__name__)
 router = APIRouter()
@@ -107,6 +108,24 @@ async def extract_terms(file: Annotated[UploadFile, File()]) -> ContractTerms:
     log.info("추출 완료 — 확인 필요 %d건 (반드시 확인 %s)", len(items), high or "없음")
 
     return terms
+
+
+class EntitlementsResponse(BaseModel):
+    items: list[dict]
+
+
+@router.get("/entitlements", response_model=EntitlementsResponse)
+async def entitlements() -> EntitlementsResponse:
+    """
+    "몰라서 못 받는 것들" 전체 목록.
+
+    ⚠️ 전체를 주고 화면이 필터링한다. 그래서 **서버는 사용자가 임신했는지,
+       장애가 있는지, 미성년자인지 알지 못한다.**
+       민감정보를 다루는 가장 안전한 방법은 받지 않는 것이다.
+
+    ⚠️ 로그인이 필요 없다. 권리를 알기 위해 가입해야 한다면 그것부터가 벽이다.
+    """
+    return EntitlementsResponse(items=all_entitlements())
 
 
 class ReviewRequest(BaseModel):

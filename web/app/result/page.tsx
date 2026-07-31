@@ -7,6 +7,7 @@ import {
   CheckResultCard,
   CHECK_SOURCE_FIELD,
 } from "@/components/CheckResultCard";
+import { EntitlementsCard } from "@/components/EntitlementsCard";
 import { OwnerMessageCard } from "@/components/OwnerMessageCard";
 import { ButtonLink, Card } from "@/components/ui";
 import { readSession } from "@/lib/session";
@@ -214,6 +215,12 @@ export default function ResultPage() {
       {!isEmployer && (
         <OwnerMessageCard terms={terms} workerBirthDate={workerBirthDate} />
       )}
+
+      {/* "몰라서 못 받는 것들" — 판정과 별개의 안내.
+          ⚠️ 사업주에게는 보여주지 않는다. 근로자 권리 안내이고,
+             사업주 화면에 띄우면 "이거 안 지켰죠?"로 읽힌다.
+             사업주용 안내는 별도로 설계해야 한다(현재 범위 밖). */}
+      {!isEmployer && <EntitlementsCard />}
 
       {/* 다음 행동은 경로별로 다르다.
           ⚠️ 이전에는 곧바로 "요청서 만들기" 하나뿐이었다. 그래서 계약서를

@@ -90,6 +90,32 @@ export const ownerMessageSchema = z.object({
   numbers_verified: z.boolean(),
 });
 
+// "몰라서 못 받는 것들" — backend/app/validation/entitlements.py 대응.
+export const audienceSchema = z.enum([
+  "EVERYONE",
+  "MINOR",
+  "PREGNANT",
+  "POSTPARTUM",
+  "FEMALE",
+  "DISABILITY",
+]);
+
+export const entitlementSchema = z.object({
+  code: z.string(),
+  label: z.string(),
+  audience: audienceSchema,
+  summary: z.string(),
+  detail: z.string(),
+  legal_basis: z.string(),
+  /** 계약서 값으로 판정할 수 있는가. false면 안내만 — 위반처럼 표시하지 말 것 */
+  verifiable: z.boolean(),
+  employer_penalty: z.string().nullable(),
+});
+
+export const entitlementsResponseSchema = z.object({
+  items: z.array(entitlementSchema),
+});
+
 export const documentStatusSchema = z.enum([
   "DRAFTING",
   "REVIEW_REQUESTED",
