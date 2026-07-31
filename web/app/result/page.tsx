@@ -10,6 +10,7 @@ import {
 import { EntitlementsCard } from "@/components/EntitlementsCard";
 import { OwnerMessageCard } from "@/components/OwnerMessageCard";
 import { ButtonLink, Card } from "@/components/ui";
+import { ContractAssistant } from "@/components/ContractAssistant";
 import { readSession } from "@/lib/session";
 import type { ContractTerms, EntryPath, ValidationReport } from "@/lib/types";
 
@@ -291,6 +292,8 @@ export default function ResultPage() {
           조건 다시 수정
         </ButtonLink>
       </Card>
+
+      <ContractAssistant terms={terms} />
 
       <LegalDisclaimer />
     </ScreenShell>
