@@ -8,6 +8,7 @@
 ⚠️ 저장소는 아직 메모리다. DB 붙이면 store를 교체할 것.
 """
 
+import asyncio
 import hmac
 import logging
 
@@ -294,6 +295,68 @@ class ArchiveItem(BaseModel):
     total: int
     entry_path: EntryPath
     created_at: str
+    # 아래 셋은 모두싸인에서 그때그때 읽어온다. 저장하지 않는다.
+    participants: list[dict] = []
+    download_url: str | None = None
+    # 제공자 조회에 실패했는가. true 면 status·signed 는 마지막 저장값이다.
+    stale: bool = False
+
+
+# 목록을 열 때 제공자에 동시에 물어볼 문서 수.
+#
+# ⚠️ 무제한으로 열면 모두싸인 쿼터를 한 번에 태우고, 응답도 가장 느린
+#    요청에 묶인다. 보관함은 최근 문서부터 보므로 앞쪽만 채워도 충분하다.
+_DETAIL_CONCURRENCY = 5
+_DETAIL_LIMIT = 20
+
+
+async def _enrich(record: dict) -> ArchiveItem:
+    """
+    저장된 이력 한 건에 제공자 정보를 덧붙인다.
+
+    ⚠️ 실패해도 목록에서 빠지지 않는다. 제공자가 잠깐 죽었다고
+       "계약서가 사라진" 화면을 보여주면 안 된다.
+       저장된 값으로 보여주고 stale=true 로 알린다.
+    """
+    base = {
+        "document_id": record["document_id"],
+        "title": record["title"],
+        "status": record["status"],
+        "signed": record.get("signed", 0),
+        "total": record.get("total", 2),
+        "entry_path": record["entry_path"],
+        "created_at": record["created_at"].isoformat(),
+    }
+
+    try:
+        doc = await modusign.get_document(record["document_id"])
+    except Exception as error:
+        # ⚠️ ModusignError 만 잡지 않는다. 응답 구조가 바뀌어 KeyError 가 나도
+        #    보관함 전체가 500 이 되면 안 된다. 한 건의 실패는 한 건으로 끝난다.
+        log.info(
+            "보관함 항목 상세 조회 실패 — 저장값으로 표시: document=%s error_type=%s",
+            record["document_id"],
+            type(error).__name__,
+        )
+        return ArchiveItem(**base, stale=True)
+
+    status = modusign.to_document_status(doc.get("status") or base["status"])
+    return ArchiveItem(
+        **{
+            **base,
+            "status": status,
+            "signed": len(doc.get("signings") or []),
+            "total": len(doc.get("participants") or []) or base["total"],
+        },
+        participants=_participants(doc),
+        # 유효시간 10분. 목록을 연 시점부터 세므로 바로 누르면 받아진다.
+        # 만료되면 화면이 "다시 조회" 버튼을 보여준다.
+        download_url=(
+            doc.get("file", {}).get("downloadUrl")
+            if status == DocumentStatus.COMPLETED
+            else None
+        ),
+    )
 
 
 @router.get("/contracts", response_model=list[ArchiveItem])
@@ -301,16 +364,34 @@ async def list_my_documents(user: CurrentUser) -> list[ArchiveItem]:
     """
     내가 만든 문서 목록 (보관함).
 
-    ⚠️ 상태는 저장된 값을 그대로 준다. 목록을 열 때마다 문서 수만큼
-       모두싸인 API 를 부르면 쿼터가 금방 마르고 화면도 느려진다.
-       정확한 최신 상태와 다운로드 링크는 개별 문서를 열 때
-       /contracts/{id}/status 가 제공자에서 읽는다.
+    각 항목에 **누구와 맺었는지**와 **다운로드 링크**를 함께 담는다.
 
-    ⚠️ 다운로드 링크를 여기에 담지 않는다. 유효시간이 10분이라
-       목록에 실어도 대부분 만료된 링크가 된다.
+    ⚠️ 예전에는 저장된 상태만 돌려줬다. 그래서 보관함이 "체결 완료 · 날짜"만
+       보이는 목록이었고, 실제로 문서를 받으려면 두 번 더 눌러야 했다.
+       보관함이라면 여기서 바로 받을 수 있어야 한다.
+
+    ⚠️ 그래도 이름과 링크를 저장하지는 않는다. 목록을 열 때 제공자에서
+       읽는다. 우리 DB에 이름을 쌓으면 보관 기간과 삭제 책임이 생긴다.
+
+    ⚠️ 동시 조회 수를 제한한다. 문서가 많아도 제공자 쿼터를 한꺼번에
+       태우지 않는다. 앞쪽 문서만 상세를 채우고 나머지는 저장값을 쓴다.
     """
     records = await get_store().list_for_owner(user["user_id"])
-    return [
+    if not records:
+        return []
+
+    semaphore = asyncio.Semaphore(_DETAIL_CONCURRENCY)
+
+    async def enrich_bounded(record: dict) -> ArchiveItem:
+        async with semaphore:
+            return await _enrich(record)
+
+    detailed = await asyncio.gather(
+        *(enrich_bounded(r) for r in records[:_DETAIL_LIMIT])
+    )
+
+    # 상세를 채우지 않은 나머지는 저장값 그대로.
+    rest = [
         ArchiveItem(
             document_id=r["document_id"],
             title=r["title"],
@@ -319,9 +400,11 @@ async def list_my_documents(user: CurrentUser) -> list[ArchiveItem]:
             total=r.get("total", 2),
             entry_path=r["entry_path"],
             created_at=r["created_at"].isoformat(),
+            stale=True,
         )
-        for r in records
+        for r in records[_DETAIL_LIMIT:]
     ]
+    return [*detailed, *rest]
 
 
 @router.get("/contracts/{document_id}/status")

@@ -531,13 +531,19 @@ def test_남의_문서_상태는_볼_수_없다(memory_store):
     assert res.status_code == 404
 
 
-def test_보관함은_내_문서만_보여준다(memory_store):
+def test_보관함은_내_문서만_보여준다(memory_store, monkeypatch):
     """
     ⚠️ owner_id 조건이 빠지면 보관함이 전체 사용자의 계약서 목록이 된다.
     """
     import asyncio
 
+    from app.routers import sign as sign_router
     from app.schemas import DocumentStatus, EntryPath
+
+    async def fake_get_document(document_id):
+        raise sign_router.modusign.ModusignError("테스트에서는 제공자를 부르지 않는다")
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
 
     async def seed(doc_id: str, owner: str) -> None:
         await memory_store.remember(
@@ -676,6 +682,146 @@ def test_참여자_이름이_없어도_상태_조회가_깨지지_않는다(memo
 
     assert [p["name"] for p in body["participants"]] == ["1번 서명자", "2번 서명자"]
     assert body["download_url"] is None
+
+
+def test_보관함_목록에_상대방과_다운로드_링크가_함께_온다(memory_store, monkeypatch):
+    """
+    ⚠️ 예전 보관함은 "체결 완료 · 날짜"만 보여줬다. 무슨 계약인지도,
+       누구와 맺었는지도 알 수 없었고 문서를 받으려면 두 번 더 눌러야 했다.
+       보관함이라면 목록에서 바로 상대방과 문서가 보여야 한다.
+
+    ⚠️ 그래도 저장소에는 이름이 남지 않는다.
+    """
+    import asyncio
+
+    from app.routers import sign as sign_router
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "DOC-LIST",
+            status=DocumentStatus.ON_GOING,  # 저장된 값은 아직 진행 중
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=TEST_USER["user_id"],
+        )
+    )
+
+    async def fake_get_document(document_id):
+        return {
+            "id": document_id,
+            "status": "COMPLETED",  # 제공자 쪽은 이미 체결 완료
+            "participants": [
+                {"id": "p1", "name": "김가상", "signingOrder": 1},
+                {"id": "p2", "name": "홍길동", "signingOrder": 2},
+            ],
+            "signings": [{"participantId": "p1"}, {"participantId": "p2"}],
+            "file": {"downloadUrl": "https://example.com/signed.pdf"},
+        }
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
+
+    item = client.get("/contracts").json()[0]
+
+    assert [p["name"] for p in item["participants"]] == ["김가상", "홍길동"]
+    assert item["download_url"] == "https://example.com/signed.pdf"
+    # 저장값(ON_GOING)이 아니라 제공자의 최신 상태를 보여준다
+    assert item["status"] == "COMPLETED"
+    assert item["stale"] is False
+
+    record = memory_store.snapshot()["DOC-LIST"]
+    assert "김가상" not in str(record)
+    assert "홍길동" not in str(record)
+
+
+def test_한_문서의_조회_실패가_보관함_전체를_깨뜨리지_않는다(memory_store, monkeypatch):
+    """
+    ⚠️ 제공자가 잠깐 죽었다고 "계약서가 사라진" 화면을 보여주면 안 된다.
+       실패한 항목은 저장값으로 보여주고 stale 로 알린다.
+    """
+    import asyncio
+
+    from app.routers import sign as sign_router
+    from app.schemas import DocumentStatus, EntryPath
+
+    async def seed(doc_id: str) -> None:
+        await memory_store.remember(
+            doc_id,
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=TEST_USER["user_id"],
+        )
+
+    asyncio.run(seed("DOC-OK"))
+    asyncio.run(seed("DOC-BROKEN"))
+
+    async def fake_get_document(document_id):
+        if document_id == "DOC-BROKEN":
+            raise sign_router.modusign.ModusignError("제공자 응답 없음")
+        return {
+            "id": document_id,
+            "status": "COMPLETED",
+            "participants": [{"id": "p1", "name": "김가상", "signingOrder": 1}],
+            "signings": [{"participantId": "p1"}],
+            "file": {"downloadUrl": "https://example.com/signed.pdf"},
+        }
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
+
+    res = client.get("/contracts")
+
+    assert res.status_code == 200
+    items = {item["document_id"]: item for item in res.json()}
+    # 실패한 항목도 목록에서 사라지지 않는다
+    assert set(items) == {"DOC-OK", "DOC-BROKEN"}
+    assert items["DOC-BROKEN"]["stale"] is True
+    assert items["DOC-BROKEN"]["status"] == "ON_GOING"  # 마지막 저장값
+    assert items["DOC-BROKEN"]["participants"] == []
+    assert items["DOC-BROKEN"]["download_url"] is None
+    assert items["DOC-OK"]["stale"] is False
+
+
+def test_체결되지_않은_문서는_다운로드_링크를_주지_않는다(memory_store, monkeypatch):
+    """
+    ⚠️ 진행 중인 문서에 다운로드 버튼이 뜨면 "이미 끝났다"고 오해한다.
+    """
+    import asyncio
+
+    from app.routers import sign as sign_router
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "DOC-GOING",
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=TEST_USER["user_id"],
+        )
+    )
+
+    async def fake_get_document(document_id):
+        return {
+            "id": document_id,
+            "status": "ON_GOING",
+            "participants": [
+                {"id": "p1", "name": "김가상", "signingOrder": 1},
+                {"id": "p2", "name": "홍길동", "signingOrder": 2},
+            ],
+            "signings": [{"participantId": "p1"}],
+            # 제공자가 링크를 실어 보내도 미체결이면 노출하지 않는다
+            "file": {"downloadUrl": "https://example.com/draft.pdf"},
+        }
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
+
+    item = client.get("/contracts").json()[0]
+
+    assert item["download_url"] is None
+    assert item["signed"] == 1
+    assert item["total"] == 2
+    assert [p["signed"] for p in item["participants"]] == [True, False]
 
 
 # ============================================================

@@ -205,7 +205,7 @@ export default function HomePage() {
               "법정 기준 검증 — 근거와 계산식까지",
               "근로조건 확인 요청서 미리보기",
               "모두싸인 전자서명 요청",
-              "보관함 기능은 준비 중",
+              "보관함에서 체결 문서 내려받기",
             ].map((label, i) => (
               <li key={label} className="flex items-center gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-tint text-xs font-extrabold text-brand-deep">

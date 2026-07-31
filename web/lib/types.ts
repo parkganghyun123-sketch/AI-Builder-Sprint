@@ -439,7 +439,13 @@ export interface Me {
   role: UserRole;
 }
 
-/** 보관함 목록 항목. GET /contracts — 다운로드 링크는 없다(유효시간 10분). */
+/**
+ * 보관함 목록 항목. GET /contracts
+ *
+ * ⚠️ participants·download_url 은 저장된 값이 아니라 목록을 열 때 모두싸인에서
+ *    읽어온 값이다. download_url 은 유효시간 10분 — 화면을 열어둔 채 오래 두면
+ *    만료된다. 만료되면 상세 화면에서 다시 받게 안내한다.
+ */
 export interface ArchiveItem {
   document_id: string;
   title: string;
@@ -448,4 +454,8 @@ export interface ArchiveItem {
   total: number;
   entry_path: EntryPath;
   created_at: string;
+  participants: SignParticipant[];
+  download_url: string | null;
+  /** 제공자 조회 실패로 마지막 저장값을 보여주는 중 */
+  stale: boolean;
 }

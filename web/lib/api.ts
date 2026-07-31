@@ -488,7 +488,18 @@ export function setRole(role: UserRole): Promise<Me> {
   return sendJson("/auth/me/role", "PATCH", { role }, meResponseSchema);
 }
 
-/** 내 보관함 목록. 로그인이 필요하다. */
-export function listMyDocuments(): Promise<ArchiveItem[]> {
-  return getJson("/contracts", archiveListSchema);
+/**
+ * 내 보관함 목록. 로그인이 필요하다.
+ *
+ * ⚠️ 옛 백엔드는 participants·download_url 을 주지 않는다. 여기서 기본값을
+ *    채워 화면이 옵셔널 체이닝 없이 쓸 수 있게 한다 (getSignStatus 와 같은 처리).
+ */
+export async function listMyDocuments(): Promise<ArchiveItem[]> {
+  const items = await getJson("/contracts", archiveListSchema);
+  return items.map((item) => ({
+    ...item,
+    participants: item.participants ?? [],
+    download_url: item.download_url ?? null,
+    stale: item.stale ?? false,
+  }));
 }

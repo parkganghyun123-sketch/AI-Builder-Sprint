@@ -314,6 +314,10 @@ export const authErrorEnvelopeSchema = z.object({
 });
 
 // 보관함 목록 — backend/app/routers/sign.py ArchiveItem 대응.
+//
+// ⚠️ participants·download_url·stale 은 optional 로 둔다. signStatusResponseSchema
+//    와 같은 이유 — 프론트가 먼저 배포되는 구간에서 필수로 두면 목록 전체가 죽는다.
+//    기본값은 api.ts 의 listMyContracts 가 채운다.
 export const archiveItemSchema = z.object({
   document_id: z.string().min(1),
   title: z.string(),
@@ -322,6 +326,10 @@ export const archiveItemSchema = z.object({
   total: z.number().int().nonnegative(),
   entry_path: entryPathSchema,
   created_at: z.string(),
+  participants: z.array(signParticipantSchema).optional(),
+  download_url: z.string().url().nullable().optional(),
+  /** 제공자 조회에 실패해 마지막 저장값을 보여주는 중인가 */
+  stale: z.boolean().optional(),
 });
 
 export const archiveListSchema = z.array(archiveItemSchema);
