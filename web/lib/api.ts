@@ -421,7 +421,17 @@ export async function getSignStatus(documentId: string) {
   if (!response.ok) {
     throw responseError("/contracts/{id}/status", response.status);
   }
-  return parseJson(response, signStatusResponseSchema);
+
+  const parsed = await parseJson(response, signStatusResponseSchema);
+
+  // 프론트(Vercel)와 백엔드(Railway)는 따로 배포된다. 새 화면이 옛 백엔드와
+  // 잠깐 만나는 구간에서 title·participants 가 없을 수 있다.
+  // 화면이 매번 undefined 를 다루지 않도록 여기서 한 번만 채운다.
+  return {
+    ...parsed,
+    title: parsed.title ?? "근로계약서",
+    participants: parsed.participants ?? [],
+  };
 }
 
 // ============================================================

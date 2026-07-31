@@ -186,11 +186,31 @@ export const reviewItemsResponseSchema = z.object({
   must_confirm: z.array(z.string()),
 });
 
+/**
+ * 문서 참여자.
+ *
+ * ⚠️ 우리 DB에 저장된 값이 아니다. 문서를 열 때마다 모두싸인에서 읽어온다.
+ *    이름·이메일을 우리가 쌓으면 보관 기간과 삭제 책임이 생긴다.
+ */
+export const signParticipantSchema = z.object({
+  name: z.string(),
+  order: z.number().int(),
+  signed: z.boolean(),
+});
+
+// ⚠️ title·participants 는 optional 로 둔다.
+//
+//    프론트(Vercel)와 백엔드(Railway)는 따로 배포된다. 새 화면이 옛 백엔드와
+//    잠깐 만나는 구간이 반드시 생기는데, 그때 필수로 두면 스키마 파싱이 실패해
+//    "서버 응답 형식이 예상과 다릅니다"로 화면 전체가 죽는다.
+//    기본값은 api.ts 의 getSignStatus 가 채워 넣는다.
 export const signStatusResponseSchema = z.object({
   document_id: z.string().min(1),
+  title: z.string().optional(),
   status: documentStatusSchema,
   signed: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
+  participants: z.array(signParticipantSchema).optional(),
   download_url: z.string().url().nullable(),
 });
 

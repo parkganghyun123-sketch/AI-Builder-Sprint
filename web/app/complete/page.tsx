@@ -19,6 +19,9 @@ const TERMINAL_STATUSES = new Set([
 function CompleteContent() {
   const searchParams = useSearchParams();
   const [documentId, setDocumentId] = useState<string | null>(null);
+  // ⚠️ 보관함에서 들어왔는데 스텝이 "5. 서명"으로 표시되면
+  //    사용자는 서명 화면으로 되돌아온 줄 안다. 실제로 그런 신고가 있었다.
+  const [fromArchive, setFromArchive] = useState(false);
   const [status, setStatus] = useState<SignStatusResponse | null>(null);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -30,6 +33,8 @@ function CompleteContent() {
     // 이 탭의 세션 값을 쓴다(기존 동작 유지).
     const idParam = searchParams.get("id");
     const session = readSession();
+    // 보관함에서 ?id= 로 들어왔는지. 스텝 표시가 달라진다.
+    setFromArchive(Boolean(idParam));
     setDocumentId(idParam || session.sign?.documentId || null);
     setReady(true);
   }, [searchParams]);
@@ -80,7 +85,7 @@ function CompleteContent() {
 
   if (!ready) {
     return (
-      <ScreenShell step={5} title="서명 상태 준비 중">
+      <ScreenShell step={fromArchive ? 6 : 5} title="서명 상태 준비 중">
         <Card>
           <p aria-live="polite" className="text-sm text-ink-muted">
             문서 식별자를 확인하고 있어요.
@@ -94,12 +99,16 @@ function CompleteContent() {
   if (!documentId) {
     return (
       <ScreenShell
-        step={5}
+        step={fromArchive ? 6 : 5}
         title="확인할 서명 요청이 없어요"
-        description="현재 브라우저 탭에서 서명 요청을 먼저 보내 주세요."
+        description={
+          fromArchive
+            ? "이 문서를 찾지 못했어요. 보관함에서 다시 선택해 주세요."
+            : "현재 브라우저 탭에서 서명 요청을 먼저 보내 주세요."
+        }
       >
-        <ButtonLink href="/sign" className="w-full">
-          서명 요청으로 돌아가기
+        <ButtonLink href={fromArchive ? "/archive" : "/sign"} className="w-full">
+          {fromArchive ? "보관함으로 돌아가기" : "서명 요청으로 돌아가기"}
         </ButtonLink>
         <LegalDisclaimer />
       </ScreenShell>
@@ -113,7 +122,7 @@ function CompleteContent() {
 
   return (
     <ScreenShell
-      step={5}
+      step={fromArchive ? 6 : 5}
       title={
         isCompleted
           ? "서명 상태가 체결 완료로 확인됐어요"
@@ -141,6 +150,46 @@ function CompleteContent() {
       {status ? (
         <>
           <DocumentStatusBadge status={status.status} />
+
+          {/* 누가 누구와 맺은 계약인가.
+              ⚠️ 우리 DB에 저장된 값이 아니다. 문서를 열 때마다 모두싸인에서
+                 읽어온다. 이름을 우리가 쌓으면 보관 기간과 삭제 책임이 생긴다. */}
+          {status.participants.length > 0 && (
+            <Card>
+              <h2 className="text-sm font-extrabold text-ink">
+                <span aria-hidden="true">✍️ </span>
+                {status.title}
+              </h2>
+              <ul className="mt-3 flex flex-col gap-2">
+                {status.participants.map((party) => (
+                  <li
+                    key={`${party.order}-${party.name}`}
+                    className="flex items-center justify-between gap-3 rounded-field border border-brand-line bg-white px-4 py-3"
+                  >
+                    <span className="text-sm font-bold text-ink">
+                      <span className="mr-2 text-xs font-semibold text-ink-muted">
+                        {party.order}번째
+                      </span>
+                      {party.name}
+                    </span>
+                    <span
+                      className={`shrink-0 rounded-full px-2 py-1 text-xs font-bold ${
+                        party.signed
+                          ? "bg-emerald-100 text-emerald-900"
+                          : "bg-slate-200 text-slate-700"
+                      }`}
+                    >
+                      {party.signed ? "서명 완료" : "서명 대기"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs leading-relaxed text-ink-muted">
+                이 정보는 저장하지 않고 모두싸인에서 그때그때 조회합니다.
+              </p>
+            </Card>
+          )}
+
           <Card>
             <h2 className="text-sm font-extrabold text-ink">실제 조회 결과</h2>
             <dl className="mt-3 flex flex-col gap-2 text-sm">
@@ -202,6 +251,24 @@ function CompleteContent() {
             체결 문서 다운로드
           </a>
         )}
+
+        {/* ⚠️ 체결은 됐는데 링크가 없으면 사용자는 버튼이 왜 없는지 모른다.
+               다운로드 주소는 유효시간이 10분이라 만료되면 null 로 온다.
+               버튼을 감추기만 하면 "다운로드가 안 되는 서비스"로 보인다. */}
+        {isCompleted && !status?.download_url && (
+          <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
+            다운로드 주소는 유효시간이 짧아 지금은 만료된 상태입니다.
+            <Button
+              variant="secondary"
+              className="mt-3 w-full"
+              onClick={() => setRetry((value) => value + 1)}
+              disabled={loading}
+            >
+              다시 조회해서 링크 받기
+            </Button>
+          </p>
+        )}
+
         <ButtonLink href="/archive" variant="secondary" className="w-full">
           보관함으로
         </ButtonLink>

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { getMe } from "@/lib/api";
-import { clearToken } from "@/lib/auth";
+import { clearToken, readToken } from "@/lib/auth";
+import { startKakaoLogin } from "@/lib/kakaoLogin";
 import type { Me } from "@/lib/types";
 
 /**
@@ -26,9 +27,20 @@ export type Step = 1 | 2 | 3 | 4 | 5 | 6;
 export function BrandHeader() {
   const [me, setMe] = useState<Me | null>(null);
   const [checked, setChecked] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
+
+    // 토큰이 없으면 물어볼 것도 없다. 로그인하지 않은 사용자가 화면을
+    // 넘길 때마다 401을 받아오는 요청을 만들지 않는다.
+    if (!readToken()) {
+      setMe(null);
+      setChecked(true);
+      return;
+    }
+
     getMe()
       .then((user) => {
         if (!cancelled) setMe(user);
@@ -43,6 +55,20 @@ export function BrandHeader() {
       cancelled = true;
     };
   }, []);
+
+  async function login() {
+    setLoggingIn(true);
+    setLoginError(null);
+    try {
+      // 인자를 주지 않으면 지금 보고 있는 화면으로 돌아온다.
+      await startKakaoLogin();
+    } catch (caught) {
+      setLoggingIn(false);
+      setLoginError(
+        caught instanceof Error ? caught.message : "로그인을 시작하지 못했어요.",
+      );
+    }
+  }
 
   function logout() {
     clearToken();
@@ -84,12 +110,26 @@ export function BrandHeader() {
               </button>
             </>
           ) : checked ? (
-            <Link
-              href="/archive"
-              className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
-            >
-              로그인
-            </Link>
+            <>
+              {/* ⚠️ 예전에는 이 버튼이 /archive 로 가는 Link 였다.
+                     그래서 "로그인"을 누르면 보관함으로 끌려가서 거기서
+                     다시 "카카오로 계속하기"를 눌러야 했다. 두 번 눌러야 하고,
+                     가려던 곳도 아닌 화면으로 이동한다.
+                     로그인 버튼은 로그인을 시작해야 한다. */}
+              <button
+                type="button"
+                onClick={login}
+                disabled={loggingIn}
+                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-60"
+              >
+                {loggingIn ? "이동 중…" : "로그인"}
+              </button>
+              {loginError && (
+                <span role="alert" className="px-2 text-xs text-red-900">
+                  {loginError}
+                </span>
+              )}
+            </>
           ) : null}
         </div>
       </div>

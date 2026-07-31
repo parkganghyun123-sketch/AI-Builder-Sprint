@@ -341,11 +341,26 @@ export interface ViolationBlocked {
   hint: string;
 }
 
+/**
+ * 문서 참여자 한 명.
+ *
+ * ⚠️ 우리 DB에 저장된 값이 아니다. 문서를 열 때마다 모두싸인에서 읽어온다.
+ *    이름을 우리가 쌓으면 보관 기간과 삭제 책임이 생긴다.
+ */
+export interface SignParticipant {
+  name: string;
+  /** 서명 순서. 문서를 만든 쪽이 1번이다 */
+  order: number;
+  signed: boolean;
+}
+
 export interface SignStatusResponse {
   document_id: string;
+  title: string;
   status: DocumentStatus;
   signed: number;
   total: number;
+  participants: SignParticipant[];
   download_url: string | null;
 }
 

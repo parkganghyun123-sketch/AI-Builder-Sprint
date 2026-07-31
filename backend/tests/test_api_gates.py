@@ -588,3 +588,91 @@ def test_빈_파일은_400으로_거부한다():
         files={"file": ("empty.png", b"", "image/png")},
     )
     assert res.status_code == 400
+
+
+# ============================================================
+# 7. 보관함 상세 — 누가 누구와 맺었는가
+# ============================================================
+
+
+def test_참여자_정보를_저장하지_않고_제공자에서_읽어온다(memory_store, monkeypatch):
+    """
+    ⚠️ 보관함에 이름이 없으면 "무슨 계약인지 알 수 없는 목록"이 된다.
+       그렇다고 우리 DB에 이름·이메일을 쌓으면 보관 기간과 삭제 책임이 생긴다.
+
+    그래서 저장하지 않고 문서를 열 때마다 모두싸인에서 읽는다.
+    다운로드 링크를 저장하지 않는 것과 같은 이유다.
+    """
+    import asyncio
+
+    from app.routers import sign as sign_router
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "DOC-DETAIL",
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=TEST_USER["user_id"],
+        )
+    )
+
+    async def fake_get_document(document_id):
+        return {
+            "id": document_id,
+            "title": "근로계약서",
+            "status": "COMPLETED",
+            "participants": [
+                {"id": "p2", "name": "홍길동", "signingOrder": 2},
+                {"id": "p1", "name": "김가상", "signingOrder": 1},
+            ],
+            "signings": [{"participantId": "p1"}],
+            "file": {"downloadUrl": "https://example.com/signed.pdf"},
+        }
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
+
+    body = client.get("/contracts/DOC-DETAIL/status").json()
+
+    # 서명 순서대로 정렬되고, 서명 여부가 구분된다
+    assert [p["name"] for p in body["participants"]] == ["김가상", "홍길동"]
+    assert body["participants"][0]["signed"] is True
+    assert body["participants"][1]["signed"] is False
+    assert body["download_url"] == "https://example.com/signed.pdf"
+
+    # ⚠️ 저장소에는 여전히 이름이 없어야 한다
+    record = memory_store.snapshot()["DOC-DETAIL"]
+    assert "김가상" not in str(record)
+    assert "홍길동" not in str(record)
+
+
+def test_참여자_이름이_없어도_상태_조회가_깨지지_않는다(memory_store, monkeypatch):
+    """
+    제공자 응답 구조가 바뀌어도 상태 조회 전체가 죽으면 안 된다.
+    이름을 못 읽으면 순서로 대신한다 — 빈 목록보다 낫다.
+    """
+    import asyncio
+
+    from app.routers import sign as sign_router
+    from app.schemas import DocumentStatus, EntryPath
+
+    asyncio.run(
+        memory_store.remember(
+            "DOC-ODD",
+            status=DocumentStatus.ON_GOING,
+            entry_path=EntryPath.PHOTO,
+            title="근로계약서",
+            owner_id=TEST_USER["user_id"],
+        )
+    )
+
+    async def fake_get_document(document_id):
+        return {"id": document_id, "status": "ON_GOING", "participants": [{}, {}]}
+
+    monkeypatch.setattr(sign_router.modusign, "get_document", fake_get_document)
+
+    body = client.get("/contracts/DOC-ODD/status").json()
+
+    assert [p["name"] for p in body["participants"]] == ["1번 서명자", "2번 서명자"]
+    assert body["download_url"] is None

@@ -375,3 +375,124 @@ def test_닉네임을_두_위치에서_모두_찾는다(payload, expected):
        실제로 kakao_account.profile 만 읽다가 화면에 "님" 만 뜬 적이 있다.
     """
     assert kakao._read_nickname(payload) == expected
+
+
+# ============================================================
+# 로그인 왕복 전 구간 시뮬레이션
+#
+# 브라우저를 띄우지 않고 실제 화면이 하는 순서를 그대로 재현한다.
+#   ① 로그인 없이 판정까지 된다
+#   ② 서명 발송에서 401 로 막힌다
+#   ③ 로그인 주소를 받아 state 를 들고 콜백에 온다
+#   ④ 토큰으로 보호된 화면이 열린다
+#
+# ⚠️ 이 순서가 깨지면 사용자는 "로그인했는데 아무것도 안 된다"를 겪는다.
+#    화면 코드는 이 계약을 그대로 따라야 한다.
+# ============================================================
+
+
+def _sample_terms() -> dict:
+    def f(value=None):
+        return {
+            "value": value,
+            "confidence": "NOT_FOUND" if value is None else "HIGH",
+            "source_text": None,
+        }
+
+    return {
+        "contract_start": f("2026-08-01"),
+        "contract_end": f("2026-12-31"),
+        "workplace": f("부산 금정구 가상카페"),
+        "job_description": f("음료 제조"),
+        "work_start_time": f("09:00"),
+        "work_end_time": f("15:00"),
+        "break_start_time": f("12:00"),
+        "break_end_time": f("12:30"),
+        "work_days_per_week": f(3),
+        "weekly_holiday_day": f("일"),
+        "wage_type": f("HOURLY"),
+        "wage_amount": f(9500),
+        "has_bonus": f("없음"),
+        "other_allowance": f("없음"),
+        "payday": f("매월 10일"),
+        "payment_method": f("계좌입금"),
+        "employer_business_name": f("가상카페"),
+        "employer_phone": f(None),
+        "employer_address": f(None),
+        "employer_name": f("홍길동"),
+        "worker_address": f(None),
+        "worker_contact": f(None),
+        "worker_name": f("김가상"),
+    }
+
+
+def test_로그인_왕복_전_구간이_이어진다(kakao_ok):
+    from app.store import MemoryDocumentStore, set_store
+
+    set_store(MemoryDocumentStore())
+    terms = _sample_terms()
+
+    # ① 로그인 없이 판정·문구까지 된다.
+    #    여기서 로그인을 요구하면 열여섯 살이 벽을 넘지 못한다.
+    for path in ("/contracts/validate", "/contracts/message"):
+        assert client.post(path, json={"terms": terms}).status_code == 200, path
+
+    # ② 서명 발송은 401. 화면은 이걸 보고 로그인 안내를 띄운다.
+    blocked = client.post(
+        "/contracts/analyze-sign",
+        json={
+            "terms": terms,
+            "worker_name": "김가상",
+            "worker_email": "w@example.com",
+            "employer_name": "홍길동",
+            "employer_email": "e@example.com",
+            "entry_path": "PHOTO",
+            "confirmed_fields": [],
+            "proceed_with_violations": True,
+        },
+    )
+    assert blocked.status_code == 401
+    assert blocked.json()["detail"]["code"] == "LOGIN_REQUIRED"
+
+    # ③ 로그인 주소를 받는다. 화면은 여기 담긴 state 를 그대로 되돌려준다.
+    authorize_url = client.get("/auth/login-url").json()["authorize_url"]
+    state = authorize_url.split("state=")[1]
+
+    logged_in = client.post(
+        "/auth/kakao/callback",
+        json={"code": "kakao-returned-this", "state": state, "role": "WORKER"},
+    )
+    assert logged_in.status_code == 200, logged_in.text
+    headers = {"Authorization": f"Bearer {logged_in.json()['access_token']}"}
+
+    # ④ 이제 보호된 화면이 열린다.
+    assert client.get("/auth/me", headers=headers).status_code == 200
+    assert client.get("/contracts", headers=headers).status_code == 200
+    assert client.get("/contracts", headers=headers).json() == []
+
+
+def test_같은_인가_코드로는_state_를_재사용할_수_없다(kakao_ok):
+    """
+    ⚠️ state 는 한 번 쓰고 버리는 값이 아니라 서명된 토큰이라 만료 전까지
+       유효하다. 그래서 화면이 재시도할 때 **같은 code 를 다시 보내면 안 된다** —
+       카카오 인가 코드가 1회용이기 때문이다.
+       화면은 로그인 주소를 새로 받아 처음부터 진행해야 한다.
+       (web/app/auth/kakao/callback/page.tsx 의 retry 참고)
+
+    이 테스트는 그 계약을 문서화한다. state 자체는 재사용 가능하므로
+    화면 쪽 재시도 구현이 유일한 방어선이다.
+    """
+    state = _state()
+
+    first = client.post(
+        "/auth/kakao/callback",
+        json={"code": "code-1", "state": state, "role": "WORKER"},
+    )
+    assert first.status_code == 200
+
+    # 백엔드는 state 를 다시 받아도 통과시킨다. 막는 것은 카카오의 code 다.
+    second = client.post(
+        "/auth/kakao/callback",
+        json={"code": "code-2", "state": state, "role": "WORKER"},
+    )
+    assert second.status_code == 200

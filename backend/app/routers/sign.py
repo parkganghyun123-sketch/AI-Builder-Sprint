@@ -199,9 +199,18 @@ async def reconcile(document_id: str) -> dict:
 
     return {
         "document_id": document_id,
+        "title": doc.get("title") or "근로계약서",
         "status": status,
         "signed": signed,
         "total": total,
+        # 누가 누구와 맺은 계약인가.
+        #
+        # ⚠️ 저장하지 않고 **열 때마다 제공자에서 읽는다.**
+        #    보관함에 이름이 없으면 "무슨 계약인지 알 수 없는 목록"이 되는데,
+        #    그렇다고 우리 DB에 이름·이메일을 쌓으면 보관 기간과 삭제 책임이
+        #    생긴다. 원본은 모두싸인이 갖고 있으므로 우리는 가리키기만 한다.
+        #    (다운로드 링크를 저장하지 않는 것과 같은 이유다)
+        "participants": _participants(doc),
         # 다운로드 링크는 유효시간 10분이므로 저장하지 말고 그때그때 조회할 것
         "download_url": (
             doc.get("file", {}).get("downloadUrl")
@@ -209,6 +218,39 @@ async def reconcile(document_id: str) -> dict:
             else None
         ),
     }
+
+
+def _participants(doc: dict) -> list[dict]:
+    """
+    문서 참여자와 서명 여부.
+
+    ⚠️ 제공자 응답 구조가 바뀌어도 상태 조회 전체가 깨지지 않도록
+       모든 필드를 방어적으로 읽는다. 이름을 못 읽으면 순서로 대신한다 —
+       빈 목록을 주는 것보다 "1번 서명자"라도 보여주는 편이 낫다.
+    """
+    signed_ids = {
+        str(s.get("participantId"))
+        for s in doc.get("signings") or []
+        if isinstance(s, dict) and s.get("participantId") is not None
+    }
+
+    result: list[dict] = []
+    for index, participant in enumerate(doc.get("participants") or [], start=1):
+        if not isinstance(participant, dict):
+            continue
+        participant_id = str(participant.get("id", ""))
+        result.append(
+            {
+                "name": (participant.get("name") or "").strip()
+                or f"{index}번 서명자",
+                "order": participant.get("signingOrder", index),
+                # signings 에 없으면 아직 서명 전
+                "signed": participant_id in signed_ids,
+            }
+        )
+
+    result.sort(key=lambda p: p["order"])
+    return result
 
 
 def _assert_owner(record: dict | None, user: dict) -> None:
