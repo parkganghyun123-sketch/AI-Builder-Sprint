@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 import { ApiError, askGeneralQuestion } from "@/lib/api";
 import type { GeneralQuestionResponse } from "@/lib/types";
 import { Button, ButtonLink } from "@/components/ui";
@@ -11,6 +11,16 @@ export function GeneralQuestionAssistant() {
   const [answer, setAnswer] = useState<GeneralQuestionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const answerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!answer) return;
+
+    answerRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [answer]);
 
   function close() {
     setOpen(false);
@@ -77,7 +87,11 @@ export function GeneralQuestionAssistant() {
             {error && <p className="mt-3 text-sm text-red-900" role="alert">{error}</p>}
 
             {answer && (
-              <div className="mt-4 border-t border-brand-line pt-4" aria-live="polite">
+              <div
+                ref={answerRef}
+                className="mt-4 scroll-mt-2 border-t border-brand-line pt-4"
+                aria-live="polite"
+              >
               <p className="font-semibold leading-relaxed text-ink">{answer.answer}</p>
               {answer.evidence.map((item, index) => (
                 <div key={`${item.label}-${index}`} className="mt-3 rounded-field bg-brand-tint/50 p-3 text-sm">
