@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
+import { LoginGate } from "@/components/LoginGate";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import {
   analyzeAndSign,
+  getMe,
   getValidationState,
+  InvalidContractValuesError,
+  LoginRequiredError,
   SignBlockedError,
   ViolationBlockedError,
 } from "@/lib/api";
@@ -58,6 +62,33 @@ export default function SignPage() {
   const [signBlock, setSignBlock] = useState<SignBlockedError["detail"] | null>(
     null,
   );
+  // 서명 발송에서 처음 로그인을 요구한다. 그 전 단계는 로그인 없이 완주된다.
+  const [authState, setAuthState] = useState<
+    "checking" | "authed" | "guest" | "session-invalid"
+  >("checking");
+
+  useEffect(() => {
+    let cancelled = false;
+    getMe()
+      .then(() => {
+        if (!cancelled) setAuthState("authed");
+      })
+      .catch((caught) => {
+        if (cancelled) return;
+        if (caught instanceof LoginRequiredError) {
+          setAuthState(
+            caught.reason === "SESSION_INVALID" ? "session-invalid" : "guest",
+          );
+        } else {
+          // 로그인 여부를 확인하지 못했다고 사용자를 막지 않는다.
+          // 실제로 로그인이 안 됐다면 서명 요청 자체가 401로 다시 막는다.
+          setAuthState("authed");
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const session = readSession();
@@ -170,6 +201,15 @@ export default function SignPage() {
       } else if (caught instanceof SignBlockedError) {
         // 값 확인 누락·이름 불일치 — 돌아가서 고쳐야 한다(진행 강행 불가).
         setSignBlock(caught.detail);
+      } else if (caught instanceof InvalidContractValuesError) {
+        // 서버 재검증에서 성립하지 않는 값을 발견 — 사전 점검과 같은
+        // 형태(issues)이므로 같은 UI(blockingIssues)로 이유·해결법을 보여준다.
+        setBlockingIssues(caught.detail.issues);
+      } else if (caught instanceof LoginRequiredError) {
+        // 로그인 확인 뒤 발송 사이에 세션이 만료된 경우. 폼 대신 안내로 되돌린다.
+        setAuthState(
+          caught.reason === "SESSION_INVALID" ? "session-invalid" : "guest",
+        );
       } else {
         setError(
           caught instanceof Error
@@ -182,7 +222,7 @@ export default function SignPage() {
     }
   }
 
-  if (!ready) {
+  if (!ready || authState === "checking") {
     return (
       <ScreenShell step={5} title="서명 단계 준비 중">
         <Card>
@@ -190,6 +230,33 @@ export default function SignPage() {
             현재 세션의 조건을 불러오고 있어요.
           </p>
         </Card>
+        <LegalDisclaimer />
+      </ScreenShell>
+    );
+  }
+
+  // 서명 발송에서 처음 로그인을 요구한다. 폼 대신 안내를 먼저 보여준다.
+  if (authState === "guest" || authState === "session-invalid") {
+    return (
+      <ScreenShell step={5} title="전자서명 발송">
+        <LoginGate
+          title={
+            authState === "session-invalid"
+              ? "세션이 만료됐어요"
+              : "서명 요청을 보내려면 로그인이 필요해요"
+          }
+          description={
+            authState === "session-invalid" ? (
+              "다시 로그인해 주세요. 지금까지 입력한 내용은 그대로 남아 있어요."
+            ) : (
+              <>
+                여기까지는 로그인 없이 확인하셨어요. 서명 요청은 상대방에게
+                실제로 메일이 가고, 나중에 이 계약서를 다시 찾을 수 있어야
+                해서 로그인이 필요합니다.
+              </>
+            )
+          }
+        />
         <LegalDisclaimer />
       </ScreenShell>
     );
@@ -249,6 +316,36 @@ export default function SignPage() {
             <span aria-hidden="true">↩️ </span>
             {signBlock.message}
           </p>
+          {signBlock.conflicts && signBlock.conflicts.length > 0 && (
+            <>
+              <ul className="mt-3 flex flex-col gap-3">
+                {signBlock.conflicts.map((conflict) => (
+                  <li
+                    key={conflict.field}
+                    className="rounded-field border border-amber-300 bg-white p-3"
+                  >
+                    <p className="font-bold">{conflict.label}</p>
+                    <dl className="mt-1.5 flex flex-col gap-1 text-sm">
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-amber-800">계약서에서 읽음</dt>
+                        <dd className="font-bold">{conflict.on_contract}</dd>
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <dt className="text-amber-800">입력하신 이름</dt>
+                        <dd className="font-bold">{conflict.typed}</dd>
+                      </div>
+                    </dl>
+                  </li>
+                ))}
+              </ul>
+              {/* ⚠️ 어느 쪽이 맞는지 코드가 고르지 않는다(contracts.py:_name_conflicts).
+                  두 값을 나란히 보여주고 선택은 사용자에게 되돌린다. */}
+              <p className="mt-3 leading-relaxed">
+                어느 쪽이 맞나요? 맞는 이름으로 위 입력칸을 고쳐 다시 보내
+                주세요.
+              </p>
+            </>
+          )}
           {signBlock.fields && signBlock.fields.length > 0 && (
             <ul className="mt-2 list-inside list-disc">
               {signBlock.fields.map((field, index) => (

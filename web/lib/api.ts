@@ -1,8 +1,15 @@
 import type { z } from "zod";
+import { readToken } from "./auth";
 import {
   analyzeSignResponseSchema,
+  archiveListSchema,
+  authErrorEnvelopeSchema,
+  callbackResponseSchema,
   contractTermsSchema,
   entitlementsResponseSchema,
+  invalidContractValuesEnvelopeSchema,
+  loginUrlResponseSchema,
+  meResponseSchema,
   ownerMessageSchema,
   reviewItemsResponseSchema,
   signBlockedEnvelopeSchema,
@@ -13,8 +20,12 @@ import {
 } from "./schemas";
 import type {
   AnalyzeSignRequest,
+  ArchiveItem,
+  InvalidContractValues,
+  Me,
   PreviewRequest,
   SignBlocked,
+  UserRole,
   ValidateRequest,
   ViolationBlocked,
 } from "./types";
@@ -28,6 +39,7 @@ type ApiErrorCode =
   | "CONFLICT"
   | "FILE_TOO_LARGE"
   | "INVALID_RESPONSE"
+  | "LOGIN_REQUIRED"
   | "NETWORK"
   | "SERVER"
   | "UNAVAILABLE"
@@ -42,6 +54,28 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = "ApiError";
+  }
+}
+
+/**
+ * 서명 발송·보관함 등 로그인이 필요한 요청이 401을 반환했을 때.
+ *
+ * ⚠️ reason 으로 "토큰 없음"과 "만료·위조"를 구분한다. 화면이 둘 다
+ *    "요청 실패"로 뭉뚱그리면 사용자는 무엇을 해야 할지 모른다.
+ *      LOGIN_REQUIRED  → "로그인하고 계속하기" 버튼
+ *      SESSION_INVALID → "세션이 만료됐어요. 다시 로그인해 주세요"
+ */
+export class LoginRequiredError extends ApiError {
+  constructor(public readonly reason: "LOGIN_REQUIRED" | "SESSION_INVALID") {
+    super(
+      reason === "SESSION_INVALID"
+        ? "세션이 만료됐어요. 다시 로그인해 주세요."
+        : "이 단계는 로그인이 필요합니다.",
+      401,
+      "LOGIN_REQUIRED",
+      false,
+    );
+    this.name = "LoginRequiredError";
   }
 }
 
@@ -66,6 +100,18 @@ export class SignBlockedError extends ApiError {
   constructor(public readonly detail: SignBlocked) {
     super(detail.message, 409, "CONFLICT", false);
     this.name = "SignBlockedError";
+  }
+}
+
+/**
+ * analyze-sign이 성립하지 않는 값(임금 0원 등)으로 문서 생성 자체를
+ * 거부했을 때(HTTP 422). 클라이언트 사전 점검(getValidationState)을
+ * 우회해 직접 호출한 경우에도 서버가 같은 형태(issues)로 다시 막는다.
+ */
+export class InvalidContractValuesError extends ApiError {
+  constructor(public readonly detail: InvalidContractValues) {
+    super(detail.message, 422, "BAD_INPUT", false);
+    this.name = "InvalidContractValuesError";
   }
 }
 
@@ -153,12 +199,22 @@ async function readErrorDetail(response: Response): Promise<string | undefined> 
   return undefined;
 }
 
+/** 토큰이 있을 때만 Authorization 헤더를 붙인다. 로그인 없이도 되는 요청에 섞여도 무해하다. */
+function authHeaders(): HeadersInit {
+  const token = readToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request(
   path: string,
   init?: RequestInit,
 ): Promise<Response> {
+  let response: Response;
   try {
-    return await fetch(`${BASE}${path}`, init);
+    response = await fetch(`${BASE}${path}`, {
+      ...init,
+      headers: { ...authHeaders(), ...init?.headers },
+    });
   } catch {
     throw new ApiError(
       "백엔드에 연결할 수 없습니다. 네트워크와 API 주소를 확인해 주세요.",
@@ -167,6 +223,17 @@ async function request(
       true,
     );
   }
+
+  if (response.status === 401) {
+    const json: unknown = await response.json().catch(() => null);
+    const parsed = authErrorEnvelopeSchema.safeParse(json);
+    const code = parsed.success ? parsed.data.detail.code : undefined;
+    throw new LoginRequiredError(
+      code === "SESSION_INVALID" ? "SESSION_INVALID" : "LOGIN_REQUIRED",
+    );
+  }
+
+  return response;
 }
 
 async function parseJson<T>(
@@ -197,13 +264,14 @@ async function parseJson<T>(
   return parsed.data;
 }
 
-async function postJson<T>(
+async function sendJson<T>(
   path: string,
+  method: string,
   body: unknown,
   schema: z.ZodType<T>,
 ): Promise<T> {
   const response = await request(path, {
-    method: "POST",
+    method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
@@ -222,6 +290,27 @@ async function postJson<T>(
     }
     throw responseError(path, response.status);
   }
+  if (response.status === 422) {
+    const json: unknown = await response.json().catch(() => null);
+    const invalid = invalidContractValuesEnvelopeSchema.safeParse(json);
+    if (invalid.success) {
+      throw new InvalidContractValuesError(invalid.data.detail);
+    }
+    throw responseError(path, response.status);
+  }
+  if (!response.ok) {
+    const detail = await readErrorDetail(response);
+    throw responseError(path, response.status, detail);
+  }
+  return parseJson(response, schema);
+}
+
+function postJson<T>(path: string, body: unknown, schema: z.ZodType<T>) {
+  return sendJson(path, "POST", body, schema);
+}
+
+async function getJson<T>(path: string, schema: z.ZodType<T>): Promise<T> {
+  const response = await request(path);
   if (!response.ok) {
     const detail = await readErrorDetail(response);
     throw responseError(path, response.status, detail);
@@ -324,7 +413,7 @@ export async function previewPdf(body: PreviewRequest): Promise<Blob> {
   return response.blob();
 }
 
-/** 모두싸인의 현재 서명 상태를 백엔드를 통해 조회한다. */
+/** 모두싸인의 현재 서명 상태를 백엔드를 통해 조회한다. 로그인이 필요하다. */
 export async function getSignStatus(documentId: string) {
   const response = await request(
     `/contracts/${encodeURIComponent(documentId)}/status`,
@@ -333,4 +422,42 @@ export async function getSignStatus(documentId: string) {
     throw responseError("/contracts/{id}/status", response.status);
   }
   return parseJson(response, signStatusResponseSchema);
+}
+
+// ============================================================
+// 5. 로그인 — backend/app/routers/auth.py 대응
+// ============================================================
+
+/** 카카오 로그인 주소. 프론트엔드에는 카카오 키를 두지 않는다. */
+export function getLoginUrl() {
+  return getJson("/auth/login-url", loginUrlResponseSchema);
+}
+
+/** 인가 코드 → 우리 세션 토큰. state 는 login-url 이 발급한 값을 그대로 넘긴다. */
+export function completeKakaoLogin(body: {
+  code: string;
+  state: string;
+  role: UserRole;
+}) {
+  return sendJson(
+    "/auth/kakao/callback",
+    "POST",
+    body,
+    callbackResponseSchema,
+  );
+}
+
+/** 현재 로그인 사용자. 토큰이 없거나 만료됐으면 LoginRequiredError. */
+export function getMe(): Promise<Me> {
+  return getJson("/auth/me", meResponseSchema);
+}
+
+/** 역할 변경. 접근 통제와 무관하다 — 화면 흐름만 바꾼다. */
+export function setRole(role: UserRole): Promise<Me> {
+  return sendJson("/auth/me/role", "PATCH", { role }, meResponseSchema);
+}
+
+/** 내 보관함 목록. 로그인이 필요하다. */
+export function listMyDocuments(): Promise<ArchiveItem[]> {
+  return getJson("/contracts", archiveListSchema);
 }

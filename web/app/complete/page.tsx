@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
@@ -15,7 +16,8 @@ const TERMINAL_STATUSES = new Set([
   "PROCESSING_FAILED",
 ]);
 
-export default function CompletePage() {
+function CompleteContent() {
+  const searchParams = useSearchParams();
   const [documentId, setDocumentId] = useState<string | null>(null);
   const [status, setStatus] = useState<SignStatusResponse | null>(null);
   const [ready, setReady] = useState(false);
@@ -24,10 +26,13 @@ export default function CompletePage() {
   const [retry, setRetry] = useState(0);
 
   useEffect(() => {
+    // 보관함에서 들어오면 ?id= 로 문서를 지정한다. 없으면 방금 서명 발송한
+    // 이 탭의 세션 값을 쓴다(기존 동작 유지).
+    const idParam = searchParams.get("id");
     const session = readSession();
-    setDocumentId(session.sign?.documentId ?? null);
+    setDocumentId(idParam || session.sign?.documentId || null);
     setReady(true);
-  }, []);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!documentId) return;
@@ -198,7 +203,7 @@ export default function CompletePage() {
           </a>
         )}
         <ButtonLink href="/archive" variant="secondary" className="w-full">
-          보관함 준비 중 안내
+          보관함으로
         </ButtonLink>
         <ButtonLink href="/" variant="ghost" className="w-full">
           처음으로
@@ -207,5 +212,13 @@ export default function CompletePage() {
 
       <LegalDisclaimer />
     </ScreenShell>
+  );
+}
+
+export default function CompletePage() {
+  return (
+    <Suspense>
+      <CompleteContent />
+    </Suspense>
   );
 }
