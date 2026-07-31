@@ -130,6 +130,18 @@ export const signBlockedEnvelopeSchema = z.object({
     .passthrough(),
 });
 
+// analyze-sign 이 성립하지 않는 값(임금 0원 등)으로 문서 생성 자체를 거부할 때(422).
+// backend/app/routers/contracts.py:_reject_if_blocking — validation-state 의
+// issues 와 같은 형태(reason·fix)라 화면도 blockingIssues 와 같은 UI로 보여준다.
+export const invalidContractValuesEnvelopeSchema = z.object({
+  detail: z.object({
+    code: z.literal("INVALID_CONTRACT_VALUES"),
+    message: z.string(),
+    blocking_fields: z.array(z.string()),
+    issues: z.array(validationIssueSchema),
+  }),
+});
+
 // review-items — 확인이 필요한 항목 목록.
 export const reviewItemSchema = z.object({
   field: z.string(),
@@ -155,3 +167,47 @@ export const signStatusResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   download_url: z.string().url().nullable(),
 });
+
+// ============================================================
+// 5. 로그인 — backend/app/routers/auth.py 대응
+// ============================================================
+
+export const userRoleSchema = z.enum(["WORKER", "EMPLOYER"]);
+
+export const meResponseSchema = z.object({
+  user_id: z.string().min(1),
+  nickname: z.string(),
+  role: userRoleSchema,
+});
+
+export const loginUrlResponseSchema = z.object({
+  authorize_url: z.string().min(1),
+});
+
+export const callbackResponseSchema = z.object({
+  access_token: z.string().min(1),
+  user: meResponseSchema,
+});
+
+// 401 응답 본문. code 로 "로그인 필요"와 "세션 만료"를 구분한다.
+export const authErrorEnvelopeSchema = z.object({
+  detail: z
+    .object({
+      code: z.string().optional(),
+      message: z.string().default("로그인이 필요합니다."),
+    })
+    .passthrough(),
+});
+
+// 보관함 목록 — backend/app/routers/sign.py ArchiveItem 대응.
+export const archiveItemSchema = z.object({
+  document_id: z.string().min(1),
+  title: z.string(),
+  status: documentStatusSchema,
+  signed: z.number().int().nonnegative(),
+  total: z.number().int().nonnegative(),
+  entry_path: entryPathSchema,
+  created_at: z.string(),
+});
+
+export const archiveListSchema = z.array(archiveItemSchema);
