@@ -66,15 +66,30 @@ def _minimize_contact_fields(terms: ContractTerms) -> ContractTerms:
     )
 
 
-def _validate_with_optional_birth_date(
+def _validate_for_worker(
     terms: ContractTerms,
     worker_birth_date: str | None,
+    *,
+    worker_is_pregnant: bool = False,
+    worker_pregnancy_week: int | None = None,
+    worker_is_postpartum_within_year: bool = False,
+    worker_is_disabled: bool = False,
 ) -> ValidationReport:
-    """생년월일 미입력 요청은 기존 한 인자 검증 호출과 호환한다."""
+    """0단계 근로자 유형 확인 값을 모아 검증을 호출한다.
 
-    if worker_birth_date is None:
-        return validate(terms)
-    return validate(terms, worker_birth_date=worker_birth_date)
+    값을 하나도 보내지 않은 요청은 기존 ``validate(terms)`` 호출과 동일하게
+    동작한다 — 전부 기본값(생략·False·None)이면 연소자·임산부·장애인 판정을
+    추가하지 않는다.
+    """
+
+    return validate(
+        terms,
+        worker_birth_date=worker_birth_date,
+        worker_is_pregnant=worker_is_pregnant,
+        worker_pregnancy_week=worker_pregnancy_week,
+        worker_is_postpartum_within_year=worker_is_postpartum_within_year,
+        worker_is_disabled=worker_is_disabled,
+    )
 
 
 # ============================================================
@@ -85,6 +100,24 @@ def _validate_with_optional_birth_date(
 class ValidateRequest(BaseModel):
     terms: ContractTerms
     worker_birth_date: str | None = None
+    # 0단계 근로자 유형 확인 — 자기신고, ContractTerms에는 저장하지 않는다.
+    worker_is_pregnant: bool = False
+    worker_pregnancy_week: int | None = None
+    worker_is_postpartum_within_year: bool = False
+    worker_is_disabled: bool = False
+
+
+def _validate_request_for_worker(
+    terms: ContractTerms, body: ValidateRequest
+) -> ValidationReport:
+    return _validate_for_worker(
+        terms,
+        body.worker_birth_date,
+        worker_is_pregnant=body.worker_is_pregnant,
+        worker_pregnancy_week=body.worker_pregnancy_week,
+        worker_is_postpartum_within_year=body.worker_is_postpartum_within_year,
+        worker_is_disabled=body.worker_is_disabled,
+    )
 
 
 @router.post("/contracts/validate", response_model=ValidationReport)
@@ -95,10 +128,7 @@ async def validate_terms(body: ValidateRequest) -> ValidationReport:
     입력은 사용자가 확인·수정을 마친 조건이어야 한다.
     AI 추출 직후 값을 그대로 넣으면 안 된다.
     """
-    return _validate_with_optional_birth_date(
-        _minimize_contact_fields(body.terms),
-        body.worker_birth_date,
-    )
+    return _validate_request_for_worker(_minimize_contact_fields(body.terms), body)
 
 
 class ValidationStateResponse(BaseModel):
@@ -127,10 +157,7 @@ async def validation_state(body: ValidateRequest) -> ValidationStateResponse:
        최저임금 미달 같은 법정 기준 위반은 warning 이다.
        사실이고, 사용자가 알고도 진행할 수 있어야 한다.
     """
-    report = _validate_with_optional_birth_date(
-        _minimize_contact_fields(body.terms),
-        body.worker_birth_date,
-    )
+    report = _validate_request_for_worker(_minimize_contact_fields(body.terms), body)
     return ValidationStateResponse(
         **build_validation_state(body.terms, report).to_dict()
     )
@@ -269,7 +296,15 @@ def build_verification_note(
     )
 
 
-def _reject_if_blocking(terms: ContractTerms, worker_birth_date: str | None) -> None:
+def _reject_if_blocking(
+    terms: ContractTerms,
+    worker_birth_date: str | None,
+    *,
+    worker_is_pregnant: bool = False,
+    worker_pregnancy_week: int | None = None,
+    worker_is_postpartum_within_year: bool = False,
+    worker_is_disabled: bool = False,
+) -> None:
     """
     값 자체가 성립하지 않으면 문서를 만들지 않는다.
 
@@ -280,7 +315,14 @@ def _reject_if_blocking(terms: ContractTerms, worker_birth_date: str | None) -> 
     그건 사실이고 사용자가 알고도 진행할 수 있어야 한다.
     여기서 막는 것은 임금 0원처럼 **계약으로 성립하지 않는 값**뿐이다.
     """
-    report = _validate_with_optional_birth_date(terms, worker_birth_date)
+    report = _validate_for_worker(
+        terms,
+        worker_birth_date,
+        worker_is_pregnant=worker_is_pregnant,
+        worker_pregnancy_week=worker_pregnancy_week,
+        worker_is_postpartum_within_year=worker_is_postpartum_within_year,
+        worker_is_disabled=worker_is_disabled,
+    )
     state = build_validation_state(terms, report)
     if state.can_proceed:
         return
@@ -346,6 +388,11 @@ async def preview_pdf(body: PreviewRequest) -> Response:
 class AnalyzeSignRequest(BaseModel):
     terms: ContractTerms
     worker_birth_date: str | None = None
+    # 0단계 근로자 유형 확인 — 자기신고, ContractTerms에는 저장하지 않는다.
+    worker_is_pregnant: bool = False
+    worker_pregnancy_week: int | None = None
+    worker_is_postpartum_within_year: bool = False
+    worker_is_disabled: bool = False
     worker_name: PartyName
     worker_email: EmailAddress
     employer_name: PartyName
@@ -480,10 +527,24 @@ async def analyze_and_sign(
     # 확인 관문을 통과했다는 건 "사람이 봤다"는 뜻이지
     # "값이 올바르다"는 뜻이 아니다. 임금 0원을 확인만 하고 넘어갈 수도 있다.
     terms = _minimize_contact_fields(body.terms)
-    _reject_if_blocking(terms, body.worker_birth_date)
+    _reject_if_blocking(
+        terms,
+        body.worker_birth_date,
+        worker_is_pregnant=body.worker_is_pregnant,
+        worker_pregnancy_week=body.worker_pregnancy_week,
+        worker_is_postpartum_within_year=body.worker_is_postpartum_within_year,
+        worker_is_disabled=body.worker_is_disabled,
+    )
 
     # 4단계 — 확인된 값으로 법정 기준 판정
-    report = _validate_with_optional_birth_date(terms, body.worker_birth_date)
+    report = _validate_for_worker(
+        terms,
+        body.worker_birth_date,
+        worker_is_pregnant=body.worker_is_pregnant,
+        worker_pregnancy_week=body.worker_pregnancy_week,
+        worker_is_postpartum_within_year=body.worker_is_postpartum_within_year,
+        worker_is_disabled=body.worker_is_disabled,
+    )
 
     if report.has_problem and not body.proceed_with_violations:
         problem_checks = [

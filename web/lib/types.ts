@@ -311,6 +311,11 @@ export interface ValidateRequest {
   terms: ContractTerms;
   /** 사용자가 선택 입력한 생년월일. 계약서 추출값에는 포함하지 않는다. */
   worker_birth_date?: string | null;
+  /** 0단계 근로자 유형 확인 — 자기신고. ContractTerms에는 포함하지 않는다. */
+  worker_is_pregnant?: boolean;
+  worker_pregnancy_week?: number | null;
+  worker_is_postpartum_within_year?: boolean;
+  worker_is_disabled?: boolean;
 }
 
 export interface PreviewRequest {
@@ -323,6 +328,11 @@ export interface AnalyzeSignRequest {
   terms: ContractTerms;
   /** 검증 단계에서 선택 입력한 생년월일. 계약서/PDF에는 포함하지 않는다. */
   worker_birth_date?: string | null;
+  /** 0단계 근로자 유형 확인 — 자기신고. 계약서/PDF에는 포함하지 않는다. */
+  worker_is_pregnant?: boolean;
+  worker_pregnancy_week?: number | null;
+  worker_is_postpartum_within_year?: boolean;
+  worker_is_disabled?: boolean;
   worker_name: string;
   worker_email: string;
   employer_name: string;
