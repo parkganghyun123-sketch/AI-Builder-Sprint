@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
-import { Button, ButtonLink, Card } from "@/components/ui";
+import { Button, ButtonLink, Card, SkeletonCard } from "@/components/ui";
 import { getValidationState, previewPdf } from "@/lib/api";
 import { documentTitle, firstSignerLabel } from "@/lib/constants";
 import { readSession } from "@/lib/session";
@@ -206,13 +206,10 @@ export default function ContractPage() {
       )}
 
       {loading && (
-        <Card>
-          <p aria-live="polite" className="text-sm text-ink-muted">
-            {blockingIssues === null
-              ? "확인하는 중"
-              : "계약서 만드는 중"}
-          </p>
-        </Card>
+        <SkeletonCard
+          label={blockingIssues === null ? "확인하는 중" : "계약서 만드는 중"}
+          lines={4}
+        />
       )}
 
       {error && (

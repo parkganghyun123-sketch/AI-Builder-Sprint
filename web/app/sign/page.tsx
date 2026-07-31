@@ -6,7 +6,7 @@ import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { LoginGate } from "@/components/LoginGate";
-import { Button, ButtonLink, Card } from "@/components/ui";
+import { Button, ButtonLink, Card, Spinner } from "@/components/ui";
 import {
   analyzeAndSign,
   getMe,
@@ -532,7 +532,12 @@ export default function SignPage() {
             aria-describedby={fieldError ? "sign-field-error" : undefined}
           >
             {loading
-              ? "서명 요청을 보내고 있어요…"
+              ? (
+                  <>
+                    <Spinner />
+                    보내는 중
+                  </>
+                )
               : blockingIssues.length > 0
                 ? "필수 항목을 먼저 채워 주세요"
                 : blockedProblems

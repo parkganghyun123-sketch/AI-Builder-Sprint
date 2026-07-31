@@ -102,3 +102,70 @@ export function Pill({
 export function SectionLabel({ children }: { children: ReactNode }) {
   return <p className="text-sm font-bold text-brand">{children}</p>;
 }
+
+/**
+ * 로딩 자리표시 한 줄.
+ *
+ * ⚠️ 진행 중 화면을 텍스트 한 줄로만 바꾸면 "멈춘 건가?"로 읽힌다.
+ *    올 내용의 모양을 미리 보여주면 기다리는 시간이 짧게 느껴진다.
+ *
+ * ⚠️ 애니메이션은 globals.css 의 .skeleton 이 담당한다. 그래서
+ *    prefers-reduced-motion 설정을 켠 사용자에게는 자동으로 멈춘다.
+ */
+export function SkeletonLine({
+  className = "",
+  width = "w-full",
+}: {
+  className?: string;
+  /** Tailwind 폭 클래스. 길이를 섞어야 진짜 글줄처럼 보인다. */
+  width?: string;
+}) {
+  return (
+    <div
+      aria-hidden="true"
+      className={`skeleton h-4 rounded-full ${width} ${className}`}
+    />
+  );
+}
+
+/**
+ * 카드 한 장 분량의 로딩 자리표시.
+ *
+ * 스크린리더에는 모양이 아니라 상태를 읽어준다 — 회색 막대는 정보가 아니다.
+ */
+export function SkeletonCard({
+  label = "불러오는 중",
+  lines = 3,
+  className = "",
+}: {
+  label?: string;
+  lines?: number;
+  className?: string;
+}) {
+  const widths = ["w-2/3", "w-full", "w-4/5", "w-1/2"];
+  return (
+    <Card className={`flex flex-col gap-3 ${className}`}>
+      <span aria-live="polite" className="sr-only">
+        {label}
+      </span>
+      {Array.from({ length: lines }).map((_, i) => (
+        <SkeletonLine key={i} width={widths[i % widths.length]} />
+      ))}
+    </Card>
+  );
+}
+
+/**
+ * 버튼 안에서 도는 표시.
+ *
+ * ⚠️ 버튼 폭이 바뀌지 않게 아이콘 자리만 차지한다. 누른 순간 버튼이
+ *    출렁이면 잘못 눌렀나 싶어진다.
+ */
+export function Spinner({ className = "" }: { className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`}
+    />
+  );
+}

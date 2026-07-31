@@ -9,7 +9,7 @@ import {
 } from "@/components/CheckResultCard";
 import { EntitlementsCard } from "@/components/EntitlementsCard";
 import { OwnerMessageCard } from "@/components/OwnerMessageCard";
-import { ButtonLink, Card } from "@/components/ui";
+import { ButtonLink, Card, SkeletonCard } from "@/components/ui";
 import { ContractAssistant } from "@/components/ContractAssistant";
 import { readSession } from "@/lib/session";
 import type { ContractTerms, EntryPath, ValidationReport } from "@/lib/types";
@@ -49,11 +49,8 @@ export default function ResultPage() {
         title="검증 결과 불러오는 중"
         description="검토 결과를 불러오는 중이에요."
       >
-        <Card>
-          <p aria-live="polite" className="text-sm text-ink-muted">
-            잠시만 기다려 주세요.
-          </p>
-        </Card>
+        <SkeletonCard label="검증 결과를 불러오는 중" lines={4} />
+        <SkeletonCard lines={3} />
       </ScreenShell>
     );
   }
@@ -162,7 +159,7 @@ export default function ResultPage() {
             {report.estimated_monthly_pay !== null && (
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-sm text-ink-muted">예상 월급</dt>
-                <dd className="font-extrabold text-ink">
+                <dd className="tnum font-extrabold text-ink">
                   {report.estimated_monthly_pay.toLocaleString()}원
                 </dd>
               </div>
@@ -170,7 +167,7 @@ export default function ResultPage() {
             {report.wage_shortfall !== null && (
               <div className="flex items-center justify-between gap-3">
                 <dt className="text-sm text-ink-muted">기준과의 월 차이</dt>
-                <dd className="font-extrabold text-red-900">
+                <dd className="tnum font-extrabold text-red-900">
                   {report.wage_shortfall.toLocaleString()}원
                 </dd>
               </div>

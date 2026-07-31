@@ -8,7 +8,7 @@ import {
   FieldInput,
   type FieldOption,
 } from "@/components/FieldInput";
-import { Button, ButtonLink, Card } from "@/components/ui";
+import { Button, ButtonLink, Card, Spinner } from "@/components/ui";
 import {
   getReviewItems,
   getValidationState,
@@ -752,7 +752,12 @@ function ReviewContent() {
           className="w-full"
         >
           {loading
-            ? "확인하는 중"
+            ? (
+                <>
+                  <Spinner />
+                  확인하는 중
+                </>
+              )
             : blocked
               ? "고쳐야 할 항목이 있어요"
               : !allConfirmed

@@ -22,10 +22,22 @@ export function CheckResultCard({
   sourceValue?: string | null;
 }) {
   const meta = CHECK_STATUS_META[check.status];
+  const hasSource =
+    sourceOrigin === "USER" ||
+    (sourceOrigin === "CONTRACT" && Boolean(sourceText || sourceValue));
 
   return (
     <div className={`rounded-card border bg-white p-6 shadow-card ${meta.ring}`}>
-      <div className="flex flex-wrap items-center gap-2">
+      {/* 법령 근거를 제목 위 눈썹으로 올린다.
+          이 카드가 주장하는 것의 출처가 결론보다 먼저 보여야 한다. */}
+      <p className="text-xs font-bold tracking-tighter text-brand">
+        {check.legal_basis}
+        <span className="ml-1.5 font-normal text-ink-soft tabular-nums">
+          {check.standard_year}년 기준
+        </span>
+      </p>
+
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <span aria-hidden="true" className="text-lg">
           {meta.icon}
         </span>
@@ -37,7 +49,22 @@ export function CheckResultCard({
         </span>
       </div>
 
-      <dl className="mt-4 flex flex-col gap-3 rounded-field bg-brand-tint/70 p-4 text-sm">
+      {/* 계산식을 카드의 주인공으로 올린다.
+          이 서비스가 다른 곳과 다른 지점은 "위반입니다"가 아니라
+          **어떻게 그 결론이 나왔는지 숫자로 보여준다**는 것이다.
+          그런데 예전에는 이 줄이 근거 목록 맨 아래 작은 글씨로 묻혀 있었다.
+
+          ⚠️ 여기서 계산하지 않는다. 백엔드가 만든 문자열을 그대로 보여준다. */}
+      {check.calculation && (
+        <p className="tnum mt-4 rounded-field border border-brand-line bg-brand-tint/60 px-4 py-3 text-base font-bold leading-relaxed text-ink">
+          {check.calculation}
+        </p>
+      )}
+
+      {/* ⚠️ 출처가 하나도 없으면 회색 상자만 남는다. 빈 상자는 정보가 아니라
+             "뭔가 안 불러와졌나" 하는 인상만 준다. 아예 그리지 않는다. */}
+      {hasSource && (
+      <dl className="mt-3 flex flex-col gap-3 rounded-field bg-slate-50 p-4 text-sm">
         {sourceOrigin === "USER" && (
           <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
             <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
@@ -70,24 +97,8 @@ export function CheckResultCard({
             </dd>
           </div>
         )}
-        <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
-          <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
-            ⚖️ 법령 근거
-          </dt>
-          <dd className="text-ink-muted">
-            {check.legal_basis}{" "}
-            <span className="text-ink-soft">({check.standard_year}년 기준)</span>
-          </dd>
-        </div>
-        {check.calculation && (
-          <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
-            <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
-              🧮 계산
-            </dt>
-            <dd className="text-ink-muted">{check.calculation}</dd>
-          </div>
-        )}
       </dl>
+      )}
 
       {check.detail && (
         <p

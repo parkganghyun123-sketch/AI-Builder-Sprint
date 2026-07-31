@@ -6,7 +6,7 @@ import { ScreenShell } from "@/components/ScreenShell";
 import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { LoginGate } from "@/components/LoginGate";
-import { ButtonLink, Card } from "@/components/ui";
+import { ButtonLink, Card, SkeletonCard } from "@/components/ui";
 import { getMe, listMyDocuments, LoginRequiredError } from "@/lib/api";
 import type { ArchiveItem } from "@/lib/types";
 
@@ -47,7 +47,7 @@ function ArchiveRow({ item }: { item: ArchiveItem }) {
 
       <div className="flex flex-wrap items-center gap-2">
         <DocumentStatusBadge status={item.status} />
-        <span className="text-sm text-ink-muted">
+        <span className="tnum text-sm text-ink-muted">
           서명 {item.signed}/{item.total}명 완료
         </span>
       </div>
@@ -218,11 +218,10 @@ export default function ArchivePage() {
       )}
 
       {!error && items === null && (
-        <Card>
-          <p aria-live="polite" className="text-sm text-ink-muted">
-            보관함 불러오는 중
-          </p>
-        </Card>
+        <div className="flex flex-col gap-3">
+          <SkeletonCard label="보관함을 불러오는 중" lines={3} />
+          <SkeletonCard lines={3} />
+        </div>
       )}
 
       {!error && items !== null && items.length === 0 && (
