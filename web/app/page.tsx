@@ -2,6 +2,7 @@ import Link from "next/link";
 import { BrandHeader } from "@/components/ScreenShell";
 import { ButtonLink, Card, Pill, SectionLabel } from "@/components/ui";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
+import { GeneralQuestionAssistant } from "@/components/GeneralQuestionAssistant";
 
 /**
  * 홈 / 랜딩 (단계 1 접속).
@@ -227,6 +228,8 @@ export default function HomePage() {
           ✓ 페어사인 · AI BUILDER SPRINT 2026
         </p>
       </footer>
+
+      <GeneralQuestionAssistant />
     </>
   );
 }
