@@ -129,6 +129,7 @@ export interface ChatEvidence {
   kind: ChatEvidenceKind;
   label: string;
   value: string;
+  url: string | null;
 }
 
 export interface ChatAction {
@@ -151,7 +152,17 @@ export interface ContractChatRequest {
   worker_birth_date?: string | null;
 }
 
+export type GeneralQuestionTopic =
+  | "WEEKLY_HOLIDAY"
+  | "MINIMUM_WAGE"
+  | "BREAK_TIME"
+  | "WRITTEN_CONTRACT"
+  | "MINOR_WORK"
+  | "EXTRA_WORK"
+  | "OUT_OF_SCOPE";
+
 export interface GeneralQuestionResponse {
+  topic: GeneralQuestionTopic;
   answer: string;
   limitations: string;
   evidence: ChatEvidence[];

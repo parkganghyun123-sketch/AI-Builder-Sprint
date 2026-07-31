@@ -5,9 +5,6 @@ import { ApiError, askGeneralQuestion } from "@/lib/api";
 import type { GeneralQuestionResponse } from "@/lib/types";
 import { Button, ButtonLink } from "@/components/ui";
 
-const MOEL_WEEKLY_HOLIDAY_URL =
-  "https://1350.moel.go.kr/rtmview.do?id=1000059852";
-
 export function GeneralQuestionAssistant() {
   const [open, setOpen] = useState(false);
   const [question, setQuestion] = useState("");
@@ -22,15 +19,15 @@ export function GeneralQuestionAssistant() {
     setError(null);
   }
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = question.trim();
+  async function ask(rawQuestion: string) {
+    const trimmed = rawQuestion.trim();
     if (!trimmed || loading) return;
 
+    setQuestion(trimmed);
     setLoading(true);
     setError(null);
     try {
-      setAnswer(await askGeneralQuestion(trimmed));
+      setAnswer(await askGeneralQuestion(trimmed, answer?.topic ?? null));
     } catch (caught) {
       setError(
         caught instanceof ApiError
@@ -40,6 +37,11 @@ export function GeneralQuestionAssistant() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await ask(question);
   }
 
   return (
@@ -81,9 +83,9 @@ export function GeneralQuestionAssistant() {
                 <div key={`${item.label}-${index}`} className="mt-3 rounded-field bg-brand-tint/50 p-3 text-sm">
                   <p className="font-bold text-brand-deep">{item.label}</p>
                   <p className="mt-1 leading-relaxed text-ink-muted">{item.value}</p>
-                  {item.kind === "LEGAL_STANDARD" && (
-                    <a className="mt-2 inline-block font-bold text-brand underline underline-offset-2" href={MOEL_WEEKLY_HOLIDAY_URL} rel="noreferrer" target="_blank">
-                      고용노동부 1350 근거 보기
+                  {item.url && (
+                    <a className="mt-2 inline-block font-bold text-brand underline underline-offset-2" href={item.url} rel="noreferrer" target="_blank">
+                      공식 근거 보기
                     </a>
                   )}
                 </div>
@@ -102,7 +104,7 @@ export function GeneralQuestionAssistant() {
                     <button
                       key={suggestion}
                       className="rounded-full border border-brand-line px-2.5 py-1.5 text-left text-xs font-semibold text-brand-deep hover:bg-brand-tint focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
-                      onClick={() => setQuestion(suggestion)}
+                      onClick={() => void ask(suggestion)}
                       type="button"
                     >
                       {suggestion}

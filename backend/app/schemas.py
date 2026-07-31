@@ -261,6 +261,7 @@ class ChatEvidence(BaseModel):
     kind: ChatEvidenceKind
     label: str
     value: str
+    url: str | None = None
 
 
 class ChatAction(BaseModel):
@@ -285,13 +286,25 @@ class ContractChatResponse(BaseModel):
     suggestions: list[str] = Field(default_factory=list)
 
 
+class GeneralQuestionTopic(str, Enum):
+    WEEKLY_HOLIDAY = "WEEKLY_HOLIDAY"
+    MINIMUM_WAGE = "MINIMUM_WAGE"
+    BREAK_TIME = "BREAK_TIME"
+    WRITTEN_CONTRACT = "WRITTEN_CONTRACT"
+    MINOR_WORK = "MINOR_WORK"
+    EXTRA_WORK = "EXTRA_WORK"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+
+
 class GeneralQuestionRequest(BaseModel):
     """계약서 없이 묻는 일반 기준 질문. 개인 식별정보는 받지 않는다."""
 
     question: str = Field(min_length=1, max_length=500)
+    context: GeneralQuestionTopic | None = None
 
 
 class GeneralQuestionResponse(BaseModel):
+    topic: GeneralQuestionTopic
     answer: str
     limitations: str
     evidence: list[ChatEvidence]

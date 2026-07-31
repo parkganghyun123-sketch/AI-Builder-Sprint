@@ -82,6 +82,7 @@ export const contractChatResponseSchema = z.object({
       kind: chatEvidenceKindSchema,
       label: z.string(),
       value: z.string(),
+      url: z.string().url().nullable(),
     }),
   ),
   action: z
@@ -93,7 +94,18 @@ export const contractChatResponseSchema = z.object({
   suggestions: z.array(z.string()),
 });
 
+export const generalQuestionTopicSchema = z.enum([
+  "WEEKLY_HOLIDAY",
+  "MINIMUM_WAGE",
+  "BREAK_TIME",
+  "WRITTEN_CONTRACT",
+  "MINOR_WORK",
+  "EXTRA_WORK",
+  "OUT_OF_SCOPE",
+]);
+
 export const generalQuestionResponseSchema = z.object({
+  topic: generalQuestionTopicSchema,
   answer: z.string(),
   limitations: z.string(),
   evidence: z.array(
@@ -101,6 +113,7 @@ export const generalQuestionResponseSchema = z.object({
       kind: chatEvidenceKindSchema,
       label: z.string(),
       value: z.string(),
+      url: z.string().url().nullable(),
     }),
   ),
   action: z

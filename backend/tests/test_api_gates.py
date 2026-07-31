@@ -426,3 +426,63 @@ def test_계약서_없는_주휴_질문은_시간_요건과_한계를_함께_안
     assert "15시간 미만" in body["answer"]
     assert body["evidence"][0]["kind"] == "LEGAL_STANDARD"
     assert body["action"]["href"] == "/upload"
+
+
+@pytest.mark.parametrize(
+    "question,expected,source_fragment",
+    [
+        ("최저임금 기준을 알려주세요.", "10,320원", "minimumwage.go.kr"),
+        ("계약서에 휴게시간이 안 적혀 있어요.", "4시간", "law.go.kr"),
+    ],
+)
+def test_추천_질문은_질문별_공식_근거로_답한다(
+    question, expected, source_fragment
+):
+    res = client.post("/questions/general", json={"question": question})
+
+    assert res.status_code == 200
+    body = res.json()
+    assert expected in body["answer"]
+    assert source_fragment in body["evidence"][0]["url"]
+
+
+@pytest.mark.parametrize(
+    "question,topic,expected",
+    [
+        ("근로계약서를 꼭 받아야 하나요?", "WRITTEN_CONTRACT", "서면"),
+        ("17살인데 밤 10시 이후에도 일해도 되나요?", "MINOR_WORK", "35시간"),
+        ("야간근로 수당 기준을 알려주세요.", "EXTRA_WORK", "22시"),
+        ("해고 신고는 어떻게 하나요?", "OUT_OF_SCOPE", "1350"),
+    ],
+)
+def test_계약서_없는_주요_노동_질문을_주제별로_답한다(
+    question, topic, expected
+):
+    res = client.post("/questions/general", json={"question": question})
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["topic"] == topic
+    assert expected in body["answer"]
+
+
+@pytest.mark.parametrize(
+    "question,context,topic,expected",
+    [
+        ("그럼 6시간이면?", "BREAK_TIME", "BREAK_TIME", "30분"),
+        ("그럼 14시간은?", "WEEKLY_HOLIDAY", "WEEKLY_HOLIDAY", "15시간 미만"),
+        ("시급 10,000원은?", "MINIMUM_WAGE", "MINIMUM_WAGE", "320원"),
+    ],
+)
+def test_짧은_후속_질문은_직전_주제_문맥을_이어받는다(
+    question, context, topic, expected
+):
+    res = client.post(
+        "/questions/general",
+        json={"question": question, "context": context},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["topic"] == topic
+    assert expected in body["answer"]

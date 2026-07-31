@@ -14,6 +14,7 @@ import {
 import type {
   AnalyzeSignRequest,
   ContractChatRequest,
+  GeneralQuestionTopic,
   PreviewRequest,
   SignBlocked,
   ValidateRequest,
@@ -253,10 +254,13 @@ export function askContractAssistant(body: ContractChatRequest) {
 }
 
 /** 계약서 없이 묻는 일반 기준 질문. 개인 정보나 계약서 원문은 전송하지 않는다. */
-export function askGeneralQuestion(question: string) {
+export function askGeneralQuestion(
+  question: string,
+  context: GeneralQuestionTopic | null = null,
+) {
   return postJson(
     "/questions/general",
-    { question },
+    { question, context },
     generalQuestionResponseSchema,
   );
 }
