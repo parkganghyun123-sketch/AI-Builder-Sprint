@@ -92,6 +92,9 @@ def payload(contract: ContractTerms | None = None, *, question: str = "질문") 
     }
 
 
+WEEKLY_MET_ANSWER = "계약상 주 18시간은 주휴수당의 15시간 이상 시간 요건을 충족합니다."
+
+
 def mock_classification(
     monkeypatch,
     intent: ChatIntent,
@@ -116,12 +119,15 @@ def test_weekly_holiday_time_requirement_met(client, monkeypatch) -> None:
     body = response.json()
     assert body["intent"] == "CALCULATION"
     assert body["topic"] == "WEEKLY_HOLIDAY"
-    assert "시간 요건을 충족합니다" in body["answer"]
+    assert body["answer"] == WEEKLY_MET_ANSWER
     assert body["limitation"] is None
     assert body["condition_groups"]["met"] == [
         "계약상 주 소정근로시간 18시간은 15시간 이상"
     ]
-    assert "소정근로일 개근 여부" in body["condition_groups"]["needs_check"]
+    assert "해당 주 소정근로일 개근 여부" in body["condition_groups"]["needs_check"]
+    assert (
+        "해당 주까지 근로관계가 유지되었는지" in body["condition_groups"]["needs_check"]
+    )
     assert (
         "계약과 실제 근무 내용의 일치 여부" in body["condition_groups"]["needs_check"]
     )
@@ -172,9 +178,9 @@ def test_contract_chat_severance_amount_answers_missing_calculation_inputs(
     ).json()
 
     assert body["topic"] == "SEVERANCE_PAY"
-    assert "퇴직금 금액을 계산하려면" in body["answer"]
-    assert "퇴직 전 3개월" in body["answer"]
-    assert "계약서 한 장만으로는" in body["answer"]
+    assert "퇴직금 계산에는" in body["answer"]
+    assert "직전 3개월" in body["answer"]
+    assert "현재 계약서만으로는" in body["answer"]
 
 
 def test_contract_chat_extra_work_amount_answers_required_inputs(
@@ -188,7 +194,7 @@ def test_contract_chat_extra_work_amount_answers_required_inputs(
     ).json()
 
     assert body["topic"] == "EXTRA_WORK"
-    assert "날짜별 실제 근무" in body["answer"]
+    assert "날짜별 실제 시작·종료·휴게시간" in body["answer"]
     assert "상시근로자 수" in body["answer"]
     assert body["retrieved_knowledge"][0]["kb_id"] == "KB-EXTRA-WORK"
 
@@ -293,7 +299,7 @@ def test_weekly_holiday_below_time_requirement(client, monkeypatch) -> None:
 
     assert response.status_code == 200
     body = response.json()
-    assert "시간 요건을 충족하지 않습니다" in body["answer"]
+    assert "15시간 미만이면 주휴수당 시간 조건을 충족하지 않습니다" in body["answer"]
     assert body["condition_groups"]["unmet"] == [
         "계약상 주 소정근로시간 12시간은 15시간 미만"
     ]
@@ -340,7 +346,10 @@ def test_severance_pay_contract_conditions_are_structured(client, monkeypatch) -
     assert response.status_code == 200
     body = response.json()
     assert body["topic"] == "SEVERANCE_PAY"
-    assert body["answer"] == "계약 조건상 퇴직급여 관련 두 기준을 충족합니다."
+    assert body["answer"] == (
+        "계약상 예정기간이 1년 이상이고 주 소정근로시간이 15시간 이상입니다. "
+        "실제 계속근로와 퇴직 조건도 충족하면 퇴직급여 기준에 해당합니다."
+    )
     assert body["limitation"] is None
     assert body["condition_groups"]["met"] == [
         "계약상 예정 근로기간이 1년 이상",
@@ -424,7 +433,7 @@ def test_severance_pay_missing_contract_facts_are_needs_check(
         (
             ChatTopic.SOCIAL_INSURANCE,
             "4대보험 가입 대상이야?",
-            "보험별 확인사항",
+            "보험별 시간·기간·소득",
             "산재보험",
         ),
         (
@@ -436,13 +445,13 @@ def test_severance_pay_missing_contract_facts_are_needs_check(
         (
             ChatTopic.DISMISSAL_NOTICE,
             "해고예고수당 받을 수 있어?",
-            "확정할 수 없습니다",
+            "30일 전 예고",
             "실제 해고인지",
         ),
         (
             ChatTopic.PROBATION_MINIMUM_WAGE,
             "수습시급 최저임금 기준은?",
-            "수습 최저임금",
+            "최저임금을 최대 10%",
             "단순노무",
         ),
     ],
@@ -1082,10 +1091,7 @@ def test_natural_grounded_generation_keeps_deterministic_answer_first(
         json=payload(question="주휴수당 요건 알려줘"),
     ).json()
 
-    deterministic = (
-        "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-        "시간 요건을 충족합니다."
-    )
+    deterministic = WEEKLY_MET_ANSWER
     assert body["answer_mode"] == "NATURAL_GROUNDED_GENERATION"
     assert body["answer"].startswith(f"{deterministic}\n\n")
     assert "계약상 주 소정근로시간 18시간" in body["answer"]
@@ -1128,10 +1134,7 @@ def test_natural_generation_unknown_fact_falls_back_to_deterministic_answer(
     ).json()
 
     assert body["answer_mode"] == "DETERMINISTIC_TEMPLATE"
-    assert body["answer"] == (
-        "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-        "시간 요건을 충족합니다."
-    )
+    assert body["answer"] == WEEKLY_MET_ANSWER
 
 
 @pytest.mark.parametrize(
@@ -1211,10 +1214,7 @@ def test_free_text_generation_attack_is_rejected_and_api_falls_back(
 
     assert body["answer_mode"] == "DETERMINISTIC_TEMPLATE"
     assert injected_text not in body["answer"]
-    assert body["answer"] == (
-        "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-        "시간 요건을 충족합니다."
-    )
+    assert body["answer"] == WEEKLY_MET_ANSWER
 
 
 @pytest.mark.parametrize(
@@ -1256,10 +1256,7 @@ def test_ungrounded_generation_falls_back_to_deterministic_answer(
     ).json()
 
     assert body["answer_mode"] == "DETERMINISTIC_TEMPLATE"
-    assert body["answer"] == (
-        "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-        "시간 요건을 충족합니다."
-    )
+    assert body["answer"] == WEEKLY_MET_ANSWER
     assert body["retrieved_knowledge"][0]["kb_id"] == "KB-WEEKLY-HOLIDAY-TIME"
 
 
@@ -1419,10 +1416,7 @@ def test_openai_responses_api_selects_plan_and_server_renders_exact_facts(
         "/chat", json=payload(injected_contract, question=raw_question)
     ).json()
 
-    deterministic = (
-        "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-        "시간 요건을 충족합니다."
-    )
+    deterministic = WEEKLY_MET_ANSWER
     assert body["answer_mode"] == "OPENAI_GROUNDED_GENERATION"
     assert body["answer"].startswith(f"{deterministic}\n\n")
     assert "계약 내용을 기준으로 살펴보면" in body["answer"]

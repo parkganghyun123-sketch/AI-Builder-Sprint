@@ -39,11 +39,13 @@ def test_계약서_미작성_질문은_두_단계와_확인_항목을_직접_안
     assert response.status_code == 200
     body = response.json()
     assert body["topic"] == "WRITTEN_CONTRACT"
-    assert body["answer"].startswith("계약서를 아직 작성하지 않았다면")
-    assert "사장님(법에서는 사용자라고 부릅니다)" in body["answer"]
-    assert "근무 시작 전이라면" in body["answer"]
-    assert "이미 근무를 시작했다면" in body["answer"]
-    assert "추가 확인 항목" in body["answer"]
+    assert body["answer"].startswith("사용자는 임금")
+    assert "주요 근로조건을 서면으로" in body["answer"]
+    assert "전자문서" not in body["answer"]
+    assert "근무 시작 전이라면" not in body["answer"]
+    assert "이미 근무를 시작했다면" not in body["answer"]
+    assert "계약서를 아직 작성하지 않았다면" in body["answer"]
+    assert "확인:" in body["limitations"]
     assert body["action"]["href"] == "/review?path=B"
     assert len(body["evidence"]) == 2
     assert "근로기준법 제17조" in body["evidence"][0]["value"]
@@ -66,8 +68,6 @@ def test_제공자는_승인된_1350_action을_선택할_수_있다(monkeypatch)
         return _written_plan(
             [
                 GeneralBlockId.CORE_STANDARD,
-                GeneralBlockId.BEFORE_WORK,
-                GeneralBlockId.WORK_STARTED,
                 GeneralBlockId.CHECK_REQUIRED,
                 GeneralBlockId.NEXT_ACTION,
             ],
@@ -109,7 +109,8 @@ def test_openai_계획이_승인_블록의_선택과_순서만_바꾼다(monkeyp
     )
 
     answer = response.json()["answer"]
-    assert answer.index("추가 확인 항목") < answer.index("근무 시작 전이라면")
+    assert answer.index("사용자는 임금") < answer.index("근무 전이라면")
+    assert "추가 확인 항목" not in answer
     assert "이미 근무를 시작했다면" not in answer
     sent = captured[0].model_dump_json()
     assert "근무 시작 전인데" not in sent
@@ -142,7 +143,8 @@ def test_openai_실패_후_upstage_계획을_사용한다(monkeypatch):
         "/questions/general",
         json={"question": "계약서 안 썼고 이미 일하고 있어"},
     ).json()
-    assert body["answer"].startswith("이미 근무를 시작했다면")
+    assert body["answer"].startswith("사용자는 임금")
+    assert "이미 근무 중이면" in body["answer"]
     assert "근무 시작 전이라면" not in body["answer"]
 
 
@@ -158,7 +160,8 @@ def test_두_제공자_실패는_검증된_결정론_답변으로_복구한다(m
     body = client.post(
         "/questions/general", json={"question": "계약서를 아직 안썼는데 괜찮아?"}
     ).json()
-    assert body["answer"].startswith("계약서를 아직 작성하지 않았다면")
+    assert body["answer"].startswith("사용자는 임금")
+    assert "계약서를 아직 작성하지 않았다면" in body["answer"]
 
 
 def test_서로_충돌하는_근무_단계_신호는_unknown으로_안내한다():
@@ -168,8 +171,9 @@ def test_서로_충돌하는_근무_단계_신호는_unknown으로_안내한다(
     ).json()
 
     assert body["topic"] == "WRITTEN_CONTRACT"
-    assert "근무 시작 전이라면" in body["answer"]
-    assert "이미 근무를 시작했다면" in body["answer"]
+    assert "근무 시작 전이라면" not in body["answer"]
+    assert "이미 근무를 시작했다면" not in body["answer"]
+    assert "계약서를 아직 작성하지 않았다면" in body["answer"]
 
 
 def test_제공자의_자유문장은_strict_model에서_거부된다():
@@ -202,11 +206,10 @@ def test_퇴직금은_판단_불가_이유와_확인_항목을_함께_안내한�
     ).json()
 
     assert body["topic"] == "SEVERANCE_PAY"
-    assert "질문만으로는 퇴직금 지급 대상인지 확정할 수 없습니다" in body["answer"]
-    assert "계속근로기간" in body["answer"]
-    assert "4주를 평균한 1주 소정근로시간" in body["answer"]
-    assert "추가 확인 항목" in body["answer"]
-    assert "실제 퇴직 여부" in body["answer"]
+    assert "계속근로기간이 1년 이상" in body["answer"]
+    assert "4주 평균 주 소정근로시간" in body["answer"]
+    assert "실제 근무 이력과 퇴직 여부" in body["answer"]
+    assert "확인:" in body["limitations"]
     assert len(body["evidence"]) > 1
 
 
@@ -217,7 +220,7 @@ def test_퇴직금_후속_질문은_context를_유지한다():
     ).json()
 
     assert body["topic"] == "SEVERANCE_PAY"
-    assert "실제 입사일과 퇴사일" in body["answer"]
+    assert "실제 근무 이력과 퇴직 여부" in body["answer"]
 
 
 def test_퇴직금_계획은_중복_출처를_거부한다():
@@ -266,7 +269,7 @@ def test_퇴직금_계획은_중복_출처를_거부한다():
             "KB-MINOR-WORKING-TIME",
             "22시",
         ),
-        ("월차는 언제 생겨?", "ANNUAL_LEAVE", "KB-ANNUAL-LEAVE", "계속근로기간"),
+        ("월차는 언제 생겨?", "ANNUAL_LEAVE", "KB-ANNUAL-LEAVE", "1년간 80%"),
         (
             "한달 전 통보 없이 갑자기 잘렸어. 예고 기준이 뭐야?",
             "DISMISSAL_NOTICE",
@@ -283,7 +286,7 @@ def test_퇴직금_계획은_중복_출처를_거부한다():
             "알바도 사대보험 들어?",
             "SOCIAL_INSURANCE",
             "KB-SOCIAL-INSURANCE",
-            "하나의 기준",
+            "보험별 조건",
         ),
         (
             "그만둘 때 받는 돈 조건 알려줘",
@@ -334,16 +337,16 @@ def test_분쟁_사실판단_계산_공격_범위밖은_항상_거절한다(ques
 @pytest.mark.parametrize(
     "question,topic,limitation_fragment",
     [
-        ("연차 받을 수 있어?", "ANNUAL_LEAVE", "발생 여부나 일수를 확정하지 않습니다"),
+        ("연차 받을 수 있어?", "ANNUAL_LEAVE", "계속근로기간"),
         (
             "갑자기 잘렸는데 예고수당 받을 수 있어?",
             "DISMISSAL_NOTICE",
-            "지급 대상이나 금액을 확정하지 않습니다",
+            "계속근로기간",
         ),
         (
             "알바도 4대보험 가입 대상이야?",
             "SOCIAL_INSURANCE",
-            "개인 가입 대상을 한꺼번에 확정하지 않습니다",
+            "보험별 예외",
         ),
     ],
 )
@@ -421,9 +424,9 @@ def test_주휴_숫자는_명시된_소정근로시간일_때만_비교한다():
     ).json()
 
     assert prescribed["topic"] == "WEEKLY_HOLIDAY"
-    assert "입력하신 주 14시간" in prescribed["answer"]
-    assert "입력하신 주 14시간" not in hypothetical["answer"]
-    assert "질문에 적은 실제 근무시간" in hypothetical["answer"]
+    assert "입력한 주 14시간" in prescribed["answer"]
+    assert "입력한 주 14시간" not in hypothetical["answer"]
+    assert "4주 평균 주 소정근로시간" in hypothetical["answer"]
 
 
 def test_보호자_차단은_평범한_미성년자_근로시간_질문을_막지_않는다():
@@ -444,21 +447,21 @@ def test_보호자_차단은_평범한_미성년자_근로시간_질문을_막�
             "MINOR_DOCUMENTS",
             "KB-MINOR-EMPLOYMENT-DOCUMENTS",
             ["SRC-LSA-66", "SRC-LSA-67", "SRC-LSA-68"],
-            "가족관계기록사항",
+            "연령을 증명하는 가족관계기록사항에 관한 증명서",
         ),
         (
             "부모 동의서가 꼭 필요해?",
             "MINOR_DOCUMENTS",
             "KB-MINOR-EMPLOYMENT-DOCUMENTS",
             ["SRC-LSA-66", "SRC-LSA-67", "SRC-LSA-68"],
-            "사업장에 갖추어",
+            "친권자·후견인 동의서",
         ),
         (
             "법정대리인이 미성년자 계약을 대신해도 돼?",
             "MINOR_DOCUMENTS",
             "KB-MINOR-EMPLOYMENT-DOCUMENTS",
             ["SRC-LSA-66", "SRC-LSA-67", "SRC-LSA-68"],
-            "대신 체결할 수는 없고",
+            "대리 계약은 불가",
         ),
         (
             "임신 중 야간근로 기준은?",
@@ -472,7 +475,7 @@ def test_보호자_차단은_평범한_미성년자_근로시간_질문을_막�
             "PREGNANCY_PROTECTION",
             "KB-PREGNANCY-PROTECTION",
             ["SRC-LSA-70", "SRC-LSA-71", "SRC-LSA-74", "SRC-LSA-74-2", "SRC-LSA-75"],
-            "1일 2시간",
+            "근로자가 신청하면",
         ),
         (
             "태아검진 시간도 보장돼?",
@@ -507,7 +510,7 @@ def test_보호자_차단은_평범한_미성년자_근로시간_질문을_막�
             "WAGE_PAYMENT",
             "KB-WAGE-PAYMENT",
             ["SRC-LSA-43", "SRC-LSA-48"],
-            "일정한 날짜",
+            "매월 1회 이상",
         ),
         (
             "임금 지급 원칙 알려줘",
@@ -709,8 +712,8 @@ def test_주휴_계산법은_금액입력_요청이_아니라_공식_산식을_�
 @pytest.mark.parametrize(
     "question,topic,required",
     [
-        ("퇴직금 얼마 받아?", "SEVERANCE_PAY", "퇴직 전 3개월"),
-        ("야간수당 금액 계산해줘", "EXTRA_WORK", "날짜별 실제 근무"),
+        ("퇴직금 얼마 받아?", "SEVERANCE_PAY", "직전 3개월"),
+        ("야간수당 금액 계산해줘", "EXTRA_WORK", "날짜별 실제 시작"),
     ],
 )
 def test_다른_금액_질문도_일반론_대신_계산에_필요한_값을_답한다(
@@ -724,3 +727,60 @@ def test_다른_금액_질문도_일반론_대신_계산에_필요한_값을_답
     assert body["topic"] == topic
     assert required in body["answer"]
     assert "계산할 수 없습니다" in body["answer"]
+
+
+def test_주휴수당_일반_답변은_조건부터_짧게_안내한다():
+    body = client.post(
+        "/questions/general", json={"question": "나 지금 주휴수당 받을 수 있어?"}
+    ).json()
+
+    assert body["answer"] == (
+        "주요 조건은 4주 평균 주 소정근로시간 15시간 이상과 소정근로일 개근입니다."
+    )
+    assert "해당 주까지 근로관계 유지" in body["limitations"]
+    assert "질문에 적은 실제 근무시간" not in body["answer"]
+    assert "판단하지 않습니다" not in body["answer"]
+    assert len(body["answer"]) <= 220
+    assert len(body["limitations"]) <= 220
+
+
+def test_임신기_단축과_연소자_서류의_법정_한정문구를_보존한다():
+    pregnancy = client.post(
+        "/questions/general", json={"question": "임신기 근로시간 단축 기준 알려줘"}
+    ).json()
+    minor = client.post(
+        "/questions/general", json={"question": "미성년자 알바 서류가 뭐야?"}
+    ).json()
+
+    assert "근로자가 신청하면" in pregnancy["answer"]
+    assert "8시간 미만이면 단축 후 6시간이 되도록" in pregnancy["answer"]
+    assert "연령을 증명하는 가족관계기록사항에 관한 증명서" in minor["answer"]
+    assert "친권자·후견인 동의서" in minor["answer"]
+
+
+def test_근무단계가_불명확한_계약서_답변은_두_상황을_나열하지_않는다():
+    body = client.post(
+        "/questions/general", json={"question": "근로계약서를 어떻게 해야 해?"}
+    ).json()
+
+    assert "사용자는 임금" in body["answer"]
+    assert "근무 시작 전이라면" not in body["answer"]
+    assert "이미 근무를 시작했다면" not in body["answer"]
+    assert len(body["answer"]) <= 260
+    assert len(body["limitations"]) <= 220
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "퇴직금 받을 수 있어?",
+        "연차 받을 수 있어?",
+        "해고예고수당 받을 수 있어?",
+        "수습기간 최저임금은?",
+    ],
+)
+def test_주요_일반_답변은_간결성_상한을_지킨다(question):
+    body = client.post("/questions/general", json={"question": question}).json()
+
+    assert len(body["answer"]) <= 220
+    assert len(body["limitations"]) <= 220

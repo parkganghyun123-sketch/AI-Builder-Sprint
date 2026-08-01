@@ -36,8 +36,8 @@ from app.validation.rules import (
 )
 
 OUT_OF_SCOPE_ANSWER = (
-    "이 질문은 계약서만으로 판단할 수 없습니다. 개별 상황에 따라 답이 달라질 수 있어, "
-    "고용노동부 고객상담센터(☎1350)에서 확인하시는 것을 권합니다."
+    "개별 사실과 기록이 필요한 질문이어서 계약서만으로 결론 낼 수 없습니다. "
+    "고용노동부 1350에서 확인하세요."
 )
 COMMON_SUGGESTIONS = [
     "나 지금 주휴수당 시간 요건을 충족하나요?",
@@ -108,10 +108,7 @@ def _weekly_holiday_method() -> ChatResponse:
                 detail=("SRC-MOEL-WEEKLY-HOLIDAY-AMOUNT · SRC-LSA-DECREE-SCHEDULE-2"),
             )
         ],
-        limitation=(
-            "단시간근로자 여부와 비교 정보를 안전하게 입력받는 기능을 추가하기 전까지 "
-            "개인 금액 자동 계산은 제공하지 않습니다."
-        ),
+        limitation="개인 금액에는 단시간근로자 여부, 통상시급과 비교 근로정보가 필요합니다.",
         suggested_questions=COMMON_SUGGESTIONS,
     )
 
@@ -140,7 +137,7 @@ def _break_time_from_question(question: str | None) -> ChatResponse | None:
                 detail="근로기준법 제54조 · 4시간에 30분 이상, 8시간에 1시간 이상",
             )
         ],
-        limitation="실제 휴게 부여 여부와 자유롭게 이용할 수 있었는지는 별도로 확인해야 합니다.",
+        limitation="실제 휴게 부여와 자유로운 이용 여부는 별도로 확인해야 합니다.",
         suggested_questions=COMMON_SUGGESTIONS,
     )
 
@@ -150,9 +147,8 @@ def _extra_work_amount() -> ChatResponse:
         intent=ChatIntent.CALCULATION,
         topic=ChatTopic.EXTRA_WORK,
         answer=(
-            "연장·야간·휴일근로 수당 금액을 계산하려면 통상시급, 날짜별 실제 근무 "
-            "시작·종료·휴게시간, 휴일 여부와 사업장 상시근로자 수가 필요합니다. "
-            "현재 계약서만으로는 이 값이 없어 금액을 계산할 수 없습니다."
+            "금액 계산에는 통상시급, 날짜별 실제 시작·종료·휴게시간, 휴일 여부와 "
+            "상시근로자 수가 필요합니다. 현재 계약서만으로는 계산할 수 없습니다."
         ),
         evidence=[
             ChatEvidence(
@@ -161,7 +157,7 @@ def _extra_work_amount() -> ChatResponse:
                 detail="근로기준법 제56조 · 연장·야간·휴일근로",
             )
         ],
-        limitation="실제 근무기록과 사업장 규모를 확인하기 전에는 지급 여부나 금액을 확정하지 않습니다.",
+        limitation="실제 근무기록과 사업장 규모를 확인해야 합니다.",
         suggested_questions=COMMON_SUGGESTIONS,
     )
 
@@ -242,7 +238,7 @@ def out_of_scope_response() -> ChatResponse:
         topic=ChatTopic.UNSUPPORTED,
         answer=OUT_OF_SCOPE_ANSWER,
         evidence=[],
-        limitation="FairSign은 계약서 내용과 지원하는 법정 기준만 설명하며 법률 자문을 제공하지 않습니다.",
+        limitation="FairSign은 계약서와 지원 기준만 설명하며 법률 자문은 제공하지 않습니다.",
         suggested_questions=COMMON_SUGGESTIONS,
     )
 
@@ -300,7 +296,8 @@ def _weekly_holiday(
     met: list[str] = []
     unmet: list[str] = []
     needs_check = [
-        "소정근로일 개근 여부",
+        "해당 주 소정근로일 개근 여부",
+        "해당 주까지 근로관계가 유지되었는지",
         "계약과 실제 근무 내용의 일치 여부",
         "실제 주휴수당 지급 내역",
     ]
@@ -332,15 +329,12 @@ def _weekly_holiday(
         and terms.weekly_hours >= WEEKLY_HOLIDAY_MIN_HOURS
     ):
         answer = (
-            "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
+            f"계약상 주 {terms.weekly_hours:g}시간은 주휴수당의 15시간 이상 "
             "시간 요건을 충족합니다."
         )
         met.append(f"계약상 주 소정근로시간 {terms.weekly_hours:g}시간은 15시간 이상")
     else:
-        answer = (
-            "계약상 주 소정근로시간을 기준으로 보면 주휴수당 지급 조건 중 "
-            "시간 요건을 충족하지 않습니다."
-        )
+        answer = "계약상 주 소정근로시간이 15시간 미만이면 주휴수당 시간 조건을 충족하지 않습니다."
         if terms.weekly_hours is not None:
             unmet.append(
                 f"계약상 주 소정근로시간 {terms.weekly_hours:g}시간은 15시간 미만"
@@ -400,17 +394,18 @@ def _severance_pay(
 
     if amount_requested:
         answer = (
-            "퇴직금 금액을 계산하려면 실제 퇴직일, 퇴직 전 3개월의 임금 총액과 "
-            "그 기간의 총일수, 전체 계속근로기간, 기간별 주 소정근로시간이 필요합니다. "
-            "현재 계약서 한 장만으로는 이 값과 실제 퇴직 여부를 모두 확인할 수 없어 "
-            "금액을 계산하지 않았습니다."
+            "퇴직금 계산에는 실제 퇴직일, 직전 3개월 임금 총액·총일수, 계속근로기간과 "
+            "기간별 주 근로시간이 필요합니다. 현재 계약서만으로는 계산할 수 없습니다."
         )
     elif unmet:
         answer = "계약 조건상 퇴직급여 관련 기준 중 충족하지 않는 항목이 있습니다."
     elif result.planned_one_year is None or result.weekly_hours_15 is None:
         answer = "계약서 정보가 부족해 퇴직급여 관련 두 기준을 모두 확인할 수 없습니다."
     else:
-        answer = "계약 조건상 퇴직급여 관련 두 기준을 충족합니다."
+        answer = (
+            "계약상 예정기간이 1년 이상이고 주 소정근로시간이 15시간 이상입니다. "
+            "실제 계속근로와 퇴직 조건도 충족하면 퇴직급여 기준에 해당합니다."
+        )
 
     return ChatResponse(
         intent=ChatIntent.CALCULATION,
@@ -509,7 +504,10 @@ def _annual_leave(terms: ContractTerms) -> ChatResponse:
         needs.insert(0, "현재 계약상 주 소정근로시간")
     return _policy_response(
         topic=ChatTopic.ANNUAL_LEAVE,
-        answer="계약에서 확인 가능한 연차 관련 기간·시간 지표를 정리했습니다.",
+        answer=(
+            "연차는 사업장 적용 범위, 계속근로기간·출근율 또는 월 개근, 주 근로시간 "
+            "조건을 충족하면 발생합니다. 계약에서 기간·시간 지표만 확인했습니다."
+        ),
         basis=result.legal_basis,
         calculation=f"{result.period_calculation} / {result.weekly_hours_calculation}",
         met=met,
@@ -537,7 +535,10 @@ def _dismissal_notice(terms: ContractTerms) -> ChatResponse:
         needs.insert(0, "계약 시작일·종료일")
     return _policy_response(
         topic=ChatTopic.DISMISSAL_NOTICE,
-        answer="계약상 예정기간 지표만 확인했으며 해고예고수당 여부는 확정할 수 없습니다.",
+        answer=(
+            "원칙적으로 30일 전 예고하거나 30일분 통상임금을 지급하며, 계속근로 "
+            "3개월 미만 등 예외가 있습니다. 계약에서는 예정기간만 확인했습니다."
+        ),
         basis=result.legal_basis,
         calculation=result.calculation,
         met=met,
@@ -577,7 +578,10 @@ def _probation_minimum_wage(terms: ContractTerms) -> ChatResponse:
         needs.insert(0, "계약상 시간급")
     return _policy_response(
         topic=ChatTopic.PROBATION_MINIMUM_WAGE,
-        answer="계약기간과 시급을 수습 최저임금 관련 기준과 비교했습니다.",
+        answer=(
+            "1년 이상 계약의 수습 시작 후 3개월 이내이고 단순노무 직종이 아니면 "
+            "최저임금을 최대 10% 감액할 수 있습니다. 계약기간과 시급만 비교했습니다."
+        ),
         basis=result.legal_basis,
         calculation=f"{result.period_calculation} / {result.wage_calculation}",
         met=met,
@@ -608,7 +612,10 @@ def _social_insurance(terms: ContractTerms) -> ChatResponse:
         needs.insert(0, "현재 계약상 주 소정근로시간")
     return _policy_response(
         topic=ChatTopic.SOCIAL_INSURANCE,
-        answer="4대보험 가입 여부를 하나로 단정하지 않고 보험별 확인사항을 정리했습니다.",
+        answer=(
+            "4대보험은 보험별 시간·기간·소득·업종 조건을 충족하면 적용됩니다. "
+            "계약에서는 주 근로시간 지표만 확인했습니다."
+        ),
         basis=result.legal_basis,
         calculation=result.weekly_hours_calculation,
         met=met,
@@ -753,7 +760,7 @@ def _legal_standard(topic: ChatTopic) -> ChatResponse:
             "최저임금위원회 2026년 적용 최저임금 (SRC-MINWAGE-2026)",
         ),
         ChatTopic.WEEKLY_HOLIDAY: (
-            f"주휴수당 관련 시간 기준은 4주 평균 1주 소정근로시간 {WEEKLY_HOLIDAY_MIN_HOURS:g}시간 이상입니다.",
+            f"주요 조건은 4주 평균 주 소정근로시간 {WEEKLY_HOLIDAY_MIN_HOURS:g}시간 이상과 소정근로일 개근입니다.",
             "근로기준법 제18조제3항·제55조 (SRC-LSA-18)",
         ),
         ChatTopic.BREAK_TIME: (
@@ -776,7 +783,11 @@ def _legal_standard(topic: ChatTopic) -> ChatResponse:
                 detail=basis,
             )
         ],
-        limitation="일반 기준 안내이며 개별 상황에 대한 법률 판단이 아닙니다.",
+        limitation=(
+            "확인: 해당 주 소정근로일 개근과 해당 주까지 근로관계 유지."
+            if topic == ChatTopic.WEEKLY_HOLIDAY
+            else "개인 적용에는 계약 조건과 실제 사실 확인이 필요합니다."
+        ),
         suggested_questions=COMMON_SUGGESTIONS,
     )
 
