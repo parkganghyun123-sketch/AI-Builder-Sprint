@@ -12,8 +12,9 @@ from app.schemas import (
 )
 from app.validation.cli import main as cli_main
 from app.validation.rules import (
+    check_annual_leave_indicators,
     check_break_time,
-    check_disabled_accommodation,
+    check_dismissal_notice_indicator,
     check_minimum_wage,
     check_minor_night_work,
     check_minor_working_hours,
@@ -21,7 +22,10 @@ from app.validation.rules import (
     check_pregnant_night_work,
     check_pregnant_overtime,
     check_pregnant_shortened_hours,
+    check_probation_minimum_wage,
     check_required_fields,
+    check_severance_pay,
+    check_social_insurance_indicators,
     check_weekly_holiday,
     validate,
 )
@@ -609,6 +613,130 @@ def test_validation_report_marks_violation_as_problem() -> None:
     assert report.has_problem is True
 
 
+def test_severance_contract_conditions_both_meet_thresholds() -> None:
+    result = check_severance_pay(terms(contract_end=field("2027-07-31")))
+
+    assert result.planned_one_year is True
+    assert result.weekly_hours_15 is True
+    assert "2026-08-01~2027-07-31" in result.period_calculation
+    assert result.weekly_hours_calculation == (
+        "4주 평균 기준(현재 계약상 주간 일정으로 비교): 주 소정근로시간 18시간 ≥ 15시간"
+    )
+    assert "제4조·제8조" in result.legal_basis
+
+
+def test_severance_short_planned_period_is_unmet_without_legal_conclusion() -> None:
+    result = check_severance_pay(terms(contract_end=field("2027-07-30")))
+
+    assert result.planned_one_year is False
+    assert "< 1년 예정 기준" in result.period_calculation
+
+
+def test_severance_leap_day_one_year_boundary_is_inclusive() -> None:
+    exact = check_severance_pay(
+        terms(
+            contract_start=field("2024-02-29"),
+            contract_end=field("2025-02-28"),
+        )
+    )
+    one_day_short = check_severance_pay(
+        terms(
+            contract_start=field("2024-02-29"),
+            contract_end=field("2025-02-27"),
+        )
+    )
+
+    assert exact.planned_one_year is True
+    assert one_day_short.planned_one_year is False
+
+
+def test_severance_weekly_hours_below_fifteen_is_unmet() -> None:
+    result = check_severance_pay(
+        terms(
+            contract_end=field("2027-07-31"),
+            work_start_time=field("09:00"),
+            work_end_time=field("13:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+            work_days_per_week=field(3),
+        )
+    )
+
+    assert result.planned_one_year is True
+    assert result.weekly_hours_15 is False
+    assert result.weekly_hours_calculation == (
+        "4주 평균 기준(현재 계약상 주간 일정으로 비교): 주 소정근로시간 12시간 < 15시간"
+    )
+
+
+def test_severance_missing_or_invalid_inputs_remain_unknown() -> None:
+    result = check_severance_pay(
+        terms(
+            contract_start=field("날짜 미상"),
+            contract_end=field(None),
+            work_days_per_week=field(None),
+        )
+    )
+
+    assert result.planned_one_year is None
+    assert result.weekly_hours_15 is None
+    assert "비교 불가" in result.period_calculation
+    assert "비교 불가" in result.weekly_hours_calculation
+
+
+def test_annual_leave_indicators_keep_contract_boundaries_only() -> None:
+    result = check_annual_leave_indicators(terms(contract_end=field("2027-07-31")))
+
+    assert result.planned_one_year is True
+    assert result.weekly_hours_15 is True
+    assert "제60조" in result.legal_basis
+
+
+def test_dismissal_notice_three_month_boundary_and_leap_day() -> None:
+    exact = check_dismissal_notice_indicator(
+        terms(contract_start=field("2024-02-29"), contract_end=field("2024-05-28"))
+    )
+    short = check_dismissal_notice_indicator(
+        terms(contract_start=field("2024-02-29"), contract_end=field("2024-05-27"))
+    )
+
+    assert exact.planned_three_months is True
+    assert short.planned_three_months is False
+
+
+def test_probation_wage_regular_discounted_and_below_boundaries() -> None:
+    regular = check_probation_minimum_wage(
+        terms(contract_end=field("2027-07-31"), wage_amount=field(10_320))
+    )
+    discounted = check_probation_minimum_wage(
+        terms(contract_end=field("2027-07-31"), wage_amount=field(9_288))
+    )
+    below = check_probation_minimum_wage(
+        terms(contract_end=field("2027-07-31"), wage_amount=field(9_287))
+    )
+
+    assert regular.meets_regular_minimum is True
+    assert "SRC-MWA-DECREE-3" in regular.legal_basis
+    assert discounted.meets_regular_minimum is False
+    assert discounted.meets_discounted_floor is True
+    assert below.meets_discounted_floor is False
+
+
+def test_policy_indicators_keep_missing_values_unknown() -> None:
+    contract = terms(
+        contract_start=field(None),
+        contract_end=field(None),
+        work_days_per_week=field(None),
+        wage_amount=field(None),
+    )
+
+    assert check_dismissal_notice_indicator(contract).planned_three_months is None
+    probation = check_probation_minimum_wage(contract)
+    assert probation.planned_one_year is None
+    assert probation.hourly_wage is None
+    assert check_social_insurance_indicators(contract).weekly_hours_15 is None
+
+
 # ============================================================
 # 임산부·장애인 보호 규정
 # ============================================================
@@ -650,8 +778,30 @@ def test_pregnant_overtime_over_forty_hours_is_violation() -> None:
     assert "합의로도 예외가 인정되지" in result.detail
 
 
+def test_pregnant_overtime_over_daily_eight_hours_is_violation_even_under_weekly_forty() -> (
+    None
+):
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(4),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "1일 소정근로시간 9시간 > 법정근로시간 8시간" in result.calculation
+    assert "SRC-LSA-50" in result.legal_basis
+    assert "SRC-LSA-74" in result.legal_basis
+
+
 def test_pregnant_overtime_unknown_when_schedule_missing() -> None:
-    result = check_pregnant_overtime(terms(work_start_time=field(None)), is_pregnant=True)
+    result = check_pregnant_overtime(
+        terms(work_start_time=field(None)), is_pregnant=True
+    )
 
     assert result.status == CheckStatus.UNKNOWN
 
@@ -662,6 +812,8 @@ def test_pregnant_shortened_hours_eligible_at_boundaries(week: int) -> None:
 
     assert result is not None
     assert "신청할 수 있습니다" in result.detail
+    assert "8시간 미만" in result.detail
+    assert "6시간" in result.detail
 
 
 def test_pregnant_shortened_hours_not_eligible_mid_pregnancy() -> None:
@@ -797,17 +949,6 @@ def test_postpartum_overtime_unknown_when_schedule_missing() -> None:
     assert result.status == CheckStatus.UNKNOWN
 
 
-def test_disabled_accommodation_none_when_not_disabled() -> None:
-    assert check_disabled_accommodation(False) is None
-
-
-def test_disabled_accommodation_is_informational_ok() -> None:
-    result = check_disabled_accommodation(True)
-
-    assert result.status == CheckStatus.OK
-    assert "정당한 편의" in result.detail
-
-
 def test_validate_conditionally_includes_pregnant_checks() -> None:
     report = validate(terms(), worker_is_pregnant=True, worker_pregnancy_week=10)
     codes = {check.code for check in report.checks}
@@ -826,11 +967,11 @@ def test_validate_conditionally_includes_postpartum_check() -> None:
     assert "PREGNANT_OVERTIME" not in codes
 
 
-def test_validate_conditionally_includes_disabled_check() -> None:
+def test_validate_does_not_turn_disability_guidance_into_an_automatic_check() -> None:
     report = validate(terms(), worker_is_disabled=True)
     codes = {check.code for check in report.checks}
 
-    assert "DISABLED_ACCOMMODATION" in codes
+    assert "DISABLED_ACCOMMODATION" not in codes
 
 
 def test_validate_without_worker_flags_has_no_new_checks() -> None:

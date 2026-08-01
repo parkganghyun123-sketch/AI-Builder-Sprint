@@ -5,6 +5,7 @@ import {
   archiveListSchema,
   authErrorEnvelopeSchema,
   callbackResponseSchema,
+  chatResponseSchema,
   contractChatResponseSchema,
   contractTermsSchema,
   entitlementsResponseSchema,
@@ -23,6 +24,7 @@ import {
 import type {
   AnalyzeSignRequest,
   ArchiveItem,
+  ChatRequest,
   ContractChatRequest,
   GeneralQuestionTopic,
   InvalidContractValues,
@@ -162,8 +164,21 @@ function responseError(
     );
   }
   if (status === 502 || status === 503 || status === 504) {
+    if (path === "/chat") {
+      return new ApiError(
+        "AI 계약 비서와 연결하지 못했어요. API 키와 서버 설정을 확인한 뒤 다시 시도해 주세요.",
+        status,
+        "UNAVAILABLE",
+        true,
+      );
+    }
+    const signingPath =
+      path === "/contracts/analyze-sign" ||
+      path === "/contracts/{id}/status";
     return new ApiError(
-      "전자서명 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      signingPath
+        ? "전자서명 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요."
+        : "외부 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
       status,
       "UNAVAILABLE",
       true,
@@ -342,6 +357,14 @@ export function validateTerms(body: ValidateRequest) {
 /** 확인된 계약 조건과 검증 결과만 검색하는 계약 비서. 원문 계약서는 전송하지 않는다. */
 export function askContractAssistant(body: ContractChatRequest) {
   return postJson("/contracts/chat", body, contractChatResponseSchema);
+}
+
+/**
+ * 검증된 KB를 검색하고 승인된 근거만 조합하는 RAG 계약 비서.
+ * 법정 판정과 계산은 백엔드의 결정론적 규칙 결과만 사용한다.
+ */
+export function askContractQuestion(body: ChatRequest) {
+  return postJson("/chat", body, chatResponseSchema);
 }
 
 /** 계약서 없이 묻는 일반 기준 질문. 개인 정보나 계약서 원문은 전송하지 않는다. */

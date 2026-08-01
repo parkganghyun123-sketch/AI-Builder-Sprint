@@ -159,6 +159,16 @@ export type GeneralQuestionTopic =
   | "WRITTEN_CONTRACT"
   | "MINOR_WORK"
   | "EXTRA_WORK"
+  | "SEVERANCE_PAY"
+  | "ANNUAL_LEAVE"
+  | "DISMISSAL_NOTICE"
+  | "PROBATION_MINIMUM_WAGE"
+  | "SOCIAL_INSURANCE"
+  | "MINOR_DOCUMENTS"
+  | "PREGNANCY_PROTECTION"
+  | "DISABILITY_ACCOMMODATION"
+  | "WAGE_PAYMENT"
+  | "POST_EMPLOYMENT_SETTLEMENT"
   | "OUT_OF_SCOPE";
 
 export interface GeneralQuestionResponse {
@@ -168,6 +178,8 @@ export interface GeneralQuestionResponse {
   evidence: ChatEvidence[];
   action: ChatAction | null;
   suggestions: string[];
+  retrieved_kb_ids?: string[];
+  retrieved_source_ids?: string[];
 }
 
 // ============================================================
@@ -468,4 +480,69 @@ export interface ArchiveItem {
   download_url: string | null;
   /** 제공자 조회 실패로 마지막 저장값을 보여주는 중 */
   stale: boolean;
+}
+
+// ============================================================
+// 6. 근거 추적형 RAG 계약 비서 — POST /chat
+// ============================================================
+
+/**
+ * 최신 계약 비서(`/contracts/chat`)와 별개로, 검증된 KB 검색 결과까지
+ * 반환하는 `/chat` 응답 계약이다. 두 API의 근거 모양이 달라 명시적으로
+ * 타입을 분리한다.
+ */
+export type GroundedChatIntent =
+  | "FIELD_LOOKUP"
+  | "CALCULATION"
+  | "MISSING_CLAUSE"
+  | "LEGAL_STANDARD"
+  | "OUT_OF_SCOPE";
+
+export type GroundedChatEvidenceKind =
+  | "CONTRACT"
+  | "LEGAL"
+  | "CALCULATION";
+
+export interface GroundedChatEvidence {
+  kind: GroundedChatEvidenceKind;
+  title: string;
+  detail: string;
+}
+
+export interface ChatRequest {
+  question: string;
+  terms: ContractTerms;
+  /** 선택 입력값이며 화면·대화 내역에는 표시하지 않는다. */
+  worker_birth_date?: string | null;
+}
+
+export interface ChatConditionGroups {
+  met: string[];
+  unmet: string[];
+  needs_check: string[];
+}
+
+export interface RetrievedKnowledge {
+  kb_id: string;
+  title: string;
+  source_ids: string[];
+  score: number;
+}
+
+export type ChatAnswerMode =
+  | "DETERMINISTIC_TEMPLATE"
+  | "GROUNDED_GENERATION"
+  | "NATURAL_GROUNDED_GENERATION"
+  | "OPENAI_GROUNDED_GENERATION";
+
+export interface ChatResponse {
+  intent: GroundedChatIntent;
+  topic: string;
+  answer: string;
+  evidence: GroundedChatEvidence[];
+  limitation: string | null;
+  condition_groups: ChatConditionGroups | null;
+  retrieved_knowledge: RetrievedKnowledge[];
+  answer_mode: ChatAnswerMode;
+  suggested_questions: string[];
 }

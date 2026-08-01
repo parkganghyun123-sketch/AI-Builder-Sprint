@@ -73,6 +73,18 @@ export const chatEvidenceKindSchema = z.enum([
   "OFFICIAL_GUIDANCE",
 ]);
 
+const APPROVED_EXTERNAL_ACTION_HREFS = [
+  "https://www.moel.go.kr/policy/policydata/view.do?bbs_seq=20230700845",
+  "https://1350.moel.go.kr/",
+] as const;
+
+export const actionHrefSchema = z.string().refine(
+  (href) =>
+    /^\/(?!\/)[^\s]*$/.test(href) ||
+    APPROVED_EXTERNAL_ACTION_HREFS.some((approved) => href === approved),
+  "허용되지 않은 이동 주소입니다.",
+);
+
 export const contractChatResponseSchema = z.object({
   intent: chatIntentSchema,
   answer: z.string(),
@@ -88,7 +100,7 @@ export const contractChatResponseSchema = z.object({
   action: z
     .object({
       label: z.string(),
-      href: z.string().startsWith("/"),
+      href: actionHrefSchema,
     })
     .nullable(),
   suggestions: z.array(z.string()),
@@ -101,6 +113,16 @@ export const generalQuestionTopicSchema = z.enum([
   "WRITTEN_CONTRACT",
   "MINOR_WORK",
   "EXTRA_WORK",
+  "SEVERANCE_PAY",
+  "ANNUAL_LEAVE",
+  "DISMISSAL_NOTICE",
+  "PROBATION_MINIMUM_WAGE",
+  "SOCIAL_INSURANCE",
+  "MINOR_DOCUMENTS",
+  "PREGNANCY_PROTECTION",
+  "DISABILITY_ACCOMMODATION",
+  "WAGE_PAYMENT",
+  "POST_EMPLOYMENT_SETTLEMENT",
   "OUT_OF_SCOPE",
 ]);
 
@@ -119,10 +141,12 @@ export const generalQuestionResponseSchema = z.object({
   action: z
     .object({
       label: z.string(),
-      href: z.string().startsWith("/"),
+      href: actionHrefSchema,
     })
     .nullable(),
   suggestions: z.array(z.string()),
+  retrieved_kb_ids: z.array(z.string()).default([]),
+  retrieved_source_ids: z.array(z.string()).default([]),
 });
 
 // 입력값 유효성 + 진행 차단 판정. 백엔드 severity.py 의 Issue/ValidationState 와 1:1.
@@ -333,3 +357,59 @@ export const archiveItemSchema = z.object({
 });
 
 export const archiveListSchema = z.array(archiveItemSchema);
+
+// ============================================================
+// 6. 근거 추적형 RAG 계약 비서 — POST /chat
+// ============================================================
+
+export const groundedChatIntentSchema = z.enum([
+  "FIELD_LOOKUP",
+  "CALCULATION",
+  "MISSING_CLAUSE",
+  "LEGAL_STANDARD",
+  "OUT_OF_SCOPE",
+]);
+
+export const groundedChatEvidenceKindSchema = z.enum([
+  "CONTRACT",
+  "LEGAL",
+  "CALCULATION",
+]);
+
+export const chatAnswerModeSchema = z.enum([
+  "DETERMINISTIC_TEMPLATE",
+  "GROUNDED_GENERATION",
+  "NATURAL_GROUNDED_GENERATION",
+  "OPENAI_GROUNDED_GENERATION",
+]);
+
+export const retrievedKnowledgeSchema = z.object({
+  kb_id: z.string(),
+  title: z.string(),
+  source_ids: z.array(z.string()),
+  score: z.number().min(0).max(1),
+});
+
+export const chatResponseSchema = z.object({
+  intent: groundedChatIntentSchema,
+  topic: z.string(),
+  answer: z.string(),
+  evidence: z.array(
+    z.object({
+      kind: groundedChatEvidenceKindSchema,
+      title: z.string(),
+      detail: z.string(),
+    }),
+  ),
+  limitation: z.string().nullable(),
+  condition_groups: z
+    .object({
+      met: z.array(z.string()),
+      unmet: z.array(z.string()),
+      needs_check: z.array(z.string()),
+    })
+    .nullable(),
+  retrieved_knowledge: z.array(retrievedKnowledgeSchema),
+  answer_mode: chatAnswerModeSchema,
+  suggested_questions: z.array(z.string()),
+});

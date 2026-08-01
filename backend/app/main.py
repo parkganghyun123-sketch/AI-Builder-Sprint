@@ -136,7 +136,7 @@ async def health_pdf() -> Response:
 
 app.include_router(auth.router)
 app.include_router(contracts.router, tags=["contracts"])
-app.include_router(chat.router, tags=["contract assistant"])
+app.include_router(chat.router, tags=["chat"])
 app.include_router(general_questions.router, tags=["general questions"])
 app.include_router(extract.router, tags=["ai"])
 app.include_router(sign.router, tags=["signing"])
