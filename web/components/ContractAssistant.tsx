@@ -7,7 +7,7 @@ import { Button, ButtonLink, Card, Pill } from "@/components/ui";
 
 const KIND_LABEL = {
   CONTRACT: "계약서 근거",
-  VALIDATION: "검증 결과",
+  VALIDATION: "확인 결과",
   LEGAL_STANDARD: "법정 기준",
   OFFICIAL_GUIDANCE: "공식 안내",
 } as const;
@@ -41,7 +41,7 @@ export function ContractAssistant({ terms }: { terms: ContractTerms }) {
   return (
     <Card className="border-brand/40 bg-brand-tint/30">
       <div className="flex flex-col gap-2">
-        <Pill>계약 비서 · 근거 검색</Pill>
+        <Pill>계약 비서</Pill>
         <h2 className="text-xl font-extrabold tracking-tight text-ink">
           내 계약서에 대해 물어보세요
         </h2>
@@ -96,7 +96,7 @@ export function ContractAssistant({ terms }: { terms: ContractTerms }) {
           )}
 
           <div className="rounded-field bg-white/70 p-3 text-sm leading-relaxed text-ink-muted">
-            <span className="font-bold text-ink">판정 범위: </span>
+            <span className="font-bold text-ink">확인할 수 있는 범위: </span>
             {answer.limitations}
           </div>
 

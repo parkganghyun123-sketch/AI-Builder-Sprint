@@ -68,20 +68,19 @@ export function CheckResultCard({
         {sourceOrigin === "USER" && (
           <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
             <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
-              ✍️ 입력 출처
+              ✍️ 확인한 값
             </dt>
             <dd className="break-words text-ink-muted">
               {sourceValue
-                ? `사용자가 직접 입력하거나 수정한 값: ${sourceValue}`
-                : "사용자가 비워 둔 항목입니다."}
-              {" "}계약서 원문 근거로 표시하지 않습니다.
+                ? `직접 입력하거나 고친 값: ${sourceValue}`
+                : "비워 둔 항목입니다."}
             </dd>
           </div>
         )}
         {sourceOrigin === "CONTRACT" && sourceText && (
           <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
             <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
-              📄 계약서 근거
+              📄 계약서 내용
             </dt>
             <dd className="break-words text-ink-muted">“{sourceText}”</dd>
           </div>
@@ -89,11 +88,11 @@ export function CheckResultCard({
         {sourceOrigin === "CONTRACT" && !sourceText && sourceValue && (
           <div className="flex flex-col gap-1 sm:flex-row sm:gap-2">
             <dt className="shrink-0 font-bold text-brand-deep sm:w-28">
-              📄 입력 출처
+              📄 계약서에서 읽은 값
             </dt>
             <dd className="break-words text-ink-muted">
-              계약서 추출값: {sourceValue}. 연결된 원문 근거 문장은 확인되지
-              않았습니다.
+              {sourceValue}. 계약서에서 해당 문장을 찾지 못했으니 원본을 직접
+              확인해 주세요.
             </dd>
           </div>
         )}

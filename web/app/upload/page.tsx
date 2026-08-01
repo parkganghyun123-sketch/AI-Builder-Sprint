@@ -57,7 +57,7 @@ export default function UploadPage() {
     ].includes(selected.type);
     if (!allowed) {
       setFile(null);
-      setError("JPG, PNG 또는 PDF 파일 한 개를 선택해 주세요.");
+      setError("사진 또는 PDF 문서 한 개를 선택해 주세요.");
       return;
     }
     setFile(selected);
@@ -87,7 +87,7 @@ export default function UploadPage() {
     <ScreenShell
       step={1}
       title="계약서 사진 올리기"
-      description="시급·근로시간 같은 조건을 AI가 읽어 드려요. 다음 화면에서 사람이 모든 항목을 확인하고 수정합니다."
+      description="시급·근로시간 같은 조건을 읽어 드려요. 다음 화면에서 모든 항목을 직접 확인하고 수정할 수 있습니다."
     >
       <div
         onDragOver={(event) => {
@@ -125,7 +125,7 @@ export default function UploadPage() {
                 : "파일을 이 영역으로 끌어다 놓으세요"}
           </p>
           <p className="mt-1 text-sm text-ink-muted">
-            또는 아래 버튼으로 선택 · JPG · PNG · PDF · 파일 한 개
+            또는 아래 버튼으로 선택 · 사진 또는 PDF 문서 한 개
           </p>
         </div>
 
@@ -151,13 +151,13 @@ export default function UploadPage() {
           className="w-full sm:w-auto"
           aria-describedby={error ? "upload-error" : undefined}
         >
-          {loading ? "계약서를 읽고 있어요…" : "업로드하고 조건 읽기"}
+          {loading ? "계약서를 읽고 있어요…" : "계약 조건 읽기"}
         </Button>
 
         <p aria-live="polite" className="text-sm text-ink-muted">
           {loading
-            ? "처리가 끝날 때까지 중복 제출을 막고 있어요."
-            : "파일 원본은 브라우저 저장소에 넣지 않지만, 추출된 계약 조건은 현재 탭의 sessionStorage에 저장됩니다."}
+            ? "계약서를 읽는 동안 버튼을 잠시 잠갔어요."
+            : "읽어낸 계약 조건은 이 창을 닫기 전까지만 잠시 보관돼요."}
         </p>
       </div>
 
@@ -181,14 +181,13 @@ export default function UploadPage() {
       )}
 
       <Card>
-        <h2 className="text-sm font-extrabold text-ink">파일 처리 안내</h2>
+        <h2 className="text-sm font-extrabold text-ink">개인정보 처리 안내</h2>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
-          선택한 파일은 계약 조건을 읽기 위해 서버로 보냅니다. 서버의 보관
-          기간과 삭제 동작은 아직 검증되지 않았습니다. 추출된 텍스트와 이름·
-          사업체 정보 등 개인정보가 포함될 수 있는 계약 조건은 현재 브라우저
-          탭의 <code>sessionStorage</code>에 저장되며, 탭을 닫을 때까지 남을 수
-          있습니다. 검증에 필요하지 않은 사업주 전화·주소와 근로자 주소·
-          연락처는 저장 전에 제거합니다.
+          선택한 파일은 계약 조건을 읽기 위해 페어사인으로 전송됩니다. 전송된
+          파일의 보관 기간과 삭제 시점은 현재 확인 중입니다. 읽어낸 계약
+          조건은 이 창을 이용하는 동안만 기기에 잠시 보관되며, 창을 닫으면
+          사라집니다. 확인에 필요하지 않은 사업주 전화번호·주소와 근로자
+          주소·연락처는 보관하지 않습니다.
         </p>
       </Card>
 

@@ -73,7 +73,7 @@ export class LoginRequiredError extends ApiError {
   constructor(public readonly reason: "LOGIN_REQUIRED" | "SESSION_INVALID") {
     super(
       reason === "SESSION_INVALID"
-        ? "세션이 만료됐어요. 다시 로그인해 주세요."
+        ? "로그인이 만료됐어요. 다시 로그인해 주세요."
         : "이 단계는 로그인이 필요합니다.",
       401,
       "LOGIN_REQUIRED",
@@ -119,11 +119,6 @@ export class InvalidContractValuesError extends ApiError {
   }
 }
 
-/** 뒤에 붙일 백엔드 사유. 있으면 "(사유)" 형태로 덧붙인다. */
-function suffix(detail?: string): string {
-  return detail ? ` (${detail})` : "";
-}
-
 function responseError(
   path: string,
   status: number,
@@ -131,7 +126,7 @@ function responseError(
 ): ApiError {
   if (status === 400 || status === 422) {
     return new ApiError(
-      `입력한 값을 확인한 뒤 다시 시도해 주세요.${suffix(detail)}`,
+      detail ?? "입력한 값을 확인한 뒤 다시 시도해 주세요.",
       status,
       "BAD_INPUT",
       false,
@@ -147,7 +142,7 @@ function responseError(
   }
   if (status === 401 || status === 403) {
     return new ApiError(
-      `요청 권한을 확인하지 못했어요. 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
+      "로그인 상태를 확인하지 못했어요. 다시 로그인해 주세요.",
       status,
       "UNKNOWN",
       false,
@@ -155,7 +150,7 @@ function responseError(
   }
   if (status === 404) {
     return new ApiError(
-      `요청 주소를 찾지 못했어요. 서버 연결 설정을 확인해 주세요.${suffix(detail)}`,
+      detail ?? "요청한 내용을 찾지 못했어요. 처음부터 다시 시도해 주세요.",
       status,
       "UNKNOWN",
       false,
@@ -171,14 +166,14 @@ function responseError(
   }
   if (status >= 500) {
     return new ApiError(
-      `서버에서 요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
+      detail ?? "잠시 문제가 발생했어요. 잠시 후 다시 시도해 주세요.",
       status,
       "SERVER",
       true,
     );
   }
   return new ApiError(
-    `요청을 처리하지 못했어요 (오류 코드 ${status}). 잠시 후 다시 시도해 주세요.${suffix(detail)}`,
+    detail ?? "요청을 처리하지 못했어요. 잠시 후 다시 시도해 주세요.",
     status,
     "UNKNOWN",
     status === 408 || status === 429,
@@ -221,7 +216,7 @@ async function request(
     });
   } catch {
     throw new ApiError(
-      "백엔드에 연결할 수 없습니다. 네트워크와 API 주소를 확인해 주세요.",
+      "서비스에 연결할 수 없어요. 인터넷 연결을 확인하고 다시 시도해 주세요.",
       null,
       "NETWORK",
       true,
@@ -249,7 +244,7 @@ async function parseJson<T>(
     json = await response.json();
   } catch {
     throw new ApiError(
-      "서버 응답 형식을 확인할 수 없습니다.",
+      "처리 결과를 확인하지 못했어요. 다시 시도해 주세요.",
       response.status,
       "INVALID_RESPONSE",
       false,
@@ -259,7 +254,7 @@ async function parseJson<T>(
   const parsed = schema.safeParse(json);
   if (!parsed.success) {
     throw new ApiError(
-      "서버 응답 형식이 예상과 다릅니다.",
+      "처리 결과를 불러오지 못했어요. 다시 시도해 주세요.",
       response.status,
       "INVALID_RESPONSE",
       false,
@@ -425,7 +420,7 @@ export async function previewPdf(body: PreviewRequest): Promise<Blob> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/pdf")) {
     throw new ApiError(
-      "PDF 응답 형식이 예상과 다릅니다.",
+      "계약서 미리보기를 열지 못했어요. 다시 시도해 주세요.",
       response.status,
       "INVALID_RESPONSE",
       false,

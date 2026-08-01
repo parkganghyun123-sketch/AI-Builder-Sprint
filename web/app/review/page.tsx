@@ -507,7 +507,7 @@ function ReviewContent() {
       <ScreenShell
         step={2}
         title="확인할 계약 조건이 없어요"
-        description="이 브라우저 탭에서 파일을 다시 올리거나 직접 입력해 주세요."
+        description="계약서를 다시 올리거나 조건을 직접 입력해 주세요."
       >
         <Card className="flex flex-col gap-3">
           <ButtonLink href="/upload" className="w-full">
@@ -706,7 +706,7 @@ function ReviewContent() {
 
       <p className="rounded-field border border-brand-line bg-brand-tint/60 px-4 py-3 text-sm leading-relaxed text-ink-muted">
         전화번호와 주소는 받지 않아요. 입력한 이름과 근로조건은 다음 단계를
-        이어가는 동안 현재 탭에 임시로 보관될 수 있습니다.
+        이어가는 동안만 이 기기에 잠시 보관해요.
       </p>
 
       {!isManual && workerProtectionCard}

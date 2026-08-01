@@ -33,8 +33,8 @@ const BENEFITS = [
   },
   {
     icon: "⚖️",
-    title: "검증 결과는 재현 가능하게",
-    body: "FairSign이 지원하는 법정 기준 대조는 같은 확인값에 같은 결과를 돌려줘요. 사진 추출값은 사람이 확인합니다.",
+    title: "확인한 값으로 정확하게",
+    body: "같은 계약 조건은 언제 확인해도 같은 기준으로 계산해요. 사진에서 읽은 내용은 사람이 다시 확인합니다.",
   },
   {
     icon: "✍️",
@@ -203,7 +203,7 @@ export default function HomePage() {
             {[
               "계약서 사진 올리기",
               "읽어낸 조건 확인·수정 (사람이 최종 확정)",
-              "법정 기준 검증 — 근거와 계산식까지",
+              "법정 기준과 비교하고 이유 확인하기",
               "근로조건 확인 요청서 미리보기",
               "모두싸인 전자서명 요청",
               "보관함에서 체결 문서 내려받기",
@@ -233,7 +233,7 @@ export default function HomePage() {
             height={14}
             className="h-3.5 w-[27px] shrink-0 object-contain"
           />
-          페어사인 · AI BUILDER SPRINT 2026
+          페어사인 · 근로계약 확인 도우미
         </p>
       </footer>
 

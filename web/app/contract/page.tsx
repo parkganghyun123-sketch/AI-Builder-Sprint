@@ -129,7 +129,7 @@ export default function ContractPage() {
       <ScreenShell
         step={4}
         title="요청서를 만들 조건이 없어요"
-        description="현재 브라우저 탭에서 계약 조건을 다시 확인해 주세요."
+        description="계약 조건을 다시 확인해 주세요."
       >
         <ButtonLink href="/review" className="w-full">
           조건 확인으로 돌아가기
@@ -163,16 +163,16 @@ export default function ContractPage() {
       </p>
 
       <Card>
-        <h2 className="text-sm font-extrabold text-ink">문서 생성 기준</h2>
+        <h2 className="text-sm font-extrabold text-ink">문서에 들어가는 내용</h2>
         <ul className="mt-3 flex flex-col gap-2 text-sm leading-relaxed text-ink-muted">
-          <li>· 문서 종류: {title}</li>
-          <li>· 작성 주체: {authorLabel}</li>
+          <li>· 문서 이름: {title}</li>
+          <li>· 작성한 사람: {authorLabel}</li>
           <li>
-            · 조건 출처:{" "}
-            {entryPath === "PHOTO" ? "계약서 사진 추출 후 사람이 확인" : "직접 입력"}
+            · 조건을 가져온 곳:{" "}
+            {entryPath === "PHOTO" ? "계약서 사진을 읽고 직접 확인" : "직접 입력"}
           </li>
-          <li>· 검증 메모: 확인 결과를 문서 아래쪽에 함께 넣어요</li>
-          <li>· 서명 순서: {firstSignerLabel(entryPath)}부터</li>
+          <li>· 확인 결과: 문서 아래쪽에 함께 표시</li>
+          <li>· 먼저 서명할 사람: {firstSignerLabel(entryPath)}</li>
         </ul>
       </Card>
 
@@ -232,7 +232,7 @@ export default function ContractPage() {
       {pdfUrl && (
         <div className="overflow-hidden rounded-card border border-brand-line bg-white shadow-card">
           <iframe
-            title="근로조건 확인 요청서 PDF 미리보기"
+            title="근로조건 확인 요청서 미리보기"
             src={pdfUrl}
             className="h-[70vh] min-h-[480px] w-full"
           />
@@ -242,13 +242,13 @@ export default function ContractPage() {
       <div className="flex flex-col gap-2">
         {pdfUrl ? (
           <ButtonLink href="/sign" className="w-full">
-            요청서 발송 정보 입력으로 →
+            서명할 사람 정보 입력으로 →
           </ButtonLink>
         ) : (
           <Button className="w-full" disabled>
             {hasBlocking
-              ? "필수 항목을 고치면 발송할 수 있어요"
-              : "PDF 미리보기 후 발송 정보 입력으로"}
+              ? "필수 항목을 고치면 보낼 수 있어요"
+              : "문서 미리보기 후 서명할 사람 정보 입력으로"}
           </Button>
         )}
         <Button
@@ -257,7 +257,7 @@ export default function ContractPage() {
           onClick={downloadDraft}
           disabled={!pdfUrl}
         >
-          초안 PDF 다운로드
+          초안 내려받기
         </Button>
         <ButtonLink href="/review" variant="ghost" className="w-full">
           조건 다시 수정

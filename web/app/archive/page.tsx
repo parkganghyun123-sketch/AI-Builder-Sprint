@@ -12,7 +12,7 @@ import type { ArchiveItem } from "@/lib/types";
 
 function formatDate(iso: string): string {
   const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) return iso;
+  if (Number.isNaN(date.getTime())) return "날짜 확인 불가";
   return date.toLocaleDateString("ko-KR", {
     year: "numeric",
     month: "2-digit",
@@ -88,7 +88,7 @@ function ArchiveRow({ item }: { item: ArchiveItem }) {
             className="inline-flex items-center gap-1.5 rounded-field bg-brand px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-deep focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
             <span aria-hidden="true">📄</span>
-            체결 문서 내려받기 (PDF)
+            체결 문서 내려받기
           </a>
         ) : (
           <Link
@@ -103,8 +103,8 @@ function ArchiveRow({ item }: { item: ArchiveItem }) {
       {/* 제공자 조회 실패. 목록에서 감추지 않고 "지금 값이 오래됐다"고 알린다. */}
       {item.stale && (
         <p className="text-xs text-ink-soft">
-          현재 상태를 다시 확인하지 못해 마지막으로 저장된 값을 보여드리고
-          있어요. 항목을 열면 다시 조회합니다.
+          이 문서의 진행 상황을 새로 확인하지 못했어요. 문서를 열면 다시
+          확인합니다.
         </p>
       )}
     </Card>
@@ -187,7 +187,7 @@ export default function ArchivePage() {
         <LoginGate
           title={
             authState === "session-invalid"
-              ? "세션이 만료됐어요"
+              ? "로그인이 만료됐어요"
               : "보관함을 보려면 로그인이 필요해요"
           }
           description={
@@ -205,7 +205,7 @@ export default function ArchivePage() {
     <ScreenShell
       step={6}
       title="보관함"
-      description="내가 보낸 서명 요청과 상대방, 체결된 문서입니다. 다운로드 주소는 유효시간이 10분이라 화면을 오래 열어두면 만료돼요 — 그때는 새로고침해 주세요."
+      description="내가 보낸 서명 요청과 체결된 문서를 확인할 수 있어요. 내려받기 버튼이 작동하지 않으면 화면을 새로고침해 주세요."
     >
       {error && (
         <div

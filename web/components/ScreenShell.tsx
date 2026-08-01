@@ -14,7 +14,7 @@ import type { Me } from "@/lib/types";
  * 8개 화면이 공유한다.
  */
 const STEPS = [
-  { href: "/upload", label: "업로드" },
+  { href: "/upload", label: "사진 올리기" },
   { href: "/review", label: "확인·수정" },
   { href: "/result", label: "결과" },
   { href: "/contract", label: "요청서" },

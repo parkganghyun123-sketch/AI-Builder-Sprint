@@ -275,11 +275,11 @@ export default function SignPage() {
   // 서명 발송에서 처음 로그인을 요구한다. 폼 대신 안내를 먼저 보여준다.
   if (authState === "guest" || authState === "session-invalid") {
     return (
-      <ScreenShell step={5} title="전자서명 발송">
+      <ScreenShell step={5} title="서명 요청 보내기">
         <LoginGate
           title={
             authState === "session-invalid"
-              ? "세션이 만료됐어요"
+              ? "로그인이 만료됐어요"
               : "서명 요청을 보내려면 로그인이 필요해요"
           }
           description={
@@ -303,7 +303,7 @@ export default function SignPage() {
     return (
       <ScreenShell
         step={5}
-        title="서명을 요청할 검증 결과가 없어요"
+        title="서명을 요청할 계약 조건이 없어요"
         description="계약 조건 확인을 먼저 끝내 주세요."
       >
         <ButtonLink href="/review" className="w-full">
@@ -327,21 +327,21 @@ export default function SignPage() {
   return (
     <ScreenShell
       step={5}
-      title={`${title} 전자서명 발송`}
+      title={`${title} 서명 요청 보내기`}
       description="여기서 입력한 이메일로만 서명 요청을 보내요. 보낸 뒤에도 양쪽 서명이 확인되기 전까지는 체결 완료로 표시하지 않습니다."
     >
       <DocumentStatusBadge status="DRAFTING" />
 
       <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
         <strong>{firstSigner}부터 서명</strong>하고, 그다음 상대방에게 서명
-        요청이 갑니다. 서명할 문서에는 “확인 전 초안” 워터마크를 찍지 않습니다
-        — 체결된 문서에 초안 표기가 남으면 나중에 “초안인 줄 알았다”는 주장의
-        빌미가 되고, 근로기준법 제17조 교부 의무를 이행한 증거로도 약해집니다.
-        조건의 출처는 문서 하단에 문장으로 밝힙니다.
+        요청이 갑니다. 조건을 모두 확인한 뒤 보내는 문서이므로 “확인 전 초안”
+        표시는 빠집니다. 문서 아래에는 조건을 누가 입력했는지 표시해 오해를
+        막습니다.
       </p>
       <p className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm leading-relaxed text-ink-muted">
-        한쪽이 폼을 제출하거나 발송을 눌렀다는 이유만으로 “조건 확인됨” 또는
-        “체결 완료”로 바꾸지 않아요. 상태는 모두싸인에서 직접 읽어옵니다.
+        한쪽이 정보를 입력하거나 보내기 버튼을 눌렀다는 이유만으로 “체결 완료”로
+        표시하지 않아요. 두 사람이 모두 서명한 것이 확인된 뒤에만 완료로
+        표시합니다.
       </p>
 
       {signBlock && (
@@ -450,7 +450,7 @@ export default function SignPage() {
           <p className="mt-3 leading-relaxed">
             이 항목이 있어도 서명 요청은 보낼 수 있어요. 사장님과 조건을
             조정해 보거나, 내용을 확인한 뒤 지금 조건 그대로 진행하셔도 됩니다.
-            발송을 누르면 확인하셨는지 한 번만 더 여쭤볼게요.
+            보내기 버튼을 누르면 확인하셨는지 한 번만 더 여쭤볼게요.
           </p>
         </div>
       )}
@@ -478,9 +478,9 @@ export default function SignPage() {
               className="mt-1 h-5 w-5"
             />
             <span>
-              위 항목과 검증 결과의 한계를 확인했습니다. 이 체크는 권리를
-              포기한다는 뜻이 아니며, 현재 입력한 조건으로 서명 요청을 다시
-              보내는 데 동의합니다.
+              위 항목과 확인 결과만으로 알 수 없는 부분을 확인했습니다. 이
+              체크는 권리를 포기한다는 뜻이 아니며, 현재 입력한 조건으로 서명
+              요청을 다시 보내는 데 동의합니다.
             </span>
           </label>
         </div>
@@ -491,8 +491,8 @@ export default function SignPage() {
           <div>
             <h2 className="text-base font-extrabold text-ink">서명 당사자</h2>
             <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-              이름은 서명 당사자 표시에 사용합니다. 이메일은 지금 발송하는
-              모두싸인 요청에만 사용하며, 검증 단계에서는 수집하지 않았습니다.
+              이름은 서명할 사람을 표시하는 데 사용합니다. 이메일은 서명 요청을
+              보내는 데만 사용하며, 계약 조건을 확인하는 동안에는 받지 않았어요.
             </p>
           </div>
 
@@ -530,9 +530,8 @@ export default function SignPage() {
           />
 
           <p className="text-xs leading-relaxed text-ink-muted">
-            이메일은 이 화면의 메모리에만 잠시 유지하며 sessionStorage에
-            저장하지 않습니다. 로그나 오류 메시지에도 포함하지 않고, 발송 뒤
-            다음 화면에는 다시 표시하지 않습니다.
+            이메일은 서명 요청을 보내는 동안에만 잠시 사용합니다. 보낸 후에는
+            이 화면이나 다음 화면에 다시 표시하지 않습니다.
           </p>
         </Card>
 
@@ -579,10 +578,10 @@ export default function SignPage() {
                 ? "필수 항목을 먼저 채워 주세요"
                 : blockedProblems
                   ? "확인한 조건으로 서명 요청 다시 보내기"
-                  : "확인 전 요청서 발송"}
+                  : "확인 전 요청서 보내기"}
           </Button>
           <ButtonLink href="/result" variant="secondary" className="w-full">
-            검증 결과 다시 확인
+            계약 조건 확인 결과 보기
           </ButtonLink>
         </div>
       </form>
