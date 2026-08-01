@@ -12,6 +12,7 @@ from pydantic import ValidationError
 
 from app.chat.features import SafeQuestionFeatures
 from app.chat.models import (
+    APPROVED_NATURAL_CONNECTIVES,
     Classification,
     GroundedGenerationInput,
     GroundedGenerationOutput,
@@ -43,13 +44,23 @@ GROUNDED_GENERATION_INSTRUCTIONS = """당신은 FairSign의 근거 제한 한국
 - connector는 CONTRACT_SUMMARY, ADDITIONAL_CHECK, LEGAL_CONTEXT 중 하나만 고르세요.
 - 각 문장에는 사용할 fact_id, KB 문장 ID, source_id를 빠짐없이 붙이세요.
 - fact_cards의 사실을 고르고 배열할 뿐, 새 계산이나 새 사실을 만들지 마세요.
+- 자연스러운 답변을 만들 수 있으면 natural_answer_template에 FACT 자리표시자를 사용하세요.
+- 템플릿은 {{FACT-CONCLUSION}}으로 시작하고 fact_cards의 모든 fact_id를 정확히 한 번씩 포함하세요.
+- 자리표시자 밖에는 자연스러운 연결 표현만 쓰고 숫자, URL, 법률 사실·결론을 추가하지 마세요.
+- required_fact_ids에는 사용한 모든 fact_id를 중복 없이 넣으세요.
 - 입력에 없는 ID, 출처, 사실, 숫자를 만들지 마세요.
 JSON 하나만 반환하세요.
 형식: {"sentence_ids":["KB-...-SUMMARY"], "source_ids":["SRC-..."],
 "natural_sentences":[{"connector":"CONTRACT_SUMMARY", "fact_ids":["FACT-..."],
 "kb_sentence_id":"KB-...-SUMMARY",
-"source_ids":["SRC-..."]}]}
+"source_ids":["SRC-..."]}],
+"natural_answer_template":"{{FACT-CONCLUSION}} 다만 {{FACT-NEEDS-CHECK-1}}",
+"required_fact_ids":["FACT-CONCLUSION","FACT-NEEDS-CHECK-1"]}
 """
+GROUNDED_GENERATION_INSTRUCTIONS += (
+    "\n자리표시자 사이에는 다음 서버 승인 연결구 중 하나만 정확히 복사해 사용하세요: "
+    + json.dumps(sorted(APPROVED_NATURAL_CONNECTIVES), ensure_ascii=False)
+)
 
 
 class ChatProviderError(Exception):
@@ -112,7 +123,7 @@ async def generate_grounded_explanation(
             {"role": "user", "content": context.model_dump_json()},
         ],
         "response_format": {"type": "json_object"},
-        "temperature": 0,
+        "temperature": 0.4,
     }
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:

@@ -1,11 +1,46 @@
 """챗봇 내부·API 모델."""
 
+import re
 from enum import Enum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.schemas import ContractTerms
+
+FACT_PLACEHOLDER_RE = re.compile(r"\{\{(FACT-[A-Z0-9-]+)\}\}")
+APPROVED_NATURAL_CONNECTIVES = frozenset(
+    {
+        "",
+        " ",
+        ".",
+        ", ",
+        "과 ",
+        "와 ",
+        " 다만 ",
+        " 그리고 ",
+        " 또한 ",
+        " 추가로 확인할 내용은 ",
+        " 함께 확인할 내용은 ",
+        ". 추가로 확인할 내용은 ",
+        ". 함께 확인할 내용은 ",
+        " 먼저 확인해 주세요.",
+        " 함께 확인해 주세요.",
+        " 핵심부터 안내드렸어요.",
+        " 먼저 확인할 내용은 여기까지예요.",
+    }
+)
+
+
+def natural_template_uses_approved_connectives(template: str) -> bool:
+    """자리표시자 사이의 모든 텍스트가 서버 승인 연결구인지 검사한다."""
+
+    cursor = 0
+    for match in FACT_PLACEHOLDER_RE.finditer(template):
+        if template[cursor : match.start()] not in APPROVED_NATURAL_CONNECTIVES:
+            return False
+        cursor = match.end()
+    return template[cursor:] in APPROVED_NATURAL_CONNECTIVES
 
 
 class ChatIntent(str, Enum):
@@ -89,6 +124,8 @@ class AnswerMode(str, Enum):
     GROUNDED_GENERATION = "GROUNDED_GENERATION"
     NATURAL_GROUNDED_GENERATION = "NATURAL_GROUNDED_GENERATION"
     OPENAI_GROUNDED_GENERATION = "OPENAI_GROUNDED_GENERATION"
+    OPENAI_NATURAL_REALIZATION = "OPENAI_NATURAL_REALIZATION"
+    UPSTAGE_NATURAL_REALIZATION = "UPSTAGE_NATURAL_REALIZATION"
 
 
 class GenerationFactKind(str, Enum):
@@ -96,6 +133,7 @@ class GenerationFactKind(str, Enum):
     MET = "MET"
     UNMET = "UNMET"
     NEEDS_CHECK = "NEEDS_CHECK"
+    LIMITATION = "LIMITATION"
 
 
 class GenerationFactCard(BaseModel):
@@ -147,6 +185,25 @@ class GroundedGenerationInput(BaseModel):
     )
 
 
+class NaturalRealizationInput(BaseModel):
+    """일반 질문 자연어 연결에 쓰는 비식별·승인 사실 컨텍스트."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    selection_keys: list[str]
+    fact_cards: list[GenerationFactCard] = Field(min_length=1, max_length=4)
+    transfer_scope: GenerationTransferScope = Field(
+        default_factory=GenerationTransferScope
+    )
+
+
+class NaturalAnswerRealization(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    natural_answer_template: str = Field(min_length=1, max_length=1200)
+    required_fact_ids: list[str] = Field(min_length=1, max_length=4)
+
+
 class NaturalSentenceConnector(str, Enum):
     CONTRACT_SUMMARY = "CONTRACT_SUMMARY"
     ADDITIONAL_CHECK = "ADDITIONAL_CHECK"
@@ -173,6 +230,8 @@ class GroundedGenerationOutput(BaseModel):
         default_factory=list,
         max_length=3,
     )
+    natural_answer_template: str | None = Field(default=None, max_length=1600)
+    required_fact_ids: list[str] = Field(default_factory=list, max_length=12)
 
 
 class OpenAIConnectorKind(str, Enum):
@@ -201,12 +260,14 @@ class OpenAIExplanationStep(BaseModel):
 
 
 class OpenAIGroundedGeneration(BaseModel):
-    """자유 텍스트가 없는 Responses API strict 설명 계획."""
+    """strict 설명 계획과 선택적 사실-자리표시자 자연어 템플릿."""
 
     model_config = ConfigDict(extra="forbid")
 
     steps: list[OpenAIExplanationStep] = Field(min_length=1, max_length=3)
     source_ids: list[str] = Field(min_length=1, max_length=8)
+    natural_answer_template: str | None = Field(default=None, max_length=1600)
+    required_fact_ids: list[str] = Field(default_factory=list, max_length=12)
 
 
 class ChatResponse(BaseModel):

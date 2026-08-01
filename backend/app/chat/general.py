@@ -15,13 +15,21 @@ from app.chat.general_provider import (
     GeneralProviderError,
     GeneralResponsePlan,
     GeneralStage,
+    generate_openai_general_answer,
     generate_openai_general_plan,
+    generate_upstage_general_answer,
     generate_upstage_general_plan,
+    render_general_natural_answer,
 )
 from app.chat.knowledge import (
     VERIFIED_KNOWLEDGE,
     GeneralKnowledgeMatch,
     retrieve_general_knowledge,
+)
+from app.chat.models import (
+    GenerationFactCard,
+    GenerationFactKind,
+    NaturalRealizationInput,
 )
 from app.config import settings
 from app.schemas import (
@@ -1429,6 +1437,47 @@ _HANDLERS = {
 }
 
 
+async def _naturalize_general_response(
+    response: GeneralQuestionResponse,
+    intents: set[GeneralQuestionIntent],
+) -> GeneralQuestionResponse:
+    """승인 답변·한계 문장을 보존한 채 비식별 연결 표현만 자연화한다."""
+
+    if not settings.openai_api_key and not settings.upstage_api_key:
+        return response
+    cards = [
+        GenerationFactCard(
+            fact_id="FACT-ANSWER",
+            kind=GenerationFactKind.DETERMINISTIC_CONCLUSION,
+            text=response.answer,
+        )
+    ]
+    context = NaturalRealizationInput(
+        selection_keys=[
+            response.topic.value,
+            *(item.value for item in sorted(intents, key=lambda item: item.value)),
+        ],
+        fact_cards=cards,
+    )
+    if settings.openai_api_key:
+        try:
+            generated = await generate_openai_general_answer(context)
+            rendered = render_general_natural_answer(generated, context)
+            if rendered is not None:
+                return response.model_copy(update={"answer": rendered})
+        except GeneralProviderError:
+            pass
+    if settings.upstage_api_key:
+        try:
+            generated = await generate_upstage_general_answer(context)
+            rendered = render_general_natural_answer(generated, context)
+            if rendered is not None:
+                return response.model_copy(update={"answer": rendered})
+        except GeneralProviderError:
+            pass
+    return response
+
+
 async def answer_general_question(
     question: str,
     context: GeneralQuestionTopic | None = None,
@@ -1448,4 +1497,12 @@ async def answer_general_question(
         response = _severance_pay(plan)
         return _attach_retrieval(_ensure_direct_answer(normalized, response), match)
     response = _HANDLERS[topic](normalized)
-    return _attach_retrieval(_ensure_direct_answer(normalized, response), match)
+    deterministic = _attach_retrieval(
+        _ensure_direct_answer(normalized, response), match
+    )
+    if topic == GeneralQuestionTopic.OUT_OF_SCOPE:
+        return deterministic
+    return await _naturalize_general_response(
+        deterministic,
+        _question_intents(normalized),
+    )

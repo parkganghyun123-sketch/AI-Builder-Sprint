@@ -10,7 +10,18 @@ from enum import Enum
 import httpx
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from app.chat.openai_provider import OpenAIProviderError, _request_structured
+from app.chat.models import (
+    FACT_PLACEHOLDER_RE,
+    NaturalAnswerRealization,
+    NaturalRealizationInput,
+    natural_template_uses_approved_connectives,
+)
+from app.chat.openai_provider import (
+    NATURAL_REALIZATION_INSTRUCTIONS,
+    OpenAIProviderError,
+    _request_structured,
+    generate_openai_natural_answer,
+)
 from app.config import settings
 
 UPSTAGE_CHAT_URL = "https://api.upstage.ai/v1/chat/completions"
@@ -108,6 +119,81 @@ GENERAL_PLAN_SCHEMA = {
 
 class GeneralProviderError(Exception):
     """원문이나 제공자 응답을 노출하지 않는 안전한 오류."""
+
+
+def render_general_natural_answer(
+    generated: NaturalAnswerRealization,
+    context: NaturalRealizationInput,
+) -> str | None:
+    template = generated.natural_answer_template
+    if not template.strip().startswith("{{FACT-ANSWER}}"):
+        return None
+    facts = {card.fact_id: card.text for card in context.fact_cards}
+    if len(generated.required_fact_ids) != len(set(generated.required_fact_ids)) or set(
+        generated.required_fact_ids
+    ) != set(facts):
+        return None
+    placeholders = FACT_PLACEHOLDER_RE.findall(template)
+    if len(placeholders) != len(set(placeholders)) or set(placeholders) != set(facts):
+        return None
+    if not natural_template_uses_approved_connectives(template):
+        return None
+    rendered = template
+    for fact_id in placeholders:
+        rendered = rendered.replace(f"{{{{{fact_id}}}}}", facts[fact_id])
+    return " ".join(rendered.split())
+
+
+async def generate_openai_general_answer(
+    context: NaturalRealizationInput,
+) -> NaturalAnswerRealization:
+    try:
+        return await generate_openai_natural_answer(context)
+    except OpenAIProviderError:
+        raise GeneralProviderError(
+            "일반 질문 답변 서비스를 사용할 수 없습니다."
+        ) from None
+
+
+async def generate_upstage_general_answer(
+    context: NaturalRealizationInput,
+) -> NaturalAnswerRealization:
+    if not settings.upstage_api_key:
+        raise GeneralProviderError("일반 질문 답변 서비스를 사용할 수 없습니다.")
+    payload = {
+        "model": UPSTAGE_CHAT_MODEL,
+        "messages": [
+            {"role": "system", "content": NATURAL_REALIZATION_INSTRUCTIONS},
+            {"role": "user", "content": context.model_dump_json()},
+        ],
+        "response_format": {"type": "json_object"},
+        "temperature": 0.7,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.post(
+                UPSTAGE_CHAT_URL,
+                headers={
+                    "Authorization": f"Bearer {settings.upstage_api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+    except httpx.HTTPError:
+        raise GeneralProviderError(
+            "일반 질문 답변 서비스를 사용할 수 없습니다."
+        ) from None
+    if response.status_code >= 400:
+        raise GeneralProviderError("일반 질문 답변 서비스를 사용할 수 없습니다.")
+    try:
+        body = response.json()
+        raw = body["choices"][0]["message"]["content"]
+        parsed = json.loads(raw) if isinstance(raw, str) else raw
+        return NaturalAnswerRealization.model_validate(parsed)
+    except (KeyError, IndexError, TypeError, ValueError, ValidationError):
+        raise GeneralProviderError(
+            "일반 질문 답변 서비스를 사용할 수 없습니다."
+        ) from None
 
 
 async def generate_openai_general_plan(

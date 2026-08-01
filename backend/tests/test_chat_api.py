@@ -1689,3 +1689,108 @@ def test_openai_provider_failure_uses_existing_upstage_fallback(
     monkeypatch.setattr("app.chat.rag.generate_grounded_explanation", safe_upstage)
     body = client.post("/chat", json=payload(question="주휴수당 요건 알려줘")).json()
     assert body["answer_mode"] == "GROUNDED_GENERATION"
+
+
+_NATURAL_FACT_IDS = [
+    "FACT-CONCLUSION",
+    "FACT-MET-1",
+    "FACT-NEEDS-CHECK-1",
+    "FACT-NEEDS-CHECK-2",
+    "FACT-NEEDS-CHECK-3",
+    "FACT-NEEDS-CHECK-4",
+]
+
+
+def _natural_openai_plan(template: str) -> OpenAIGroundedGeneration:
+    return _valid_openai_plan().model_copy(
+        update={
+            "natural_answer_template": template,
+            "required_fact_ids": _NATURAL_FACT_IDS,
+        }
+    )
+
+
+def test_openai_natural_variants_pass_through_with_facts_and_evidence(
+    client,
+    monkeypatch,
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.WEEKLY_HOLIDAY)
+    monkeypatch.setattr("app.chat.rag.settings.openai_api_key", "synthetic-key")
+    monkeypatch.setattr("app.chat.rag.settings.upstage_api_key", "")
+    templates = iter(
+        [
+            "{{FACT-CONCLUSION}} 다만 {{FACT-NEEDS-CHECK-1}}과 "
+            "{{FACT-NEEDS-CHECK-2}}. 추가로 확인할 내용은 "
+            "{{FACT-NEEDS-CHECK-3}}, {{FACT-NEEDS-CHECK-4}}. "
+            "함께 확인할 내용은 {{FACT-MET-1}}.",
+            "{{FACT-CONCLUSION}} 함께 확인할 내용은 {{FACT-MET-1}}. "
+            "추가로 확인할 내용은 {{FACT-NEEDS-CHECK-1}}, "
+            "{{FACT-NEEDS-CHECK-2}}, "
+            "{{FACT-NEEDS-CHECK-3}}, {{FACT-NEEDS-CHECK-4}}.",
+        ]
+    )
+
+    async def fake_openai(_context):
+        return _natural_openai_plan(next(templates))
+
+    monkeypatch.setattr("app.chat.rag.generate_openai_explanation", fake_openai)
+    first = client.post("/chat", json=payload(question="주휴수당 요건 알려줘")).json()
+    second = client.post("/chat", json=payload(question="주휴수당 요건 알려줘")).json()
+
+    assert first["answer_mode"] == "OPENAI_NATURAL_REALIZATION"
+    assert second["answer_mode"] == "OPENAI_NATURAL_REALIZATION"
+    assert first["answer"] != second["answer"]
+    assert first["answer"].startswith(WEEKLY_MET_ANSWER)
+    assert "해당 주까지 근로관계가 유지되었는지" in first["answer"]
+    assert first["evidence"] == second["evidence"]
+    assert first["retrieved_knowledge"] == second["retrieved_knowledge"]
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "{{FACT-CONCLUSION}} 2027년에도 같습니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} 지급 대상입니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} https://invalid.example {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} {{FACT-MET-1}} {{FACT-NEEDS-CHECK-1}}",
+        "{{FACT-CONCLUSION}} 그러므로 회사가 책임져야 합니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} 하지만 앞 내용은 사실이 아닙니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} 따라서 권리가 인정됩니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} 확인할 필요가 없습니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+        "{{FACT-CONCLUSION}} 회사의 의무이며 근로자의 권리입니다. {{FACT-MET-1}} "
+        "{{FACT-NEEDS-CHECK-1}} {{FACT-NEEDS-CHECK-2}} "
+        "{{FACT-NEEDS-CHECK-3}} {{FACT-NEEDS-CHECK-4}}",
+    ],
+)
+def test_unsafe_or_incomplete_natural_answer_falls_back(
+    client,
+    monkeypatch,
+    template,
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.WEEKLY_HOLIDAY)
+    monkeypatch.setattr("app.chat.rag.settings.openai_api_key", "synthetic-key")
+    monkeypatch.setattr("app.chat.rag.settings.upstage_api_key", "")
+
+    async def fake_openai(_context):
+        return _natural_openai_plan(template)
+
+    monkeypatch.setattr("app.chat.rag.generate_openai_explanation", fake_openai)
+    body = client.post("/chat", json=payload(question="주휴수당 요건 알려줘")).json()
+
+    assert body["answer_mode"] == "DETERMINISTIC_TEMPLATE"
+    assert body["answer"] == WEEKLY_MET_ANSWER
+    assert body["retrieved_knowledge"]
