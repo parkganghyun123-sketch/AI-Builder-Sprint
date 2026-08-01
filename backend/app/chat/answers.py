@@ -1,7 +1,9 @@
 """검증된 계약 데이터와 결정론적 판정만으로 챗봇 답변을 조립한다."""
 
+import re
 from collections.abc import Callable
 
+from app.chat.general import _weekly_holiday_amount_answer
 from app.chat.models import (
     ChatEvidence,
     ChatIntent,
@@ -42,6 +44,126 @@ COMMON_SUGGESTIONS = [
     "계약서에 빠진 내용이 있나요?",
     "2026년 최저임금은 얼마인가요?",
 ]
+
+
+def _is_amount_question(question: str | None) -> bool:
+    compact = "".join((question or "").lower().split())
+    money_context = any(
+        word in compact
+        for word in ("수당", "임금", "급여", "월급", "시급", "퇴직금", "돈")
+    )
+    return any(marker in compact for marker in ("금액", "몇원")) or (
+        "얼마" in compact and "얼마나" not in compact and money_context
+    )
+
+
+def _question_hours(question: str | None) -> float | None:
+    text = question or ""
+    korean_hours = {
+        "열두": 12.0,
+        "열한": 11.0,
+        "열": 10.0,
+        "한": 1.0,
+        "두": 2.0,
+        "세": 3.0,
+        "네": 4.0,
+        "다섯": 5.0,
+        "여섯": 6.0,
+        "일곱": 7.0,
+        "여덟": 8.0,
+        "아홉": 9.0,
+    }
+    korean_pattern = (
+        r"(?<![가-힣])(열두|열한|다섯|여섯|일곱|여덟|아홉|열|한|두|세|네)\s*시간"
+    )
+    values = [
+        float(match) for match in re.findall(r"(?<![-\d.])(\d+(?:\.\d+)?)\s*시간", text)
+    ]
+    values.extend(korean_hours[word] for word in re.findall(korean_pattern, text))
+    unique = set(values)
+    if len(unique) != 1:
+        return None
+    hours = unique.pop()
+    return hours if 0 < hours <= 24 else None
+
+
+def _is_method_question(question: str | None) -> bool:
+    compact = "".join((question or "").lower().split())
+    return any(word in compact for word in ("계산법", "산식", "어떻게계산"))
+
+
+def _weekly_holiday_method() -> ChatResponse:
+    return ChatResponse(
+        intent=ChatIntent.CALCULATION,
+        topic=ChatTopic.WEEKLY_HOLIDAY,
+        answer=(
+            "주휴수당은 1일 소정근로시간에 시간급 임금을 곱해 계산합니다. "
+            "단시간근로자의 1일 소정근로시간은 최근 4주 소정근로시간을 같은 기간 "
+            "통상근로자의 총 소정근로일수로 나누어 산정합니다."
+        ),
+        evidence=[
+            ChatEvidence(
+                kind=EvidenceKind.LEGAL,
+                title=f"주휴수당 계산 기준 ({STANDARD_YEAR}년 기준)",
+                detail=("SRC-MOEL-WEEKLY-HOLIDAY-AMOUNT · SRC-LSA-DECREE-SCHEDULE-2"),
+            )
+        ],
+        limitation=(
+            "단시간근로자 여부와 비교 정보를 안전하게 입력받는 기능을 추가하기 전까지 "
+            "개인 금액 자동 계산은 제공하지 않습니다."
+        ),
+        suggested_questions=COMMON_SUGGESTIONS,
+    )
+
+
+def _break_time_from_question(question: str | None) -> ChatResponse | None:
+    hours = _question_hours(question)
+    if hours is None:
+        return None
+    if hours >= 8:
+        answer = f"{hours:g}시간 근로라면 근로 도중 1시간 이상의 휴게가 필요합니다."
+    elif hours >= 4:
+        answer = f"{hours:g}시간 근로라면 근로 도중 30분 이상의 휴게가 필요합니다."
+    else:
+        answer = (
+            f"{hours:g}시간 근로는 법정 4시간 기준에는 도달하지 않습니다. "
+            "다만 계약이나 사업장 규정으로 별도 휴게를 정할 수 있습니다."
+        )
+    return ChatResponse(
+        intent=ChatIntent.CALCULATION,
+        topic=ChatTopic.BREAK_TIME,
+        answer=answer,
+        evidence=[
+            ChatEvidence(
+                kind=EvidenceKind.LEGAL,
+                title=f"휴게시간 기준 ({STANDARD_YEAR}년 기준)",
+                detail="근로기준법 제54조 · 4시간에 30분 이상, 8시간에 1시간 이상",
+            )
+        ],
+        limitation="실제 휴게 부여 여부와 자유롭게 이용할 수 있었는지는 별도로 확인해야 합니다.",
+        suggested_questions=COMMON_SUGGESTIONS,
+    )
+
+
+def _extra_work_amount() -> ChatResponse:
+    return ChatResponse(
+        intent=ChatIntent.CALCULATION,
+        topic=ChatTopic.EXTRA_WORK,
+        answer=(
+            "연장·야간·휴일근로 수당 금액을 계산하려면 통상시급, 날짜별 실제 근무 "
+            "시작·종료·휴게시간, 휴일 여부와 사업장 상시근로자 수가 필요합니다. "
+            "현재 계약서만으로는 이 값이 없어 금액을 계산할 수 없습니다."
+        ),
+        evidence=[
+            ChatEvidence(
+                kind=EvidenceKind.LEGAL,
+                title=f"가산임금 기준 ({STANDARD_YEAR}년 기준)",
+                detail="근로기준법 제56조 · 연장·야간·휴일근로",
+            )
+        ],
+        limitation="실제 근무기록과 사업장 규모를 확인하기 전에는 지급 여부나 금액을 확정하지 않습니다.",
+        suggested_questions=COMMON_SUGGESTIONS,
+    )
 
 
 def is_fail_closed_question(question: str) -> bool:
@@ -156,7 +278,13 @@ def _check_evidence(check: CheckResult) -> list[ChatEvidence]:
     return evidence
 
 
-def _weekly_holiday(terms: ContractTerms, birth_date: str | None) -> ChatResponse:
+def _weekly_holiday(
+    terms: ContractTerms,
+    birth_date: str | None,
+    *,
+    amount_requested: bool = False,
+    question: str | None = None,
+) -> ChatResponse:
     check = next(
         item
         for item in validate(terms, worker_birth_date=birth_date).checks
@@ -176,7 +304,27 @@ def _weekly_holiday(terms: ContractTerms, birth_date: str | None) -> ChatRespons
         "계약과 실제 근무 내용의 일치 여부",
         "실제 주휴수당 지급 내역",
     ]
-    if check.status == CheckStatus.UNKNOWN:
+    if amount_requested:
+        answer, amount_limitation = _weekly_holiday_amount_answer(question or "")
+        needs_check[:0] = [
+            "주휴 계산에 사용할 통상시급",
+            "최근 4주간 약정한 일별 소정근로시간",
+            "같은 업무 통상근로자의 최근 4주 총 소정근로일수",
+        ]
+        if check.status == CheckStatus.UNKNOWN:
+            needs_check.insert(0, "계약서의 근무시간과 주 근무일 수")
+        elif (
+            terms.weekly_hours is not None
+            and terms.weekly_hours >= WEEKLY_HOLIDAY_MIN_HOURS
+        ):
+            met.append(
+                f"계약상 주 소정근로시간 {terms.weekly_hours:g}시간은 15시간 이상"
+            )
+        elif terms.weekly_hours is not None:
+            unmet.append(
+                f"계약상 주 소정근로시간 {terms.weekly_hours:g}시간은 15시간 미만"
+            )
+    elif check.status == CheckStatus.UNKNOWN:
         answer = "계약서 정보가 부족해 주휴수당의 주 15시간 요건을 계산할 수 없습니다."
         needs_check.insert(0, "계약서의 근무시간과 주 근무일 수")
     elif (
@@ -206,7 +354,7 @@ def _weekly_holiday(terms: ContractTerms, birth_date: str | None) -> ChatRespons
             _contract_evidence("계약서의 소정근로시간", contract_detail),
             *_check_evidence(check),
         ],
-        limitation=None,
+        limitation=amount_limitation if amount_requested else None,
         condition_groups=ConditionGroups(
             met=met,
             unmet=unmet,
@@ -216,7 +364,11 @@ def _weekly_holiday(terms: ContractTerms, birth_date: str | None) -> ChatRespons
     )
 
 
-def _severance_pay(terms: ContractTerms) -> ChatResponse:
+def _severance_pay(
+    terms: ContractTerms,
+    *,
+    amount_requested: bool = False,
+) -> ChatResponse:
     result = check_severance_pay(terms)
     met: list[str] = []
     unmet: list[str] = []
@@ -246,7 +398,14 @@ def _severance_pay(terms: ContractTerms) -> ChatResponse:
     else:
         needs_check.insert(0, "계약상 주 소정근로시간")
 
-    if unmet:
+    if amount_requested:
+        answer = (
+            "퇴직금 금액을 계산하려면 실제 퇴직일, 퇴직 전 3개월의 임금 총액과 "
+            "그 기간의 총일수, 전체 계속근로기간, 기간별 주 소정근로시간이 필요합니다. "
+            "현재 계약서 한 장만으로는 이 값과 실제 퇴직 여부를 모두 확인할 수 없어 "
+            "금액을 계산하지 않았습니다."
+        )
+    elif unmet:
         answer = "계약 조건상 퇴직급여 관련 기준 중 충족하지 않는 항목이 있습니다."
     elif result.planned_one_year is None or result.weekly_hours_15 is None:
         answer = "계약서 정보가 부족해 퇴직급여 관련 두 기준을 모두 확인할 수 없습니다."
@@ -626,6 +785,7 @@ def build_response(
     classification: Classification,
     terms: ContractTerms,
     worker_birth_date: str | None,
+    question: str | None = None,
 ) -> ChatResponse:
     if classification.intent == ChatIntent.OUT_OF_SCOPE:
         return out_of_scope_response()
@@ -637,9 +797,18 @@ def build_response(
         return _legal_standard(classification.topic)
     if classification.intent == ChatIntent.CALCULATION:
         if classification.topic == ChatTopic.WEEKLY_HOLIDAY:
-            return _weekly_holiday(terms, worker_birth_date)
+            if _is_method_question(question):
+                return _weekly_holiday_method()
+            amount_requested = _is_amount_question(question)
+            return _weekly_holiday(
+                terms,
+                worker_birth_date,
+                amount_requested=amount_requested,
+                question=question,
+            )
         if classification.topic == ChatTopic.SEVERANCE_PAY:
-            return _severance_pay(terms)
+            amount_requested = _is_amount_question(question)
+            return _severance_pay(terms, amount_requested=amount_requested)
         if classification.topic == ChatTopic.SOCIAL_INSURANCE:
             return _social_insurance(terms)
         if classification.topic == ChatTopic.ANNUAL_LEAVE:
@@ -648,6 +817,8 @@ def build_response(
             return _dismissal_notice(terms)
         if classification.topic == ChatTopic.PROBATION_MINIMUM_WAGE:
             return _probation_minimum_wage(terms)
+        if classification.topic == ChatTopic.EXTRA_WORK:
+            return _extra_work_amount()
         if classification.topic == ChatTopic.MINIMUM_WAGE:
             return _validation_check(
                 terms,
@@ -656,6 +827,9 @@ def build_response(
                 topic=classification.topic,
             )
         if classification.topic == ChatTopic.BREAK_TIME:
+            direct = _break_time_from_question(question)
+            if direct is not None:
+                return direct
             return _validation_check(
                 terms,
                 worker_birth_date,

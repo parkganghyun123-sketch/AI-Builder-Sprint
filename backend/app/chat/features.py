@@ -9,6 +9,7 @@ from app.chat.models import ChatTopic, Classification
 
 class QuerySignal(str, Enum):
     AMOUNT = "AMOUNT"
+    METHOD = "METHOD"
     DATE = "DATE"
     REQUIREMENT = "REQUIREMENT"
     ELIGIBILITY = "ELIGIBILITY"
@@ -29,8 +30,12 @@ _TOPIC_KEYWORDS: tuple[tuple[ChatTopic, tuple[str, ...]], ...] = (
     (ChatTopic.ANNUAL_LEAVE, ("연차", "연차휴가")),
     (ChatTopic.DISMISSAL_NOTICE, ("해고예고수당", "해고예고")),
     (ChatTopic.PROBATION_MINIMUM_WAGE, ("수습최저임금", "수습시급", "수습기간시급")),
+    (
+        ChatTopic.EXTRA_WORK,
+        ("야간수당", "연장수당", "휴일수당", "야간근로", "연장근로", "휴일근로"),
+    ),
     (ChatTopic.MINIMUM_WAGE, ("최저임금", "최저시급")),
-    (ChatTopic.BREAK_TIME, ("휴게", "쉬는시간")),
+    (ChatTopic.BREAK_TIME, ("휴게", "쉬는시간", "중간에쉬", "얼마나쉬")),
     (ChatTopic.PAYDAY, ("급여일", "월급날", "임금지급일")),
     (ChatTopic.CONTRACT_PERIOD, ("계약기간", "근로계약기간")),
     (ChatTopic.WORKPLACE, ("근무장소", "일하는곳", "근무지")),
@@ -41,7 +46,8 @@ _TOPIC_KEYWORDS: tuple[tuple[ChatTopic, tuple[str, ...]], ...] = (
 )
 
 _SIGNAL_KEYWORDS: tuple[tuple[QuerySignal, tuple[str, ...]], ...] = (
-    (QuerySignal.AMOUNT, ("얼마", "금액")),
+    (QuerySignal.AMOUNT, ("금액", "몇원")),
+    (QuerySignal.METHOD, ("계산법", "산식", "어떻게계산")),
     (QuerySignal.DATE, ("언제", "날짜")),
     (QuerySignal.REQUIREMENT, ("요건", "기준")),
     (QuerySignal.ELIGIBILITY, ("받을수", "해당", "충족", "적나요", "맞나요")),
@@ -77,6 +83,17 @@ def extract_safe_features(question: str) -> SafeQuestionFeatures | None:
         for signal, keywords in _SIGNAL_KEYWORDS
         if any(keyword in normalized for keyword in keywords)
     ]
+    money_context = any(
+        word in normalized
+        for word in ("수당", "임금", "급여", "월급", "시급", "퇴직금", "돈")
+    )
+    if (
+        "얼마" in normalized
+        and "얼마나" not in normalized
+        and money_context
+        and QuerySignal.AMOUNT not in signals
+    ):
+        signals.append(QuerySignal.AMOUNT)
     return SafeQuestionFeatures(topics=topics, signals=signals)
 
 

@@ -134,6 +134,147 @@ def test_weekly_holiday_time_requirement_met(client, monkeypatch) -> None:
     assert any("18시간 ≥ 15시간" in item["detail"] for item in body["evidence"])
 
 
+def test_contract_chat_weekly_amount_answers_missing_calculation_inputs(
+    client, monkeypatch
+) -> None:
+    mock_classification(
+        monkeypatch,
+        ChatIntent.CALCULATION,
+        ChatTopic.WEEKLY_HOLIDAY,
+    )
+
+    body = client.post(
+        "/chat",
+        json=payload(question="주휴수당 얼마지?"),
+    ).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "현재 자동 계산하지 않습니다" in body["answer"]
+    assert "통상근로자" in body["answer"]
+    assert (
+        "계약상 주 소정근로시간 18시간은 15시간 이상"
+        in (body["condition_groups"]["met"])
+    )
+
+
+def test_contract_chat_severance_amount_answers_missing_calculation_inputs(
+    client, monkeypatch
+) -> None:
+    mock_classification(
+        monkeypatch,
+        ChatIntent.CALCULATION,
+        ChatTopic.SEVERANCE_PAY,
+    )
+
+    body = client.post(
+        "/chat",
+        json=payload(question="퇴직금 얼마 받아?"),
+    ).json()
+
+    assert body["topic"] == "SEVERANCE_PAY"
+    assert "퇴직금 금액을 계산하려면" in body["answer"]
+    assert "퇴직 전 3개월" in body["answer"]
+    assert "계약서 한 장만으로는" in body["answer"]
+
+
+def test_contract_chat_extra_work_amount_answers_required_inputs(
+    client, monkeypatch
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.EXTRA_WORK)
+
+    body = client.post(
+        "/chat",
+        json=payload(question="야간수당 금액 계산해줘"),
+    ).json()
+
+    assert body["topic"] == "EXTRA_WORK"
+    assert "날짜별 실제 근무" in body["answer"]
+    assert "상시근로자 수" in body["answer"]
+    assert body["retrieved_knowledge"][0]["kb_id"] == "KB-EXTRA-WORK"
+
+
+def test_contract_chat_korean_hour_break_question_answers_requested_duration(
+    client, monkeypatch
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.BREAK_TIME)
+
+    body = client.post(
+        "/chat",
+        json=payload(question="여섯 시간 일할 때 중간에 얼마나 쉬어?"),
+    ).json()
+
+    assert body["topic"] == "BREAK_TIME"
+    assert "6시간" in body["answer"]
+    assert "30분" in body["answer"]
+
+
+def test_safe_features_distinguish_money_from_how_much_break_time() -> None:
+    break_features = extract_safe_features("여섯 시간 일할 때 중간에 얼마나 쉬어?")
+    extra_features = extract_safe_features("야간수당 금액 계산해줘")
+
+    assert break_features is not None
+    assert break_features.topics == [ChatTopic.BREAK_TIME]
+    assert QuerySignal.AMOUNT not in break_features.signals
+    assert extra_features is not None
+    assert ChatTopic.EXTRA_WORK in extra_features.topics
+    assert QuerySignal.AMOUNT in extra_features.signals
+
+
+@pytest.mark.parametrize(
+    "question,expected",
+    [
+        ("열한 시간 일하면 얼마나 쉬어?", "11시간"),
+        ("열두 시간 일하면 얼마나 쉬어?", "12시간"),
+    ],
+)
+def test_contract_chat_korean_compound_hours_are_not_partially_parsed(
+    client, monkeypatch, question, expected
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.BREAK_TIME)
+
+    body = client.post("/chat", json=payload(question=question)).json()
+
+    assert expected in body["answer"]
+    assert "1시간 근로는" not in body["answer"]
+    assert "2시간 근로는" not in body["answer"]
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "4시간이랑 8시간은 각각 얼마나 쉬어?",
+        "-1시간 일하면 얼마나 쉬어?",
+        "25시간 일하면 얼마나 쉬어?",
+    ],
+)
+def test_contract_chat_ambiguous_or_invalid_hours_are_not_directly_calculated(
+    client, monkeypatch, question
+) -> None:
+    mock_classification(monkeypatch, ChatIntent.CALCULATION, ChatTopic.BREAK_TIME)
+
+    body = client.post("/chat", json=payload(question=question)).json()
+
+    assert "근로라면" not in body["answer"]
+
+
+def test_contract_chat_weekly_calculation_method_explains_formula(
+    client, monkeypatch
+) -> None:
+    mock_classification(
+        monkeypatch,
+        ChatIntent.CALCULATION,
+        ChatTopic.WEEKLY_HOLIDAY,
+    )
+
+    body = client.post(
+        "/chat",
+        json=payload(question="주휴수당 계산법 알려줘"),
+    ).json()
+
+    assert "1일 소정근로시간에 시간급 임금을 곱" in body["answer"]
+    assert body["retrieved_knowledge"][0]["kb_id"] == "KB-WEEKLY-HOLIDAY-AMOUNT"
+
+
 def test_weekly_holiday_below_time_requirement(client, monkeypatch) -> None:
     mock_classification(
         monkeypatch,
@@ -807,11 +948,15 @@ def test_rag_corpus_is_closed_over_verified_kb_sources() -> None:
         "SRC-LSA-70",
         "SRC-LSA-18",
         "SRC-MOEL-WEEKLY-HOLIDAY",
+        "SRC-MOEL-WEEKLY-HOLIDAY-AMOUNT",
+        "SRC-LSA-DECREE-SCHEDULE-2",
         "SRC-ERBA-4",
         "SRC-ERBA-8",
         "SRC-MOEL-SEVERANCE-2025",
         "SRC-LSA-60",
         "SRC-LSA-11",
+        "SRC-LSA-56",
+        "SRC-MOEL-UNDER-5",
         "SRC-LSA-26",
         "SRC-MWA-5",
         "SRC-MWA-DECREE-3",

@@ -82,6 +82,32 @@ VERIFIED_KNOWLEDGE: tuple[KnowledgeEntry, ...] = (
         ),
     ),
     KnowledgeEntry(
+        kb_id="KB-WEEKLY-HOLIDAY-AMOUNT",
+        title="주휴수당 조건부 금액 계산",
+        topics=frozenset({ChatTopic.WEEKLY_HOLIDAY}),
+        source_ids=(
+            "SRC-MOEL-WEEKLY-HOLIDAY-AMOUNT",
+            "SRC-LSA-DECREE-SCHEDULE-2",
+        ),
+        text=(
+            "단시간근로자의 조건부 1주분 주휴수당은 4주 소정근로시간을 같은 기간 "
+            "통상근로자의 총 소정근로일수로 나눈 1일 소정근로시간에 통상시급을 곱한다. "
+            "현재는 단시간근로자 비교 정보를 안전하게 입력받지 않으므로 금액을 자동 "
+            "계산하지 않고 필요한 값을 안내한다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-EXTRA-WORK",
+        title="연장·야간·휴일근로 가산임금",
+        topics=frozenset({ChatTopic.EXTRA_WORK}),
+        source_ids=("SRC-LSA-11", "SRC-LSA-56", "SRC-MOEL-UNDER-5"),
+        text=(
+            "연장·야간·휴일근로 수당은 통상시급, 날짜별 실제 근무시각과 휴게, "
+            "휴일 여부, 사업장 상시근로자 수를 확인해야 한다. 필요한 사실이 없으면 "
+            "지급 여부나 금액을 계산하지 않는다."
+        ),
+    ),
+    KnowledgeEntry(
         kb_id="KB-SEVERANCE-ELIGIBILITY",
         title="퇴직급여 관련 계약 조건",
         topics=frozenset({ChatTopic.SEVERANCE_PAY}),
@@ -253,6 +279,21 @@ _GENERAL_ALIASES: dict[str, tuple[str, ...]] = {
         "쉬는날돈",
         "쉬는날에도돈",
         "일주일쉬는날수당",
+    ),
+    "KB-WEEKLY-HOLIDAY-AMOUNT": (
+        "주휴수당얼마",
+        "주휴수당금액",
+        "주휴수당계산",
+        "주휴계산법",
+    ),
+    "KB-EXTRA-WORK": (
+        "야간수당",
+        "연장수당",
+        "휴일수당",
+        "가산수당",
+        "야간근로",
+        "연장근로",
+        "휴일근로",
     ),
     "KB-SEVERANCE-ELIGIBILITY": (
         "퇴직금",
@@ -538,6 +579,7 @@ def retrieve_general_knowledge(
 
 _SIGNAL_TERMS: dict[QuerySignal, frozenset[str]] = {
     QuerySignal.AMOUNT: frozenset({"금액", "시간급", "임금", "수당"}),
+    QuerySignal.METHOD: frozenset({"계산", "산식", "시간급", "소정근로시간"}),
     QuerySignal.DATE: frozenset({"기간", "시점", "일"}),
     QuerySignal.REQUIREMENT: frozenset({"요건", "기준", "조건"}),
     QuerySignal.ELIGIBILITY: frozenset({"충족", "적용", "대상", "확인"}),
@@ -569,6 +611,12 @@ def retrieve_knowledge(
     ranked: list[tuple[float, KnowledgeEntry]] = []
     for entry in VERIFIED_KNOWLEDGE:
         if topic not in entry.topics:
+            continue
+        if (
+            entry.kb_id == "KB-WEEKLY-HOLIDAY-AMOUNT"
+            and QuerySignal.AMOUNT not in signals
+            and QuerySignal.METHOD not in signals
+        ):
             continue
         document_terms = _terms(f"{entry.title} {entry.text}")
         overlap = len(query_terms & document_terms) / max(len(query_terms), 1)

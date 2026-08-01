@@ -54,6 +54,7 @@ async def chat(body: ChatRequest) -> ChatResponse:
         classification,
         body.terms,
         body.worker_birth_date,
+        body.question,
     )
     return await enrich_with_grounded_rag(
         question=body.question,

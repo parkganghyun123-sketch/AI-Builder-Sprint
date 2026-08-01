@@ -317,8 +317,6 @@ def test_검증_kb를_다양한_표현으로_검색한다(question, topic, kb_id
         "대타를 썼는데 주휴 받을 수 있어?",
         "개근했으니 주휴 대상 맞지?",
         "실제 근무한 야간수당 금액 계산해줘",
-        "퇴직금 얼마 받아?",
-        "연차수당 금액 계산해줘",
         "내년 최저임금 얼마야?",
         "주휴수당이랑 퇴직금 둘 다 알려줘",
         "산재 사고 보상액을 계산해줘",
@@ -666,3 +664,63 @@ def test_안전한_후속질문은_context를_유지한다(question, context, to
 
     assert body["topic"] == topic
     assert body["retrieved_kb_ids"]
+
+
+def test_주휴_금액_질문은_조건_설명으로_회피하지_않고_필요값을_답한다():
+    body = client.post(
+        "/questions/general",
+        json={"question": "주휴수당 얼마지?"},
+    ).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "현재 자동 계산하지 않습니다" in body["answer"]
+    assert "통상시급" in body["answer"]
+    assert "최근 4주 약정 소정근로시간" in body["answer"]
+    assert "통상근로자" in body["answer"]
+
+
+def test_주휴_금액은_단시간근로자_입력기능_추가_전까지_자동계산하지_않는다():
+    body = client.post(
+        "/questions/general",
+        json={
+            "question": (
+                "4주 소정근로시간 합계 72시간이고 통상근로자의 4주 총 "
+                "소정근로일수는 20일, 통상시급은 10,320원이야. 주휴수당 얼마야?"
+            )
+        },
+    ).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "현재 자동 계산하지 않습니다" in body["answer"]
+    assert "37,152원" not in body["answer"]
+
+
+def test_주휴_계산법은_금액입력_요청이_아니라_공식_산식을_설명한다():
+    body = client.post(
+        "/questions/general",
+        json={"question": "주휴수당 계산법 알려줘"},
+    ).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "1일 소정근로시간에 시간급 임금을 곱" in body["answer"]
+    assert "현재 자동 계산하지 않습니다" not in body["answer"]
+
+
+@pytest.mark.parametrize(
+    "question,topic,required",
+    [
+        ("퇴직금 얼마 받아?", "SEVERANCE_PAY", "퇴직 전 3개월"),
+        ("야간수당 금액 계산해줘", "EXTRA_WORK", "날짜별 실제 근무"),
+    ],
+)
+def test_다른_금액_질문도_일반론_대신_계산에_필요한_값을_답한다(
+    question, topic, required
+):
+    body = client.post(
+        "/questions/general",
+        json={"question": question},
+    ).json()
+
+    assert body["topic"] == topic
+    assert required in body["answer"]
+    assert "계산할 수 없습니다" in body["answer"]

@@ -33,6 +33,9 @@ from app.schemas import (
 )
 
 WEEKLY_HOLIDAY_URL = "https://1350.moel.go.kr/rtmview.do?id=1000059852"
+WEEKLY_HOLIDAY_AMOUNT_URL = (
+    "https://1350.moel.go.kr/home/hp/data/faqView.do?faq_idx=1000000822"
+)
 MINIMUM_WAGE_URL = "https://www.minimumwage.go.kr/minWage/policy/decisionMain.do"
 LABOR_STANDARDS_ACT_URL = "https://www.law.go.kr/LSW/lsInfoP.do?lsId=001872"
 SHORT_TIME_WORK_URL = "https://www.law.go.kr/LSW/lsLinkCommonInfo.do?chrClsCd=010202&lsJoLnkSeq=1027161153"
@@ -95,6 +98,20 @@ class GeneralQuestionSignal(str, Enum):
     ASKS_OKAY = "ASKS_OKAY"
     ASKS_NEXT_ACTION = "ASKS_NEXT_ACTION"
     ASKS_WHY = "ASKS_WHY"
+
+
+class GeneralQuestionIntent(str, Enum):
+    """질문의 주제와 별도로 사용자가 실제로 요구한 답의 형태."""
+
+    ELIGIBILITY = "ELIGIBILITY"
+    AMOUNT = "AMOUNT"
+    METHOD = "METHOD"
+    REQUIREMENTS = "REQUIREMENTS"
+    DOCUMENTS = "DOCUMENTS"
+    DEADLINE = "DEADLINE"
+    PROCEDURE = "PROCEDURE"
+    REASON = "REASON"
+    GENERAL = "GENERAL"
 
 
 _WRITTEN_BLOCKS = {
@@ -354,7 +371,9 @@ _GENERAL_TOPIC_BY_KB_ID = {
     "KB-CONTRACT-TERMS": GeneralQuestionTopic.WRITTEN_CONTRACT,
     "KB-BREAK-2026-07": GeneralQuestionTopic.BREAK_TIME,
     "KB-MINOR-WORKING-TIME": GeneralQuestionTopic.MINOR_WORK,
+    "KB-WEEKLY-HOLIDAY-AMOUNT": GeneralQuestionTopic.WEEKLY_HOLIDAY,
     "KB-WEEKLY-HOLIDAY-TIME": GeneralQuestionTopic.WEEKLY_HOLIDAY,
+    "KB-EXTRA-WORK": GeneralQuestionTopic.EXTRA_WORK,
     "KB-SEVERANCE-ELIGIBILITY": GeneralQuestionTopic.SEVERANCE_PAY,
     "KB-ANNUAL-LEAVE": GeneralQuestionTopic.ANNUAL_LEAVE,
     "KB-DISMISSAL-NOTICE": GeneralQuestionTopic.DISMISSAL_NOTICE,
@@ -398,6 +417,46 @@ def _money(question: str) -> int | None:
 def _age(question: str) -> int | None:
     match = _AGE.search(question)
     return int(match.group(1)) if match else None
+
+
+def _question_intents(question: str) -> tuple[GeneralQuestionIntent, ...]:
+    """한 질문의 복수 요구를 보존한다. 주제 분류와 섞지 않는다."""
+
+    compact = re.sub(r"\s+", "", question)
+    intents: list[GeneralQuestionIntent] = []
+    money_context = any(
+        word in compact
+        for word in ("수당", "임금", "급여", "월급", "시급", "퇴직금", "돈")
+    )
+    if any(word in compact for word in ("금액", "몇원")) or (
+        "얼마" in compact and "얼마나" not in compact and money_context
+    ):
+        intents.append(GeneralQuestionIntent.AMOUNT)
+    markers = (
+        (GeneralQuestionIntent.ELIGIBILITY, ("받을수", "대상", "해당", "가능")),
+        (GeneralQuestionIntent.METHOD, ("계산법", "산식", "어떻게계산", "방법")),
+        (GeneralQuestionIntent.REQUIREMENTS, ("조건", "요건", "기준")),
+        (GeneralQuestionIntent.DOCUMENTS, ("서류", "준비물", "필요한것")),
+        (GeneralQuestionIntent.DEADLINE, ("언제까지", "기한", "며칠", "몇일")),
+        (GeneralQuestionIntent.PROCEDURE, ("어떻게해야", "뭐해야", "절차", "신청")),
+        (GeneralQuestionIntent.REASON, ("왜", "이유")),
+    )
+    for intent, words in markers:
+        if any(word in compact for word in words):
+            intents.append(intent)
+    return tuple(intents) or (GeneralQuestionIntent.GENERAL,)
+
+
+def _weekly_holiday_amount_answer(question: str) -> tuple[str, str]:
+    """금액 의도를 놓치지 않되, 보류한 단시간근로자 계산은 수행하지 않는다."""
+
+    return (
+        "주휴수당 금액은 현재 자동 계산하지 않습니다. 단시간근로자 여부에 따라 1일 "
+        "소정근로시간 산정에 추가 비교 정보가 필요하기 때문입니다. 계산하려면 통상시급, "
+        "최근 4주 약정 소정근로시간과 같은 업무 통상근로자의 근로일수를 확인해야 합니다.",
+        "실제 지급 여부에는 해당 주 소정근로일 개근과 근로관계 유지 여부도 별도로 "
+        "확인해야 합니다.",
+    )
 
 
 def _is_outdated_question(question: str) -> bool:
@@ -488,10 +547,28 @@ def _route_general_question(
 
     matches = retrieve_general_knowledge(question, top_k=3)
     if matches and matches[0].score >= 0.74:
-        strong_topics = {match.entry.kb_id for match in matches if match.score >= 0.74}
+        strong_topics = {
+            _GENERAL_TOPIC_BY_KB_ID[match.entry.kb_id]
+            for match in matches
+            if match.score >= 0.74
+        }
+        protected_topics = {
+            GeneralQuestionTopic.MINOR_WORK,
+            GeneralQuestionTopic.PREGNANCY_PROTECTION,
+        }
+        if (
+            GeneralQuestionTopic.EXTRA_WORK in strong_topics
+            and strong_topics & protected_topics
+        ):
+            strong_topics.discard(GeneralQuestionTopic.EXTRA_WORK)
         if len(strong_topics) > 1:
             return GeneralQuestionTopic.OUT_OF_SCOPE, None
-        topic = _GENERAL_TOPIC_BY_KB_ID[matches[0].entry.kb_id]
+        topic = next(iter(strong_topics))
+        selected_match = next(
+            match
+            for match in matches
+            if _GENERAL_TOPIC_BY_KB_ID[match.entry.kb_id] == topic
+        )
         if topic == GeneralQuestionTopic.WEEKLY_HOLIDAY and any(
             marker in compact for marker in _WEEKLY_ACTUAL_FACT_MARKERS
         ):
@@ -517,15 +594,9 @@ def _route_general_question(
             marker in compact for marker in _PERSONAL_SETTLEMENT_MARKERS
         ):
             return GeneralQuestionTopic.OUT_OF_SCOPE, None
-        if topic != GeneralQuestionTopic.MINIMUM_WAGE and any(
-            term in question for term in _CALCULATION_REQUEST_TERMS
-        ):
-            return GeneralQuestionTopic.OUT_OF_SCOPE, None
-        return topic, matches[0]
+        return topic, selected_match
 
     if any(term in question for term in _EXTRA_WORK_TERMS):
-        if any(term in question for term in _CALCULATION_REQUEST_TERMS):
-            return GeneralQuestionTopic.OUT_OF_SCOPE, None
         return GeneralQuestionTopic.EXTRA_WORK, None
 
     if (
@@ -542,13 +613,33 @@ def _route_general_question(
 
 
 def _weekly_holiday(question: str) -> GeneralQuestionResponse:
+    intents = _question_intents(question)
     compact = _compact_for_safety(question)
+    limitations = (
+        "실제 근무시간이 아니라 계약에서 정한 소정근로시간을 기준으로 보며, "
+        "개근·근로관계 유지 여부는 이 질문만으로 확인할 수 없습니다."
+    )
     hours = (
         _hours(question)
         if any(marker in compact for marker in _PRESCRIBED_HOURS_MARKERS)
         else None
     )
-    if hours is not None and hours < 15:
+    if (
+        GeneralQuestionIntent.METHOD in intents
+        and GeneralQuestionIntent.AMOUNT not in intents
+    ):
+        answer = (
+            "주휴수당은 1일 소정근로시간에 시간급 임금을 곱해 계산합니다. "
+            "단시간근로자의 1일 소정근로시간은 최근 4주 소정근로시간을 같은 기간 "
+            "통상근로자의 총 소정근로일수로 나누어 산정합니다."
+        )
+        limitations = (
+            "개인 금액을 계산하려면 단시간근로자 해당 여부, 통상시급과 각 산식의 "
+            "입력값을 별도로 확인해야 합니다."
+        )
+    elif GeneralQuestionIntent.AMOUNT in intents:
+        answer, limitations = _weekly_holiday_amount_answer(question)
+    elif hours is not None and hours < 15:
         answer = (
             f"입력하신 주 {hours:g}시간이 4주 평균 소정근로시간이라면, "
             "주 15시간 미만이어서 주휴일 적용 대상에서 제외됩니다."
@@ -568,10 +659,7 @@ def _weekly_holiday(question: str) -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.WEEKLY_HOLIDAY,
         answer=answer,
-        limitations=(
-            "실제 근무시간이 아니라 계약에서 정한 소정근로시간을 기준으로 보며, "
-            "개근·근로관계 유지 여부는 이 질문만으로 확인할 수 없습니다."
-        ),
+        limitations=limitations,
         evidence=[
             _evidence(
                 "주휴일 기준",
@@ -582,6 +670,11 @@ def _weekly_holiday(question: str) -> GeneralQuestionResponse:
                 "단시간근로자 시간 기준",
                 "근로기준법 제18조 · 4주 평균 주 15시간 기준",
                 SHORT_TIME_WORK_URL,
+            ),
+            _evidence(
+                "주휴수당 금액 산식",
+                "고용노동부 공식 FAQ · 1일 소정근로시간 × 시간급 임금",
+                WEEKLY_HOLIDAY_AMOUNT_URL,
             ),
         ],
         action=_upload_action(),
@@ -1324,6 +1417,57 @@ def _out_of_scope() -> GeneralQuestionResponse:
     )
 
 
+def _ensure_direct_answer(
+    question: str,
+    response: GeneralQuestionResponse,
+) -> GeneralQuestionResponse:
+    """주제는 맞지만 사용자가 요구한 답의 형태를 놓치는 회귀를 막는다."""
+
+    intents = _question_intents(question)
+    if GeneralQuestionIntent.AMOUNT not in intents:
+        return response
+    if response.topic in {
+        GeneralQuestionTopic.WEEKLY_HOLIDAY,
+        GeneralQuestionTopic.MINIMUM_WAGE,
+    }:
+        return response
+
+    missing_by_topic = {
+        GeneralQuestionTopic.SEVERANCE_PAY: (
+            "퇴직금 금액을 계산하려면 실제 퇴직일, 퇴직 전 3개월의 임금 총액과 "
+            "그 기간의 총일수, 전체 계속근로기간, 기간별 주 소정근로시간이 필요합니다. "
+            "현재 질문에는 이 값이 없어 금액을 계산할 수 없습니다."
+        ),
+        GeneralQuestionTopic.EXTRA_WORK: (
+            "연장·야간·휴일근로 수당 금액을 계산하려면 통상시급, 날짜별 실제 근무 시작·종료·휴게시간, "
+            "휴일 여부와 사업장 상시근로자 수가 필요합니다. 현재 질문에는 이 값이 없어 금액을 계산할 수 없습니다."
+        ),
+        GeneralQuestionTopic.ANNUAL_LEAVE: (
+            "연차 관련 금액을 계산하려면 어떤 금액을 묻는지(미사용 연차수당 등), 남은 연차 일수, "
+            "통상임금 산정 자료와 퇴직·정산 시점이 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+        ),
+        GeneralQuestionTopic.DISMISSAL_NOTICE: (
+            "해고예고수당 금액을 계산하려면 30일분 통상임금 산정에 필요한 임금 항목과 근로시간, "
+            "실제 해고일 및 예고일, 법정 예외 해당 여부가 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+        ),
+        GeneralQuestionTopic.WAGE_PAYMENT: (
+            "받아야 할 임금 금액을 계산하려면 임금 형태와 통상시급, 실제 근무기록, 이미 지급된 금액과 "
+            "공제 내역이 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+        ),
+        GeneralQuestionTopic.POST_EMPLOYMENT_SETTLEMENT: (
+            "퇴직 후 정산 금액을 계산하려면 미지급 임금·수당의 종류별 산정 자료, 실제 퇴직일, "
+            "이미 지급된 내역과 지급기일 연장 합의가 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+        ),
+    }
+    direct = missing_by_topic.get(response.topic)
+    if direct is None:
+        direct = (
+            "요청하신 금액은 현재 질문과 확인된 자료만으로 계산할 수 없습니다. "
+            "계산하려는 금액의 종류와 그 산식에 필요한 근로·임금 정보를 알려주세요."
+        )
+    return response.model_copy(update={"answer": direct})
+
+
 _HANDLERS = {
     GeneralQuestionTopic.WEEKLY_HOLIDAY: _weekly_holiday,
     GeneralQuestionTopic.MINIMUM_WAGE: _minimum_wage,
@@ -1353,10 +1497,13 @@ async def answer_general_question(
         signals = _extract_written_contract_signals(normalized)
         plan_context = _build_plan_context(signals)
         plan = await _choose_written_contract_plan(plan_context)
-        return _attach_retrieval(_written_contract(plan, plan_context), match)
+        response = _written_contract(plan, plan_context)
+        return _attach_retrieval(_ensure_direct_answer(normalized, response), match)
     if topic == GeneralQuestionTopic.SEVERANCE_PAY:
         signals = _extract_written_contract_signals(normalized)
         plan_context = _build_severance_context(signals)
         plan = await _choose_severance_plan(plan_context)
-        return _attach_retrieval(_severance_pay(plan), match)
-    return _attach_retrieval(_HANDLERS[topic](normalized), match)
+        response = _severance_pay(plan)
+        return _attach_retrieval(_ensure_direct_answer(normalized, response), match)
+    response = _HANDLERS[topic](normalized)
+    return _attach_retrieval(_ensure_direct_answer(normalized, response), match)
