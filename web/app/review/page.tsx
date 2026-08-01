@@ -35,6 +35,24 @@ function focusField(field: string) {
   el?.focus();
 }
 
+/** 서버 내부 용어를 그대로 노출하지 않고 사용자가 확인할 이유만 설명한다. */
+function reviewItemMessage(item: ReviewItem, hasValue: boolean) {
+  if (!hasValue) return "위 입력란에 내용을 적어 주세요.";
+
+  const messages: string[] = [];
+  if (item.printed_on_contract) {
+    messages.push("서명할 문서에 들어갈 내용이에요.");
+  }
+  if (item.affects_judgment) {
+    messages.push("근로조건을 확인하는 데 필요한 내용이에요.");
+  }
+  if (item.confidence !== "HIGH") {
+    messages.push("입력한 값이 맞는지 한 번 더 확인해 주세요.");
+  }
+
+  return messages.join(" ") || "입력한 값이 맞는지 확인해 주세요.";
+}
+
 type FieldConfig = {
   key: keyof ContractTerms;
   label: string;
@@ -89,19 +107,18 @@ const SECTIONS: { title: string; description?: string; fields: FieldConfig[] }[]
       ],
     },
     {
-      title: "소정근로시간",
-      description:
-        "출퇴근 시각과 근무일수로 근로시간을 계산해요.",
+      title: "근무시간",
+      description: "출근·퇴근 시각과 주 근무일수를 입력해 주세요.",
       fields: [
         {
           key: "work_start_time",
-          label: "시업 시각",
+          label: "출근 시각",
           type: "time",
           placeholder: "HH:MM",
         },
         {
           key: "work_end_time",
-          label: "종업 시각",
+          label: "퇴근 시각",
           type: "time",
           placeholder: "HH:MM",
         },
@@ -153,18 +170,18 @@ const SECTIONS: { title: string; description?: string; fields: FieldConfig[] }[]
         },
         {
           key: "other_allowance",
-          label: "기타급여(제수당)",
+          label: "기타 수당",
           unit: "원 또는 계약서 표기",
           placeholder: "예: 주휴수당 포함 · 없으면 비워 두세요",
         },
         {
           key: "payday",
-          label: "임금지급일",
+          label: "급여일",
           placeholder: "예: 매월 25일",
         },
         {
           key: "payment_method",
-          label: "지급방법",
+          label: "급여 받는 방법",
           placeholder: "예: 근로자 명의 통장으로 입금",
         },
       ],
@@ -223,6 +240,8 @@ function ReviewContent() {
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 빈칸 경고는 사용자가 다음 버튼을 누른 뒤에만 보여준다.
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   // 진행 차단 판정. null = 아직 확인 전(첫 검증 도착 전에는 막지 않는다).
   const [validation, setValidation] = useState<ValidationState | null>(null);
   // 확인이 필요한 항목(review-items). 화면은 confidence 를 직접 해석하지 않는다.
@@ -409,30 +428,41 @@ function ReviewContent() {
 
   async function submit() {
     if (!terms || loading) return;
-    // 차단 항목이 남아 있으면 진행하지 않는다. 버튼 비활성과 이중 방어.
-    if (validation && !validation.can_proceed) {
-      focusField(validation.blocking_fields[0]);
-      return;
-    }
-    // 서명에 쓰일 값을 아직 확인하지 않았으면 진행하지 않는다.
-    const stillUnconfirmed = mustConfirm.find(
-      (f) => !confirmedFields.includes(f),
-    );
-    if (stillUnconfirmed) {
-      focusField(stillUnconfirmed);
-      return;
-    }
+    setSubmitAttempted(true);
     setLoading(true);
     setError(null);
     try {
-      const report = await validateTerms({
+      const request = {
         terms,
         worker_birth_date: workerBirthDate || null,
         worker_is_pregnant: workerIsPregnant,
         worker_pregnancy_week: workerPregnancyWeek,
         worker_is_postpartum_within_year: workerIsPostpartumWithinYear,
         worker_is_disabled: workerIsDisabled,
-      });
+      };
+      // 다음 버튼을 누른 시점의 최신 값으로 누락 항목과 확인 목록을 받는다.
+      const [latestValidation, latestReview] = await Promise.all([
+        getValidationState(request),
+        getReviewItems({ terms }),
+      ]);
+      setValidation(latestValidation);
+      setReviewItems(latestReview.items);
+      setMustConfirm(latestReview.must_confirm);
+
+      if (!latestValidation.can_proceed) {
+        focusField(latestValidation.blocking_fields[0]);
+        return;
+      }
+
+      const stillUnconfirmed = latestReview.must_confirm.find(
+        (field) => !confirmedFields.includes(field),
+      );
+      if (stillUnconfirmed) {
+        focusField(stillUnconfirmed);
+        return;
+      }
+
+      const report = await validateTerms(request);
       updateSession({
         terms,
         entryPath,
@@ -524,6 +554,115 @@ function ReviewContent() {
   ).length;
   const allConfirmed = unconfirmedCount === 0;
 
+  const workerProtectionCard = (
+    <Card className="flex flex-col gap-4">
+      <div>
+        <h2 className="text-base font-extrabold text-ink">
+          해당되는 보호 항목이 있나요? (선택)
+        </h2>
+        <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+          답해 주시면 나이와 상황에 따라 꼭 알아야 할 근로시간·휴식 기준을
+          함께 안내해 드려요. 입력하지 않아도 다음 단계로 갈 수 있습니다.
+        </p>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <label
+          htmlFor="worker-birth-date"
+          className="text-sm font-bold text-ink"
+        >
+          근로자 생년월일 (선택)
+        </label>
+        <input
+          id="worker-birth-date"
+          type="date"
+          value={workerBirthDate}
+          autoComplete="off"
+          aria-describedby="worker-birth-date-help"
+          disabled={loading}
+          onChange={(event) => changeWorkerBirthDate(event.target.value)}
+          className="min-h-14 w-full rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
+        />
+        <p
+          id="worker-birth-date-help"
+          className="text-xs leading-relaxed text-ink-muted"
+        >
+          나이에 따라 적용되는 보호 기준을 확인할 때만 사용하며 계약서에는
+          표시하지 않습니다. 입력 내용은 확인 과정에서 전송되며, 전송 후
+          보관·삭제 방식은 아직 확인되지 않았습니다. 원하지 않으면 입력하지
+          않아도 됩니다.
+        </p>
+      </div>
+
+      <div className="flex flex-col gap-2 border-t border-brand-line pt-4">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+          <input
+            type="checkbox"
+            checked={workerIsPregnant}
+            disabled={loading}
+            onChange={(event) => changeWorkerIsPregnant(event.target.checked)}
+            className="h-5 w-5"
+          />
+          임신 중이에요
+        </label>
+        {workerIsPregnant && (
+          <div className="ml-7 flex flex-col gap-1.5">
+            <label
+              htmlFor="worker-pregnancy-week"
+              className="text-sm font-bold text-ink"
+            >
+              임신 주수 (선택)
+            </label>
+            <input
+              id="worker-pregnancy-week"
+              type="number"
+              min={1}
+              max={42}
+              inputMode="numeric"
+              value={workerPregnancyWeek ?? ""}
+              disabled={loading}
+              onChange={(event) =>
+                changeWorkerPregnancyWeek(event.target.value)
+              }
+              className="min-h-14 w-32 rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
+            />
+            <p className="text-xs leading-relaxed text-ink-muted">
+              임신 주수에 따라 신청할 수 있는 근로시간 단축 기준도 함께
+              안내해 드려요.
+            </p>
+          </div>
+        )}
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+          <input
+            type="checkbox"
+            checked={workerIsPostpartumWithinYear}
+            disabled={loading}
+            onChange={(event) =>
+              changeWorkerIsPostpartumWithinYear(event.target.checked)
+            }
+            className="h-5 w-5"
+          />
+          출산한 지 1년이 안 됐어요
+        </label>
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+          <input
+            type="checkbox"
+            checked={workerIsDisabled}
+            disabled={loading}
+            onChange={(event) => changeWorkerIsDisabled(event.target.checked)}
+            className="h-5 w-5"
+          />
+          장애가 있어요
+        </label>
+        <p className="text-xs leading-relaxed text-ink-muted">
+          선택한 내용은 관련 보호 기준을 안내할 때만 사용하며 계약서와 결과
+          화면에는 표시하지 않습니다. 입력 내용은 확인 과정에서 전송되며,
+          전송 후 보관·삭제 방식은 아직 확인되지 않았습니다. 원하지 않으면
+          선택하지 않아도 되며 증빙 서류도 받지 않습니다.
+        </p>
+      </div>
+    </Card>
+  );
+
   return (
     <ScreenShell
       step={2}
@@ -537,10 +676,10 @@ function ReviewContent() {
       }
       description={
         isEmployer
-          ? "정하신 근로조건을 입력하시면 법정 기준을 함께 확인해 드려요. 모르는 항목은 비워 두셔도 됩니다."
+          ? "정한 근로조건을 아는 만큼 입력해 주세요. 빠진 필수 항목은 다음 버튼을 누르면 알려드릴게요."
           : isManual
-            ? "말로 들은 내용만 입력해 주세요. 모르는 항목은 비워 두면 정보 부족 또는 찾지 못함으로 확인합니다."
-            : "AI가 읽은 값과 계약서 원문을 비교해 주세요. 여기서 확인한 조건만 검토에 씁니다."
+            ? "말로 들은 근로조건을 아는 만큼 입력해 주세요. 빠진 필수 항목은 다음 버튼을 누르면 알려드릴게요."
+            : "사진에서 읽은 내용이 계약서와 같은지 확인해 주세요."
       }
     >
       {isBlankForm && <DocumentStatusBadge status="DRAFTING" />}
@@ -566,123 +705,11 @@ function ReviewContent() {
       )}
 
       <p className="rounded-field border border-brand-line bg-brand-tint/60 px-4 py-3 text-sm leading-relaxed text-ink-muted">
-        검증에 필요하지 않은 사업주 전화·주소와 근로자 주소·연락처는 이
-        화면에서 수집하거나 탭 세션에 저장하지 않습니다. 이름과 확인한 계약
-        조건은 현재 브라우저 탭을 닫을 때까지 세션에 남을 수 있습니다.
+        전화번호와 주소는 받지 않아요. 입력한 이름과 근로조건은 다음 단계를
+        이어가는 동안 현재 탭에 임시로 보관될 수 있습니다.
       </p>
 
-      <Card className="flex flex-col gap-4">
-        <div>
-          <h2 className="text-base font-extrabold text-ink">
-            근로자 유형별 근로조건 확인
-          </h2>
-          <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            생년월일을 입력하면 계약 시작일을 기준으로 15세 이상 18세 미만
-            근로시간과 야간근로 항목을, 임신·출산·장애 여부를 선택하면 해당
-            보호 규정을 함께 확인합니다. 입력하지 않으면 해당 검사를 결과에
-            추가하지 않습니다.
-          </p>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <label
-            htmlFor="worker-birth-date"
-            className="text-sm font-bold text-ink"
-          >
-            근로자 생년월일 (선택)
-          </label>
-          <input
-            id="worker-birth-date"
-            type="date"
-            value={workerBirthDate}
-            autoComplete="off"
-            aria-describedby="worker-birth-date-help"
-            disabled={loading}
-            onChange={(event) => changeWorkerBirthDate(event.target.value)}
-            className="min-h-14 w-full rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
-          />
-          <p
-            id="worker-birth-date-help"
-            className="text-xs leading-relaxed text-ink-muted"
-          >
-            생년월일은 계약 조건이나 계약서·PDF에 넣지 않습니다. 브라우저에서는
-            검증과 서명 요청을 이어가기 위해 현재 탭의 sessionStorage에만 임시
-            저장하고, 검토·서명 요청 때 서버로 보냅니다. 서명 요청이
-            성공하면 현재 탭의 저장값에서도 즉시 지우며, 발송이 막히거나 오류로
-            재시도가 필요하면 탭을 닫을 때까지만 유지합니다. 브라우저
-            자동완성은 사용하지 않고 결과 화면, 오류 메시지, 로그에도 표시하지
-            않습니다. 서버의 보관·삭제 정책은 아직 검증되지 않았습니다.
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2 border-t border-brand-line pt-4">
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
-            <input
-              type="checkbox"
-              checked={workerIsPregnant}
-              disabled={loading}
-              onChange={(event) => changeWorkerIsPregnant(event.target.checked)}
-              className="h-5 w-5"
-            />
-            임신 중이에요
-          </label>
-          {workerIsPregnant && (
-            <div className="ml-7 flex flex-col gap-1.5">
-              <label
-                htmlFor="worker-pregnancy-week"
-                className="text-sm font-bold text-ink"
-              >
-                임신 주수 (선택)
-              </label>
-              <input
-                id="worker-pregnancy-week"
-                type="number"
-                min={1}
-                max={42}
-                inputMode="numeric"
-                value={workerPregnancyWeek ?? ""}
-                disabled={loading}
-                onChange={(event) =>
-                  changeWorkerPregnancyWeek(event.target.value)
-                }
-                className="min-h-14 w-32 rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
-              />
-              <p className="text-xs leading-relaxed text-ink-muted">
-                12주 이내 또는 32주 이후면 하루 2시간 단축근로를 신청할 수
-                있는지 함께 안내합니다.
-              </p>
-            </div>
-          )}
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
-            <input
-              type="checkbox"
-              checked={workerIsPostpartumWithinYear}
-              disabled={loading}
-              onChange={(event) =>
-                changeWorkerIsPostpartumWithinYear(event.target.checked)
-              }
-              className="h-5 w-5"
-            />
-            출산한 지 1년이 안 됐어요
-          </label>
-          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
-            <input
-              type="checkbox"
-              checked={workerIsDisabled}
-              disabled={loading}
-              onChange={(event) => changeWorkerIsDisabled(event.target.checked)}
-              className="h-5 w-5"
-            />
-            장애가 있어요
-          </label>
-          <p className="text-xs leading-relaxed text-ink-muted">
-            임신·출산·장애 여부는 민감정보입니다. 생년월일과 같은 방식으로
-            현재 탭의 sessionStorage에만 임시 저장하고, 검증·서명 요청 때만
-            서버로 보냅니다. 서명 요청이 성공하면 즉시 지우며, 결과 화면·오류
-            메시지·로그에는 표시하지 않습니다. 증빙 서류 제출은 요구하지
-            않습니다.
-          </p>
-        </div>
-      </Card>
+      {!isManual && workerProtectionCard}
 
       {SECTIONS.map((section) => (
         <Card key={section.title} className="flex flex-col gap-5">
@@ -708,12 +735,12 @@ function ReviewContent() {
                   name={key}
                   field={field}
                   onChange={(value) => changeField(key, value)}
+                  showExtractionStatus={!isBlankForm}
                 />
                 {userEdited ? (
                   <p className="text-xs font-semibold text-brand-deep">
                     <span aria-hidden="true">✍️ </span>
-                    사용자 입력·수정값입니다. 계약서 원문 근거로 표시하지
-                    않습니다.
+                    직접 입력한 값이에요.
                   </p>
                 ) : field.source_text ? (
                   <p className="text-xs font-semibold text-ink-muted">
@@ -723,8 +750,8 @@ function ReviewContent() {
                 ) : !isBlankForm && hasValue ? (
                   <p className="text-xs font-semibold text-amber-900">
                     <span aria-hidden="true">📄 </span>
-                    계약서에서 읽은 값이지만 연결된 원문 근거를 찾지
-                    못했습니다. 원본을 직접 확인해 주세요.
+                    계약서에서 읽은 값이지만 사진의 어느 부분인지 찾지
+                    못했어요. 계약서를 직접 확인해 주세요.
                   </p>
                 ) : null}
               </div>
@@ -733,7 +760,7 @@ function ReviewContent() {
         </Card>
       ))}
 
-      {mustConfirmItems.length > 0 && (
+      {mustConfirmItems.length > 0 && (!isManual || submitAttempted) && (
         <Card
           className={`flex flex-col gap-4 border-2 ${
             allConfirmed ? "border-brand-line" : "border-amber-300"
@@ -741,11 +768,11 @@ function ReviewContent() {
         >
           <div>
             <h2 className="text-base font-extrabold text-ink">
-              서명에 쓰일 값 확인 {allConfirmed ? "✅" : `(${unconfirmedCount}건 남음)`}
+              마지막으로 확인해 주세요 {allConfirmed ? "✅" : `(${unconfirmedCount}건 남음)`}
             </h2>
             <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-              아래 항목은 계약서와 서명에 그대로 쓰여요. 값이 맞는지 확인하고
-              체크해 주세요. 틀리면 값을 고치면 다시 확인 대상이 됩니다.
+              아래 내용이 맞는지 확인해 주세요. 잘못된 값은 위 입력란에서
+              고칠 수 있어요.
             </p>
           </div>
 
@@ -753,12 +780,13 @@ function ReviewContent() {
             {mustConfirmItems.map((item) => {
               const confirmed = confirmedFields.includes(item.field);
               const current = terms[item.field as keyof ContractTerms]?.value;
-              const shown =
-                current === null ||
-                current === undefined ||
-                String(current) === ""
-                  ? "(비어 있음)"
-                  : String(current);
+              const hasCurrentValue =
+                current !== null &&
+                current !== undefined &&
+                String(current) !== "";
+              const shown = hasCurrentValue
+                ? String(current)
+                : "입력되지 않음";
               return (
                 <li
                   key={item.field}
@@ -776,15 +804,13 @@ function ReviewContent() {
                       {shown}
                     </span>
                   </div>
-                  {item.reasons.length > 0 && (
-                    <p className="mt-1 text-xs leading-relaxed text-ink-muted">
-                      {item.reasons.join(" · ")}
-                    </p>
-                  )}
+                  <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+                    {reviewItemMessage(item, hasCurrentValue)}
+                  </p>
                   {item.source_text && (
                     <p className="mt-1 text-xs leading-relaxed text-ink-muted">
                       <span aria-hidden="true">📄 </span>
-                      계약서 근거: “{item.source_text}”
+                      계약서에 적힌 내용: “{item.source_text}”
                     </p>
                   )}
                   <div className="mt-2 flex flex-wrap items-center gap-3">
@@ -802,7 +828,7 @@ function ReviewContent() {
                       onClick={() => focusField(item.field)}
                       className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-ink-muted transition hover:border-brand hover:text-ink"
                     >
-                      값 고치러 가기
+                      {hasCurrentValue ? "값 고치기" : "입력하러 가기"}
                     </button>
                   </div>
                 </li>
@@ -830,7 +856,7 @@ function ReviewContent() {
         </div>
       )}
 
-      {blockingIssues.length > 0 && (
+      {submitAttempted && blockingIssues.length > 0 && (
         <div
           role="alert"
           aria-live="assertive"
@@ -838,24 +864,41 @@ function ReviewContent() {
         >
           <p className="font-bold">
             <span aria-hidden="true">🚫 </span>
-            먼저 고쳐야 넘어갈 수 있어요
+            입력할 내용이 남아 있어요
           </p>
           <ul className="mt-2 flex flex-col gap-3">
-            {blockingIssues.map((issue) => (
-              <li key={issue.field} className="flex flex-col gap-1">
-                <span className="font-bold">
-                  {issue.label} — {issue.reason}
-                </span>
-                <span className="text-red-800">→ {issue.fix}</span>
-                <button
-                  type="button"
-                  onClick={() => focusField(issue.field)}
-                  className="self-start rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-bold text-red-900 transition hover:border-red-500"
-                >
-                  고치러 가기
-                </button>
-              </li>
-            ))}
+            {blockingIssues.map((issue) => {
+              const isMissing =
+                issue.value === null ||
+                issue.value === undefined ||
+                String(issue.value).trim() === "";
+              const reason =
+                isBlankForm && isMissing
+                  ? "다음 단계에 필요한 항목이에요."
+                  : issue.reason;
+              const fix =
+                isBlankForm && isMissing
+                  ? isManual
+                    ? "말로 들은 내용을 입력해 주세요."
+                    : "정한 내용을 입력해 주세요."
+                  : issue.fix;
+
+              return (
+                <li key={issue.field} className="flex flex-col gap-1">
+                  <span className="font-bold">
+                    {issue.label} — {reason}
+                  </span>
+                  <span className="text-red-800">→ {fix}</span>
+                  <button
+                    type="button"
+                    onClick={() => focusField(issue.field)}
+                    className="self-start rounded-full border border-red-300 bg-white px-3 py-1 text-xs font-bold text-red-900 transition hover:border-red-500"
+                  >
+                    {isMissing ? "입력하러 가기" : "고치러 가기"}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         </div>
       )}
@@ -864,7 +907,7 @@ function ReviewContent() {
         <div className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <p className="font-bold">
             <span aria-hidden="true">⚠️ </span>
-            알고 진행하는 항목
+            한 번 더 확인해 주세요
           </p>
           <ul className="mt-2 flex flex-col gap-3">
             {warningIssues.map((issue) => (
@@ -889,16 +932,16 @@ function ReviewContent() {
       {deferredCount > 0 && (
         <div className="rounded-field border border-brand-line bg-brand-tint/40 px-4 py-3 text-sm text-ink-muted">
           <span aria-hidden="true">ℹ️ </span>
-          법정 기준과 관련된 {deferredCount}개 항목은 다음{" "}
-          <span className="font-bold text-ink">검증 결과</span> 화면에서 근거와
-          계산식을 함께 보여드려요.
+          입력한 근로조건과 꼭 알아야 할 기준은 다음 화면에서 함께 보여드려요.
         </div>
       )}
+
+      {isManual && workerProtectionCard}
 
       <div className="flex flex-col gap-2">
         <Button
           onClick={submit}
-          disabled={loading || blocked || !allConfirmed}
+          disabled={loading}
           className="w-full"
         >
           {loading
@@ -908,11 +951,11 @@ function ReviewContent() {
                   확인하는 중
                 </>
               )
-            : blocked
+            : submitAttempted && blocked
               ? "고쳐야 할 항목이 있어요"
-              : !allConfirmed
-                ? `값 확인이 ${unconfirmedCount}건 남았어요`
-                : "조건 확인하고 검증하기 →"}
+              : submitAttempted && !allConfirmed
+                ? `확인할 내용이 ${unconfirmedCount}건 남았어요`
+                : "다음으로 →"}
         </Button>
       </div>
     </ScreenShell>

@@ -21,6 +21,7 @@ export function FieldInput({
   type = "text",
   inputMode,
   options,
+  showExtractionStatus = true,
 }: {
   /** ContractTerms 키. data-field 로 심어 오류→입력란 포커스 이동에 쓴다. */
   name?: string;
@@ -32,15 +33,22 @@ export function FieldInput({
   type?: "text" | "date" | "time" | "tel";
   inputMode?: "numeric" | "text" | "tel";
   options?: FieldOption[];
+  /** 사진에서 읽은 값의 상태를 보여줄지 여부. 직접 입력 화면에서는 숨긴다. */
+  showExtractionStatus?: boolean;
 }) {
   const id = useId();
   const hintId = `${id}-hint`;
   const meta = CONFIDENCE_META[field.confidence];
-  const isLow = field.confidence === "LOW";
+  const isLow = showExtractionStatus && field.confidence === "LOW";
   const value = field.value === null ? "" : String(field.value);
   const describedBy =
-    meta.hint || field.source_text ? hintId : undefined;
-  const controlClass = `min-h-14 w-full rounded-field border bg-white px-4 py-3 text-ink outline-none transition placeholder:text-ink-muted focus:border-brand focus:ring-2 focus:ring-brand/20 ${meta.inputClass}`;
+    (showExtractionStatus && meta.hint) || field.source_text
+      ? hintId
+      : undefined;
+  const inputClass = showExtractionStatus
+    ? meta.inputClass
+    : "border-brand-line";
+  const controlClass = `min-h-14 w-full rounded-field border bg-white px-4 py-3 text-ink outline-none transition placeholder:text-ink-muted focus:border-brand focus:ring-2 focus:ring-brand/20 ${inputClass}`;
 
   return (
     <div className="flex flex-col gap-1.5">
@@ -87,9 +95,9 @@ export function FieldInput({
         />
       )}
 
-      {(meta.hint || field.source_text) && (
+      {((showExtractionStatus && meta.hint) || field.source_text) && (
         <div id={hintId} className="flex flex-col gap-1">
-          {meta.hint && (
+          {showExtractionStatus && meta.hint && (
             <span
               className={`text-xs ${
                 isLow ? "font-semibold text-amber-900" : "text-ink-muted"

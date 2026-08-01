@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { BrandHeader } from "@/components/ScreenShell";
 import { ButtonLink, Card, Pill, SectionLabel } from "@/components/ui";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
@@ -224,8 +225,15 @@ export default function HomePage() {
 
       <footer className="mx-auto w-full max-w-3xl px-5 pb-16">
         <LegalDisclaimer />
-        <p className="mt-4 text-center text-xs text-ink-soft">
-          ✓ 페어사인 · AI BUILDER SPRINT 2026
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft">
+          <Image
+            src="/brand/fairsign-mark-transparent.png"
+            alt=""
+            width={27}
+            height={14}
+            className="h-3.5 w-[27px] shrink-0 object-contain"
+          />
+          페어사인 · AI BUILDER SPRINT 2026
         </p>
       </footer>
 

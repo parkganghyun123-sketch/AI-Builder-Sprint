@@ -40,15 +40,17 @@ class KakaoError(Exception):
     pass
 
 
-def build_authorize_url(state: str) -> str:
+def build_authorize_url(state: str, redirect_uri: str | None = None) -> str:
     """사용자를 보낼 카카오 로그인 주소."""
     if not settings.kakao_configured:
         raise KakaoError("카카오 로그인이 설정되지 않았습니다")
 
+    callback_url = redirect_uri or settings.kakao_callback_url
+
     query = urlencode(
         {
             "client_id": settings.kakao_rest_api_key,
-            "redirect_uri": settings.kakao_callback_url,
+            "redirect_uri": callback_url,
             "response_type": "code",
             "scope": SCOPE,
             # ⚠️ state 는 CSRF 방어다. 우리가 서명한 토큰을 넣고
@@ -59,7 +61,7 @@ def build_authorize_url(state: str) -> str:
     return f"{AUTHORIZE_URL}?{query}"
 
 
-async def exchange_code(code: str) -> str:
+async def exchange_code(code: str, redirect_uri: str | None = None) -> str:
     """
     인가 코드 → 카카오 액세스 토큰.
 
@@ -69,11 +71,12 @@ async def exchange_code(code: str) -> str:
     if not settings.kakao_configured:
         raise KakaoError("카카오 로그인이 설정되지 않았습니다")
 
+    callback_url = redirect_uri or settings.kakao_callback_url
     data = {
         "grant_type": "authorization_code",
         "client_id": settings.kakao_rest_api_key,
         "client_secret": settings.kakao_client_secret,
-        "redirect_uri": settings.kakao_callback_url,
+        "redirect_uri": callback_url,
         "code": code,
     }
 
