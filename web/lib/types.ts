@@ -175,3 +175,58 @@ export interface SignStatusResponse {
   total: number;
   download_url: string | null;
 }
+
+// ============================================================
+// 5. 근거 추적형 계약 비서
+// ============================================================
+
+export type ChatIntent =
+  | "FIELD_LOOKUP"
+  | "CALCULATION"
+  | "MISSING_CLAUSE"
+  | "LEGAL_STANDARD"
+  | "OUT_OF_SCOPE";
+
+export type ChatEvidenceKind = "CONTRACT" | "LEGAL" | "CALCULATION";
+
+export interface ChatEvidence {
+  kind: ChatEvidenceKind;
+  title: string;
+  detail: string;
+}
+
+export interface ChatRequest {
+  question: string;
+  terms: ContractTerms;
+  /** 선택 입력값이며 화면·대화 내역에는 표시하지 않는다. */
+  worker_birth_date?: string | null;
+}
+
+export interface ChatConditionGroups {
+  met: string[];
+  unmet: string[];
+  needs_check: string[];
+}
+
+export interface RetrievedKnowledge {
+  kb_id: string;
+  title: string;
+  source_ids: string[];
+  score: number;
+}
+
+export type ChatAnswerMode =
+  | "DETERMINISTIC_TEMPLATE"
+  | "GROUNDED_GENERATION";
+
+export interface ChatResponse {
+  intent: ChatIntent;
+  topic: string;
+  answer: string;
+  evidence: ChatEvidence[];
+  limitation: string | null;
+  condition_groups: ChatConditionGroups | null;
+  retrieved_knowledge: RetrievedKnowledge[];
+  answer_mode: ChatAnswerMode;
+  suggested_questions: string[];
+}

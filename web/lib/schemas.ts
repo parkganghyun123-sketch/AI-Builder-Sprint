@@ -92,3 +92,53 @@ export const signStatusResponseSchema = z.object({
   total: z.number().int().nonnegative(),
   download_url: z.string().url().nullable(),
 });
+
+export const chatIntentSchema = z.enum([
+  "FIELD_LOOKUP",
+  "CALCULATION",
+  "MISSING_CLAUSE",
+  "LEGAL_STANDARD",
+  "OUT_OF_SCOPE",
+]);
+
+export const chatEvidenceKindSchema = z.enum([
+  "CONTRACT",
+  "LEGAL",
+  "CALCULATION",
+]);
+
+export const chatAnswerModeSchema = z.enum([
+  "DETERMINISTIC_TEMPLATE",
+  "GROUNDED_GENERATION",
+]);
+
+export const retrievedKnowledgeSchema = z.object({
+  kb_id: z.string(),
+  title: z.string(),
+  source_ids: z.array(z.string()),
+  score: z.number().min(0).max(1),
+});
+
+export const chatResponseSchema = z.object({
+  intent: chatIntentSchema,
+  topic: z.string(),
+  answer: z.string(),
+  evidence: z.array(
+    z.object({
+      kind: chatEvidenceKindSchema,
+      title: z.string(),
+      detail: z.string(),
+    }),
+  ),
+  limitation: z.string().nullable(),
+  condition_groups: z
+    .object({
+      met: z.array(z.string()),
+      unmet: z.array(z.string()),
+      needs_check: z.array(z.string()),
+    })
+    .nullable(),
+  retrieved_knowledge: z.array(retrievedKnowledgeSchema),
+  answer_mode: chatAnswerModeSchema,
+  suggested_questions: z.array(z.string()),
+});

@@ -41,7 +41,7 @@ NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 |---|---|
 | `/upload` | JPG·PNG·PDF를 `POST /contracts/extract`로 전송 |
 | `/review` | AI 추출값 또는 직접 입력값 23개를 확인·수정하고, 선택 생년월일과 함께 `POST /contracts/validate` 호출 |
-| `/result` | 백엔드 `ValidationReport`만 표시 |
+| `/result` | 백엔드 `ValidationReport`를 표시하고, 확인한 조건을 `POST /chat`에 보내 근거형 답변 제공 |
 | `/contract` | `POST /contracts/preview` PDF를 메모리 URL로 미리보기·다운로드 |
 | `/sign` | 현재 탭의 선택 생년월일을 재사용해 `POST /contracts/analyze-sign`, 409 확인 후 명시적 재요청 |
 | `/complete` | `GET /contracts/{id}/status`를 폴링하고 실제 완료 상태와 다운로드 주소 표시 |
@@ -56,6 +56,12 @@ NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생년월일 보관·삭제 정책은
 아직 검증되지 않았으므로 서버 측 자동 삭제를 보장하지 않습니다.
 
+계약 비서의 질문은 FairSign 백엔드로 전송됩니다. 대화 UI 상태는 React 메모리에만
+두고 브라우저 저장소에 기록하지 않으며, FairSign 백엔드는 대화 내역을 영구 저장하지
+않습니다. 백엔드는 질문에서 로컬로 추출한 개인정보가 아닌 허용된 분류 키워드만
+Upstage에 보내고, 계약 조건과 생년월일은 Upstage에 보내지 않습니다. 외부 제공자의
+데이터 보관 정책은 아직 검증되지 않았으며 별도로 적용될 수 있습니다.
+
 ## API 안전 규칙
 
 - 외부 JSON 응답은 `lib/schemas.ts`의 Zod 스키마로 검증합니다.
@@ -67,6 +73,8 @@ Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생�
 - 오류 메시지와 콘솔에 파일 내용, 추출 원문, 이름, 이메일을 남기지 않습니다.
 - `COMPLETED`는 상태 API가 해당 값을 반환했을 때만 표시합니다.
 - 보관함은 실제 API가 연결되기 전까지 저장 기능처럼 표시하지 않습니다.
+- 계약 비서 답변은 백엔드가 반환한 결론·근거·한계를 그대로 표시하고 프론트에서
+  추가 해석하거나 계산하지 않습니다.
 
 ## 검사
 

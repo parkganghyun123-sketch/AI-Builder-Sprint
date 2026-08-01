@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import {
   analyzeSignResponseSchema,
+  chatResponseSchema,
   contractTermsSchema,
   signStatusResponseSchema,
   validationReportSchema,
@@ -8,6 +9,7 @@ import {
 } from "./schemas";
 import type {
   AnalyzeSignRequest,
+  ChatRequest,
   PreviewRequest,
   ValidateRequest,
   ViolationBlocked,
@@ -175,6 +177,11 @@ export async function extractTerms(file: File) {
 /** 사용자가 확인한 조건 → 결정론적 법정 기준 판정. */
 export function validateTerms(body: ValidateRequest) {
   return postJson("/contracts/validate", body, validationReportSchema);
+}
+
+/** 확인한 계약 조건을 근거로 답변하는 계약 비서. 판단·계산은 백엔드에서만 수행한다. */
+export function askContractQuestion(body: ChatRequest) {
+  return postJson("/chat", body, chatResponseSchema);
 }
 
 /** 조건 → 검증 → PDF → 모두싸인 서명 요청. */

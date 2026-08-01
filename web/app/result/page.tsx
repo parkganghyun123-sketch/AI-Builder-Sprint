@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ScreenShell } from "@/components/ScreenShell";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
+import { ContractChat } from "@/components/ContractChat";
 import {
   CheckResultCard,
   CHECK_SOURCE_FIELD,
@@ -25,6 +26,7 @@ export default function ResultPage() {
   const [userEditedFields, setUserEditedFields] = useState<
     (keyof ContractTerms)[]
   >([]);
+  const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -32,6 +34,7 @@ export default function ResultPage() {
     setTerms(session.terms);
     setReport(session.report);
     setUserEditedFields(session.userEditedFields);
+    setWorkerBirthDate(session.workerBirthDate);
     setReady(true);
   }, []);
 
@@ -194,6 +197,11 @@ export default function ResultPage() {
           );
         })}
       </div>
+
+      <ContractChat
+        terms={terms}
+        workerBirthDate={workerBirthDate}
+      />
 
       <div className="flex flex-col gap-2">
         <ButtonLink href="/contract" className="w-full text-center">

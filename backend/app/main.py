@@ -14,7 +14,7 @@ from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import contracts, extract, sign
+from app.routers import chat, contracts, extract, sign
 
 logging.basicConfig(level=logging.INFO)
 
@@ -80,3 +80,4 @@ async def health_pdf() -> Response:
 app.include_router(contracts.router, tags=["contracts"])
 app.include_router(extract.router, tags=["ai"])
 app.include_router(sign.router, tags=["signing"])
+app.include_router(chat.router, tags=["chat"])
