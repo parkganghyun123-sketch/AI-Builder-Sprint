@@ -14,7 +14,6 @@ from app.validation.cli import main as cli_main
 from app.validation.rules import (
     check_annual_leave_indicators,
     check_break_time,
-    check_disabled_accommodation,
     check_dismissal_notice_indicator,
     check_minimum_wage,
     check_minor_night_work,
@@ -779,6 +778,26 @@ def test_pregnant_overtime_over_forty_hours_is_violation() -> None:
     assert "합의로도 예외가 인정되지" in result.detail
 
 
+def test_pregnant_overtime_over_daily_eight_hours_is_violation_even_under_weekly_forty() -> (
+    None
+):
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(4),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "1일 소정근로시간 9시간 > 법정근로시간 8시간" in result.calculation
+    assert "SRC-LSA-50" in result.legal_basis
+    assert "SRC-LSA-74" in result.legal_basis
+
+
 def test_pregnant_overtime_unknown_when_schedule_missing() -> None:
     result = check_pregnant_overtime(
         terms(work_start_time=field(None)), is_pregnant=True
@@ -793,6 +812,8 @@ def test_pregnant_shortened_hours_eligible_at_boundaries(week: int) -> None:
 
     assert result is not None
     assert "신청할 수 있습니다" in result.detail
+    assert "8시간 미만" in result.detail
+    assert "6시간" in result.detail
 
 
 def test_pregnant_shortened_hours_not_eligible_mid_pregnancy() -> None:
@@ -928,17 +949,6 @@ def test_postpartum_overtime_unknown_when_schedule_missing() -> None:
     assert result.status == CheckStatus.UNKNOWN
 
 
-def test_disabled_accommodation_none_when_not_disabled() -> None:
-    assert check_disabled_accommodation(False) is None
-
-
-def test_disabled_accommodation_is_informational_ok() -> None:
-    result = check_disabled_accommodation(True)
-
-    assert result.status == CheckStatus.OK
-    assert "정당한 편의" in result.detail
-
-
 def test_validate_conditionally_includes_pregnant_checks() -> None:
     report = validate(terms(), worker_is_pregnant=True, worker_pregnancy_week=10)
     codes = {check.code for check in report.checks}
@@ -957,11 +967,11 @@ def test_validate_conditionally_includes_postpartum_check() -> None:
     assert "PREGNANT_OVERTIME" not in codes
 
 
-def test_validate_conditionally_includes_disabled_check() -> None:
+def test_validate_does_not_turn_disability_guidance_into_an_automatic_check() -> None:
     report = validate(terms(), worker_is_disabled=True)
     codes = {check.code for check in report.checks}
 
-    assert "DISABLED_ACCOMMODATION" in codes
+    assert "DISABLED_ACCOMMODATION" not in codes
 
 
 def test_validate_without_worker_flags_has_no_new_checks() -> None:

@@ -159,6 +159,16 @@ export type GeneralQuestionTopic =
   | "WRITTEN_CONTRACT"
   | "MINOR_WORK"
   | "EXTRA_WORK"
+  | "SEVERANCE_PAY"
+  | "ANNUAL_LEAVE"
+  | "DISMISSAL_NOTICE"
+  | "PROBATION_MINIMUM_WAGE"
+  | "SOCIAL_INSURANCE"
+  | "MINOR_DOCUMENTS"
+  | "PREGNANCY_PROTECTION"
+  | "DISABILITY_ACCOMMODATION"
+  | "WAGE_PAYMENT"
+  | "POST_EMPLOYMENT_SETTLEMENT"
   | "OUT_OF_SCOPE";
 
 export interface GeneralQuestionResponse {
@@ -168,6 +178,8 @@ export interface GeneralQuestionResponse {
   evidence: ChatEvidence[];
   action: ChatAction | null;
   suggestions: string[];
+  retrieved_kb_ids?: string[];
+  retrieved_source_ids?: string[];
 }
 
 // ============================================================

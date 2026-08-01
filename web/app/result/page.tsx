@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ScreenShell } from "@/components/ScreenShell";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import {
@@ -9,8 +9,8 @@ import {
 } from "@/components/CheckResultCard";
 import { EntitlementsCard } from "@/components/EntitlementsCard";
 import { OwnerMessageCard } from "@/components/OwnerMessageCard";
-import { ButtonLink, Card, SkeletonCard } from "@/components/ui";
-import { ContractAssistant } from "@/components/ContractAssistant";
+import { Button, ButtonLink, Card, SkeletonCard } from "@/components/ui";
+import { ContractChat } from "@/components/ContractChat";
 import { readSession } from "@/lib/session";
 import type { ContractTerms, EntryPath, ValidationReport } from "@/lib/types";
 
@@ -30,7 +30,9 @@ export default function ResultPage() {
   >([]);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
   const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
+  const [contractChatOpen, setContractChatOpen] = useState(false);
   const [ready, setReady] = useState(false);
+  const contractChatRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const session = readSession();
@@ -41,6 +43,19 @@ export default function ResultPage() {
     setWorkerBirthDate(session.workerBirthDate);
     setReady(true);
   }, []);
+
+  useEffect(() => {
+    if (!contractChatOpen) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      contractChatRef.current?.focus({ preventScroll: true });
+      contractChatRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [contractChatOpen]);
 
   if (!ready) {
     return (
@@ -220,6 +235,37 @@ export default function ResultPage() {
              사업주용 안내는 별도로 설계해야 한다(현재 범위 밖). */}
       {!isEmployer && <EntitlementsCard />}
 
+      <Card className="flex flex-col gap-3">
+        <div>
+          <h2 className="text-sm font-extrabold text-ink">
+            계약 결과에서 더 궁금한 점이 있나요?
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-ink-muted">
+            지금 확인한 계약 조건을 기준으로 새로운 대화를 시작합니다.
+          </p>
+        </div>
+        <Button
+          type="button"
+          className="w-full"
+          aria-expanded={contractChatOpen}
+          aria-controls="result-contract-chat"
+          onClick={() => setContractChatOpen((open) => !open)}
+        >
+          {contractChatOpen ? "계약 내용 질문 닫기" : "계약 내용 질문하기"}
+        </Button>
+      </Card>
+
+      {contractChatOpen && (
+        <div
+          id="result-contract-chat"
+          ref={contractChatRef}
+          tabIndex={-1}
+          className="scroll-mt-6 rounded-card focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+        >
+          <ContractChat terms={terms} workerBirthDate={workerBirthDate} />
+        </div>
+      )}
+
       {/* 다음 행동은 경로별로 다르다.
           ⚠️ 이전에는 곧바로 "요청서 만들기" 하나뿐이었다. 그래서 계약서를
              이미 받은 근로자도 "새 문서를 만들어 사장님에게 보내는" 길로
@@ -289,11 +335,6 @@ export default function ResultPage() {
           조건 다시 수정
         </ButtonLink>
       </Card>
-
-      <ContractAssistant
-        terms={terms}
-        workerBirthDate={workerBirthDate}
-      />
 
       <LegalDisclaimer />
     </ScreenShell>

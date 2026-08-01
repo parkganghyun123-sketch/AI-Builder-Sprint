@@ -21,8 +21,6 @@ from app.validation.constants import (
     ANNUAL_LEAVE_SOURCE_IDS,
     BREAK_RULES,
     BREAK_SOURCE_ID,
-    DISABLED_ACCOMMODATION_SOURCE_ID,
-    DISABLED_EQUAL_TREATMENT_SOURCE_ID,
     DISMISSAL_NOTICE_MIN_MONTHS,
     DISMISSAL_NOTICE_SOURCE_ID,
     MINIMUM_WAGE_2026,
@@ -42,7 +40,7 @@ from app.validation.constants import (
     PREGNANT_NIGHT_END,
     PREGNANT_NIGHT_SOURCE_ID,
     PREGNANT_NIGHT_START,
-    PREGNANT_OVERTIME_SOURCE_ID,
+    PREGNANT_OVERTIME_SOURCE_IDS,
     PREGNANT_SHORTENED_DAILY_HOURS,
     PREGNANT_SHORTENED_EARLY_WEEK_MAX,
     PREGNANT_SHORTENED_LATE_WEEK_MIN,
@@ -69,7 +67,8 @@ BREAK_TIME_BASIS = f"근로기준법 제54조 ({BREAK_SOURCE_ID})"
 MINOR_WORKING_HOURS_BASIS = f"근로기준법 제69조·2026-07-29 확인 ({MINOR_SOURCE_ID})"
 MINOR_NIGHT_WORK_BASIS = f"근로기준법 제70조·2026-07-29 확인 ({MINOR_NIGHT_SOURCE_ID})"
 PREGNANT_OVERTIME_BASIS = (
-    f"근로기준법 제74조제5항·2026-07-31 확인 ({PREGNANT_OVERTIME_SOURCE_ID})"
+    "근로기준법 제50조·제74조제5항·2026-08-02 확인 "
+    f"({', '.join(PREGNANT_OVERTIME_SOURCE_IDS)})"
 )
 PREGNANT_SHORTENED_HOURS_BASIS = (
     f"근로기준법 제74조제7항·제8항·2026-07-31 확인 ({PREGNANT_SHORTENED_SOURCE_ID})"
@@ -79,10 +78,6 @@ PREGNANT_NIGHT_WORK_BASIS = (
 )
 POSTPARTUM_OVERTIME_BASIS = (
     f"근로기준법 제71조·2026-07-31 확인 ({POSTPARTUM_OVERTIME_SOURCE_ID})"
-)
-DISABLED_ACCOMMODATION_BASIS = (
-    f"근로기준법 제6조·장애인차별금지법 제11조·2026-07-31 확인 "
-    f"({DISABLED_EQUAL_TREATMENT_SOURCE_ID}, {DISABLED_ACCOMMODATION_SOURCE_ID})"
 )
 REQUIRED_FIELDS_BASIS = (
     "근로기준법 제17조·고용노동부 표준근로계약서 (SRC-LSA-17, SRC-MOEL-CONTRACT-FORMS)"
@@ -714,30 +709,34 @@ def check_pregnant_overtime(
     terms: ContractTerms,
     is_pregnant: bool,
 ) -> CheckResult | None:
-    """임신 중인 근로자의 계약상 소정근로시간이 법정근로시간(주 40시간)을 넘는지 확인한다."""
+    """임신 중 계약상 소정근로시간이 법정근로시간(1일 8시간·1주 40시간)을 넘는지 확인한다."""
 
     if not is_pregnant:
         return None
 
+    daily_hours = _safe_hours_per_day(terms)
     weekly_hours = _safe_weekly_hours(terms)
-    if weekly_hours is None:
+    if daily_hours is None or weekly_hours is None:
         return CheckResult(
             code="PREGNANT_OVERTIME",
             label="임신중 시간외근로 금지",
             status=CheckStatus.UNKNOWN,
             legal_basis=PREGNANT_OVERTIME_BASIS,
             standard_year=STANDARD_YEAR,
-            calculation="주 소정근로시간 정보 없음",
+            calculation="1일 또는 주 소정근로시간 정보 없음",
             detail="근무 시각 또는 주 근무일 수를 확인할 수 없어 비교하지 못했습니다.",
         )
 
-    operator = ">" if weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS else "≤"
+    daily_over = daily_hours > STATUTORY_DAILY_HOURS
+    weekly_over = weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS
     calculation = (
-        f"주 소정근로시간 {_hours(weekly_hours)} {operator} "
+        f"1일 소정근로시간 {_hours(daily_hours)} {'>' if daily_over else '≤'} "
+        f"법정근로시간 {STATUTORY_DAILY_HOURS:g}시간 · "
+        f"주 소정근로시간 {_hours(weekly_hours)} {'>' if weekly_over else '≤'} "
         f"법정근로시간 {PREGNANT_STATUTORY_WEEKLY_HOURS:g}시간"
     )
 
-    if weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS:
+    if daily_over or weekly_over:
         return CheckResult(
             code="PREGNANT_OVERTIME",
             label="임신중 시간외근로 금지",
@@ -746,7 +745,7 @@ def check_pregnant_overtime(
             standard_year=STANDARD_YEAR,
             calculation=calculation,
             detail=(
-                "임신 중인 근로자에게는 법정근로시간(주 40시간)을 초과하는 시간외근로를 "
+                "임신 중인 근로자에게는 법정근로시간(1일 8시간·주 40시간)을 초과하는 시간외근로를 "
                 "시킬 수 없습니다. 당사자 합의로도 예외가 인정되지 않으며, 근로자가 "
                 "요구하면 쉬운 종류의 근로로 전환해야 합니다."
             ),
@@ -854,7 +853,8 @@ def check_pregnant_shortened_hours(
             f"임신 {PREGNANT_SHORTENED_EARLY_WEEK_MAX}주 이내 또는 "
             f"{PREGNANT_SHORTENED_LATE_WEEK_MIN}주 이후에 해당해 "
             f"1일 {PREGNANT_SHORTENED_DAILY_HOURS}시간 단축근로를 신청할 수 있습니다. "
-            "신청해도 임금은 삭감되지 않습니다."
+            "다만 1일 소정근로시간이 8시간 미만이면 단축 후 1일 근로시간이 6시간이 "
+            "되도록 하는 범위에서 신청할 수 있습니다. 신청해도 임금은 삭감되지 않습니다."
         )
         if eligible
         else "현재 임신 주수는 근로시간 단축 신청 대상 기간이 아닙니다."
@@ -941,28 +941,6 @@ def check_pregnant_night_work(
         detail=(
             "확인된 계약상 근무 시각만 비교한 결과입니다. "
             "휴일근로 포함 여부는 이 판정에 포함되어 있지 않습니다."
-        ),
-    )
-
-
-def check_disabled_accommodation(is_disabled: bool) -> CheckResult | None:
-    """장애인 근로자는 시간 상한 대신 균등처우·편의제공 협의를 안내한다."""
-
-    if not is_disabled:
-        return None
-
-    return CheckResult(
-        code="DISABLED_ACCOMMODATION",
-        label="장애인 근로자 편의제공 협의",
-        status=CheckStatus.OK,
-        legal_basis=DISABLED_ACCOMMODATION_BASIS,
-        standard_year=STANDARD_YEAR,
-        calculation=None,
-        detail=(
-            "FairSign은 근로시간 등 계약 조건을 장애를 이유로 자동 조정하지 않습니다. "
-            "근무시간·업무·시설 등 필요한 편의가 있다면 사업주와 미리 협의해 두는 것을 "
-            "권장합니다. 균등처우(근로기준법 제6조)와 정당한 편의제공(장애인차별금지법 "
-            "제11조) 의무가 있습니다."
         ),
     )
 
@@ -1306,7 +1284,6 @@ def validate(
         check_pregnant_night_work(
             terms, worker_is_pregnant, worker_is_postpartum_within_year
         ),
-        check_disabled_accommodation(worker_is_disabled),
     )
     checks = [
         check_minimum_wage(terms),

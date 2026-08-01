@@ -819,6 +819,17 @@ def test_rag_corpus_is_closed_over_verified_kb_sources() -> None:
         "SRC-EASYLAW-EMPLOYMENT-INSURANCE",
         "SRC-NHIS-DECREE-9",
         "SRC-NPS-COVERAGE",
+        "SRC-LSA-36",
+        "SRC-LSA-43",
+        "SRC-LSA-48",
+        "SRC-LSA-66",
+        "SRC-LSA-67",
+        "SRC-LSA-68",
+        "SRC-LSA-71",
+        "SRC-LSA-74",
+        "SRC-LSA-74-2",
+        "SRC-LSA-75",
+        "SRC-ADA-11",
     }
 
     assert VERIFIED_KNOWLEDGE

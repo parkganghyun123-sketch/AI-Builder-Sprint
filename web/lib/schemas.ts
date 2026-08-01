@@ -73,6 +73,18 @@ export const chatEvidenceKindSchema = z.enum([
   "OFFICIAL_GUIDANCE",
 ]);
 
+const APPROVED_EXTERNAL_ACTION_HREFS = [
+  "https://www.moel.go.kr/policy/policydata/view.do?bbs_seq=20230700845",
+  "https://1350.moel.go.kr/",
+] as const;
+
+export const actionHrefSchema = z.string().refine(
+  (href) =>
+    /^\/(?!\/)[^\s]*$/.test(href) ||
+    APPROVED_EXTERNAL_ACTION_HREFS.some((approved) => href === approved),
+  "허용되지 않은 이동 주소입니다.",
+);
+
 export const contractChatResponseSchema = z.object({
   intent: chatIntentSchema,
   answer: z.string(),
@@ -88,7 +100,7 @@ export const contractChatResponseSchema = z.object({
   action: z
     .object({
       label: z.string(),
-      href: z.string().startsWith("/"),
+      href: actionHrefSchema,
     })
     .nullable(),
   suggestions: z.array(z.string()),
@@ -101,6 +113,16 @@ export const generalQuestionTopicSchema = z.enum([
   "WRITTEN_CONTRACT",
   "MINOR_WORK",
   "EXTRA_WORK",
+  "SEVERANCE_PAY",
+  "ANNUAL_LEAVE",
+  "DISMISSAL_NOTICE",
+  "PROBATION_MINIMUM_WAGE",
+  "SOCIAL_INSURANCE",
+  "MINOR_DOCUMENTS",
+  "PREGNANCY_PROTECTION",
+  "DISABILITY_ACCOMMODATION",
+  "WAGE_PAYMENT",
+  "POST_EMPLOYMENT_SETTLEMENT",
   "OUT_OF_SCOPE",
 ]);
 
@@ -119,10 +141,12 @@ export const generalQuestionResponseSchema = z.object({
   action: z
     .object({
       label: z.string(),
-      href: z.string().startsWith("/"),
+      href: actionHrefSchema,
     })
     .nullable(),
   suggestions: z.array(z.string()),
+  retrieved_kb_ids: z.array(z.string()).default([]),
+  retrieved_source_ids: z.array(z.string()).default([]),
 });
 
 // 입력값 유효성 + 진행 차단 판정. 백엔드 severity.py 의 Issue/ValidationState 와 1:1.

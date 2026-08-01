@@ -10,4 +10,4 @@ router = APIRouter()
 
 @router.post("/questions/general", response_model=GeneralQuestionResponse)
 async def general_question(body: GeneralQuestionRequest) -> GeneralQuestionResponse:
-    return answer_general_question(body.question, body.context)
+    return await answer_general_question(body.question, body.context)
