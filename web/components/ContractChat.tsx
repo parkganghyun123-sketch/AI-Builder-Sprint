@@ -51,6 +51,13 @@ const TOPIC_LABELS: Record<string, string> = {
   PROBATION_MINIMUM_WAGE: "수습 최저임금",
 };
 
+const ANSWER_MODE_LABEL = {
+  DETERMINISTIC_TEMPLATE: "검증 규칙 기반 답변",
+  GROUNDED_GENERATION: "공식 KB 승인 문장",
+  NATURAL_GROUNDED_GENERATION: "공식 근거 기반 AI 설명",
+  OPENAI_GROUNDED_GENERATION: "GPT 근거 기반 맞춤 설명",
+} as const;
+
 function topicLabel(topic: string): string {
   return TOPIC_LABELS[topic] ?? "계약 조건 안내";
 }
@@ -197,9 +204,11 @@ export function ContractChat({
           계약서만으로 확인할 수 없는 상황은 답변 범위를 안내합니다.
         </p>
         <p className="text-xs leading-relaxed text-ink-muted">
-          질문은 FairSign 백엔드로 전송됩니다. 계약서 원문·생년월일·개인정보는
-          Upstage에 보내지 않습니다. 백엔드가 만든 비식별 분류 특징과 검색된 공식 KB
-          근거에서 사용할 승인 문장·출처를 고르는 데만 Upstage를 사용합니다.
+          질문은 FairSign 백엔드로 전송됩니다. Upstage와 OpenAI에는 비식별 판정
+          사실 카드·분류 키·검증된 KB 후보만 보냅니다. OpenAI 요청은 저장
+          비활성화(store:false)로 전송합니다. 질문 원문, 계약서 파일·원문,
+          이름·연락처·생년월일·사업장 정보는 보내지 않으며, 외부 제공자의 별도
+          보관 정책이 적용될 수 있습니다.
         </p>
       </div>
 
@@ -220,11 +229,9 @@ export function ContractChat({
                       계약서만으로 확인 어려움
                     </span>
                   )}
-                  {response.answer_mode === "GROUNDED_GENERATION" && (
-                    <span className="rounded-full border border-brand-line bg-white px-3 py-1 text-xs font-bold text-brand-deep">
-                      공식 KB 검색 기반 설명
-                    </span>
-                  )}
+                  <span className="rounded-full border border-brand-line bg-white px-3 py-1 text-xs font-bold text-brand-deep">
+                    {ANSWER_MODE_LABEL[response.answer_mode]}
+                  </span>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-ink">
                   {response.answer}

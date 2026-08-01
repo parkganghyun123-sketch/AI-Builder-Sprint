@@ -1,6 +1,7 @@
 """챗봇 내부·API 모델."""
 
 from enum import Enum
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -35,6 +36,8 @@ class ChatTopic(str, Enum):
 
 
 class Classification(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     intent: ChatIntent
     topic: ChatTopic
 
@@ -83,15 +86,81 @@ class RetrievedKnowledge(BaseModel):
 class AnswerMode(str, Enum):
     DETERMINISTIC_TEMPLATE = "DETERMINISTIC_TEMPLATE"
     GROUNDED_GENERATION = "GROUNDED_GENERATION"
+    NATURAL_GROUNDED_GENERATION = "NATURAL_GROUNDED_GENERATION"
+    OPENAI_GROUNDED_GENERATION = "OPENAI_GROUNDED_GENERATION"
+
+
+class GenerationFactKind(str, Enum):
+    DETERMINISTIC_CONCLUSION = "DETERMINISTIC_CONCLUSION"
+    MET = "MET"
+    UNMET = "UNMET"
+    NEEDS_CHECK = "NEEDS_CHECK"
+
+
+class GenerationFactCard(BaseModel):
+    """Solar에 전달할 수 있는 비식별·결정론적 사실 한 건."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    fact_id: str = Field(pattern=r"^FACT-[A-Z0-9-]+$")
+    kind: GenerationFactKind
+    text: str = Field(min_length=1, max_length=300)
+
+
+class GenerationTransferScope(BaseModel):
+    """외부 모델 전송 범위를 API 입력 자체에 명시한다."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    allowed_payload: tuple[
+        Literal[
+            "SELECTION_KEYS",
+            "VERIFIED_KB_SENTENCES",
+            "DETERMINISTIC_FACT_CARDS",
+        ],
+        ...,
+    ] = (
+        "SELECTION_KEYS",
+        "VERIFIED_KB_SENTENCES",
+        "DETERMINISTIC_FACT_CARDS",
+    )
+    question_original_sent: Literal[False] = False
+    contract_original_sent: Literal[False] = False
+    personal_information_sent: Literal[False] = False
+    worker_birth_date_sent: Literal[False] = False
+    workplace_sent: Literal[False] = False
 
 
 class GroundedGenerationInput(BaseModel):
     """개인정보와 계약 원문을 제외한 생성용 허용 컨텍스트."""
 
+    model_config = ConfigDict(extra="forbid")
+
     selection_keys: list[str]
     candidate_sentences: dict[str, str]
     sentence_source_ids: dict[str, list[str]]
     allowed_source_ids: list[str]
+    fact_cards: list[GenerationFactCard] = Field(default_factory=list, max_length=12)
+    transfer_scope: GenerationTransferScope = Field(
+        default_factory=GenerationTransferScope
+    )
+
+
+class NaturalSentenceConnector(str, Enum):
+    CONTRACT_SUMMARY = "CONTRACT_SUMMARY"
+    ADDITIONAL_CHECK = "ADDITIONAL_CHECK"
+    LEGAL_CONTEXT = "LEGAL_CONTEXT"
+
+
+class GroundedNaturalSentence(BaseModel):
+    """자유 사실 서술 없이 문장 조립 방법과 근거만 고르는 Solar 출력."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    connector: NaturalSentenceConnector
+    fact_ids: list[str] = Field(min_length=1, max_length=5)
+    kb_sentence_id: str
+    source_ids: list[str] = Field(min_length=1, max_length=5)
 
 
 class GroundedGenerationOutput(BaseModel):
@@ -99,6 +168,44 @@ class GroundedGenerationOutput(BaseModel):
 
     sentence_ids: list[str] = Field(min_length=1, max_length=3)
     source_ids: list[str] = Field(min_length=1, max_length=5)
+    natural_sentences: list[GroundedNaturalSentence] = Field(
+        default_factory=list,
+        max_length=3,
+    )
+
+
+class OpenAIConnectorKind(str, Enum):
+    CONTRACT_CONTEXT = "CONTRACT_CONTEXT"
+    ADDITIONAL_CONTEXT = "ADDITIONAL_CONTEXT"
+    LEGAL_CONTEXT = "LEGAL_CONTEXT"
+
+
+class OpenAIClaimKind(str, Enum):
+    CONFIRMED_FACT = "CONFIRMED_FACT"
+    CONDITION_MET = "CONDITION_MET"
+    CONDITION_UNMET = "CONDITION_UNMET"
+    NEEDS_CHECK = "NEEDS_CHECK"
+
+
+class OpenAIExplanationStep(BaseModel):
+    """GPT가 고른 승인된 연결·주장 종류와 근거 ID만 담는 설명 계획."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    connector_kind: OpenAIConnectorKind
+    claim_kind: OpenAIClaimKind
+    fact_ids: list[str] = Field(min_length=1, max_length=5)
+    kb_sentence_ids: list[str] = Field(min_length=1, max_length=3)
+    source_ids: list[str] = Field(min_length=1, max_length=8)
+
+
+class OpenAIGroundedGeneration(BaseModel):
+    """자유 텍스트가 없는 Responses API strict 설명 계획."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    steps: list[OpenAIExplanationStep] = Field(min_length=1, max_length=3)
+    source_ids: list[str] = Field(min_length=1, max_length=8)
 
 
 class ChatResponse(BaseModel):

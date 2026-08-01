@@ -16,6 +16,13 @@ const EVIDENCE_LABEL: Record<GroundedChatEvidenceKind, string> = {
   CALCULATION: "백엔드 계산",
 };
 
+const ANSWER_MODE_LABEL = {
+  DETERMINISTIC_TEMPLATE: "검증 규칙 기반 답변",
+  GROUNDED_GENERATION: "공식 KB 승인 문장",
+  NATURAL_GROUNDED_GENERATION: "공식 근거 기반 AI 설명",
+  OPENAI_GROUNDED_GENERATION: "GPT 근거 기반 맞춤 설명",
+} as const;
+
 const CONDITION_GROUPS: {
   key: keyof ChatConditionGroups;
   label: string;
@@ -91,6 +98,12 @@ export function ContractAssistant({
           확인한 계약 조건과 검증된 KB 근거 안에서 답해요. 법적 자격과 금액은
           AI가 정하지 않고 백엔드 규칙 결과만 사용합니다.
         </p>
+        <p className="text-xs leading-relaxed text-ink-muted">
+          Upstage와 OpenAI에는 비식별 판정 사실 카드·분류 키·검증된 KB 후보만
+          보냅니다. OpenAI 요청은 저장 비활성화(store:false)로 전송합니다. 질문
+          원문, 계약서 파일·원문, 이름·연락처·생년월일·사업장 정보는 보내지
+          않으며, 외부 제공자의 별도 보관 정책이 적용될 수 있습니다.
+        </p>
       </div>
 
       <form className="mt-4 flex flex-col gap-3" onSubmit={submit}>
@@ -132,9 +145,7 @@ export function ContractAssistant({
           <div className="flex flex-wrap items-center gap-2">
             <Pill>{answer.topic}</Pill>
             <span className="rounded-full border border-brand-line bg-white px-3 py-1 text-xs font-bold text-brand-deep">
-              {answer.answer_mode === "GROUNDED_GENERATION"
-                ? "공식 KB 검색 기반 설명"
-                : "검증 규칙 기반 답변"}
+              {ANSWER_MODE_LABEL[answer.answer_mode]}
             </span>
           </div>
 

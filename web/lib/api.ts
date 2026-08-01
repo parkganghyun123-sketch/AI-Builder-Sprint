@@ -164,8 +164,21 @@ function responseError(
     );
   }
   if (status === 502 || status === 503 || status === 504) {
+    if (path === "/chat") {
+      return new ApiError(
+        "AI 계약 비서와 연결하지 못했어요. API 키와 서버 설정을 확인한 뒤 다시 시도해 주세요.",
+        status,
+        "UNAVAILABLE",
+        true,
+      );
+    }
+    const signingPath =
+      path === "/contracts/analyze-sign" ||
+      path === "/contracts/{id}/status";
     return new ApiError(
-      "전자서명 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
+      signingPath
+        ? "전자서명 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요."
+        : "외부 서비스와 연결하지 못했어요. 잠시 후 다시 시도해 주세요.",
       status,
       "UNAVAILABLE",
       true,

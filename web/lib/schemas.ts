@@ -355,6 +355,8 @@ export const groundedChatEvidenceKindSchema = z.enum([
 export const chatAnswerModeSchema = z.enum([
   "DETERMINISTIC_TEMPLATE",
   "GROUNDED_GENERATION",
+  "NATURAL_GROUNDED_GENERATION",
+  "OPENAI_GROUNDED_GENERATION",
 ]);
 
 export const retrievedKnowledgeSchema = z.object({

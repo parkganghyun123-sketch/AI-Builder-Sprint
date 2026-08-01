@@ -519,7 +519,9 @@ export interface RetrievedKnowledge {
 
 export type ChatAnswerMode =
   | "DETERMINISTIC_TEMPLATE"
-  | "GROUNDED_GENERATION";
+  | "GROUNDED_GENERATION"
+  | "NATURAL_GROUNDED_GENERATION"
+  | "OPENAI_GROUNDED_GENERATION";
 
 export interface ChatResponse {
   intent: GroundedChatIntent;
