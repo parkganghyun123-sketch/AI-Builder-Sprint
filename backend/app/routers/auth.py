@@ -31,6 +31,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # state 토큰 수명. 로그인 화면에서 머뭇거릴 시간은 충분하고,
 # 훔친 state 를 나중에 쓰기에는 짧다.
 STATE_TTL = timedelta(minutes=10)
+KAKAO_CALLBACK_PATH = "/auth/kakao/callback"
 
 
 def _require_configured() -> None:
@@ -49,8 +50,28 @@ class LoginUrlResponse(BaseModel):
     authorize_url: str
 
 
+def _callback_url(redirect_uri: str | None) -> str:
+    """카카오 콘솔에 등록할 수 있는 우리 프론트 콜백만 허용한다."""
+    requested = (redirect_uri or settings.kakao_callback_url).strip()
+    allowed = {
+        f"{origin.rstrip('/')}{KAKAO_CALLBACK_PATH}"
+        for origin in settings.allowed_origins
+    }
+    allowed.add(settings.kakao_callback_url)
+
+    if requested not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "INVALID_REDIRECT_URI",
+                "message": "이 주소에서는 로그인을 시작할 수 없습니다.",
+            },
+        )
+    return requested
+
+
 @router.get("/login-url", response_model=LoginUrlResponse)
-async def login_url() -> LoginUrlResponse:
+async def login_url(redirect_uri: str | None = None) -> LoginUrlResponse:
     """
     카카오 로그인 주소를 만든다.
 
@@ -60,12 +81,16 @@ async def login_url() -> LoginUrlResponse:
       · 프론트엔드가 따로 저장할 필요가 없다 — 서명이 곧 증거다
     """
     _require_configured()
+    callback_url = _callback_url(redirect_uri)
     state = session.issue(
         secrets.token_urlsafe(16),
         purpose=session.PURPOSE_OAUTH_STATE,
         ttl=STATE_TTL,
+        redirect_uri=callback_url,
     )
-    return LoginUrlResponse(authorize_url=kakao.build_authorize_url(state))
+    return LoginUrlResponse(
+        authorize_url=kakao.build_authorize_url(state, callback_url)
+    )
 
 
 class CallbackRequest(BaseModel):
@@ -99,7 +124,10 @@ async def kakao_callback(body: CallbackRequest) -> CallbackResponse:
 
     # 1) state 검증 — 우리가 발급한 것인가, 아직 유효한가
     try:
-        session.verify(body.state, purpose=session.PURPOSE_OAUTH_STATE)
+        state_payload = session.verify(
+            body.state,
+            purpose=session.PURPOSE_OAUTH_STATE,
+        )
     except session.SessionError:
         log.warning("로그인 state 검증 실패")
         raise HTTPException(
@@ -111,8 +139,10 @@ async def kakao_callback(body: CallbackRequest) -> CallbackResponse:
         ) from None
 
     # 2) 인가 코드 → 카카오 토큰 → 프로필
+    callback_url = _callback_url(state_payload.get("redirect_uri"))
+
     try:
-        access_token = await kakao.exchange_code(body.code)
+        access_token = await kakao.exchange_code(body.code, callback_url)
         profile = await kakao.fetch_profile(access_token)
     except kakao.KakaoError as error:
         raise HTTPException(

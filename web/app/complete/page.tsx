@@ -142,7 +142,8 @@ function CompleteContent() {
           </p>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             아래 버튼으로 체결된 문서를 받을 수 있어요.
-            FairSign 보관함에는 자동 저장되지 않습니다.
+            발송 이력과 최신 서명 상태는 페어사인 보관함에서도 다시 확인할 수
+            있습니다.
           </p>
         </Card>
       )}

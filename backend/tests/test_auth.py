@@ -11,6 +11,7 @@
 
 import asyncio
 from datetime import timedelta
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 from fastapi.testclient import TestClient
@@ -43,8 +44,9 @@ def configured(monkeypatch):
 def kakao_ok(monkeypatch):
     """카카오가 정상 응답하는 상태."""
 
-    async def fake_exchange(code):
+    async def fake_exchange(code, redirect_uri=None):
         assert code  # 코드가 실제로 전달되는지
+        assert redirect_uri
         return "kakao-access-token"
 
     async def fake_profile(token):
@@ -55,7 +57,8 @@ def kakao_ok(monkeypatch):
 
 
 def _state() -> str:
-    return client.get("/auth/login-url").json()["authorize_url"].split("state=")[1]
+    url = client.get("/auth/login-url").json()["authorize_url"]
+    return parse_qs(urlparse(url).query)["state"][0]
 
 
 # ============================================================
@@ -85,6 +88,38 @@ def test_닉네임만_요청한다():
 
     assert "profile_nickname" in url
     assert "account_email" not in url
+
+
+def test_로컬_콜백_주소로_로그인을_시작할_수_있다(monkeypatch):
+    monkeypatch.setattr(
+        settings,
+        "kakao_redirect_uri",
+        "https://fairsign.example/auth/kakao/callback",
+    )
+    redirect_uri = "http://localhost:3000/auth/kakao/callback"
+
+    res = client.get("/auth/login-url", params={"redirect_uri": redirect_uri})
+
+    assert res.status_code == 200
+    query = parse_qs(urlparse(res.json()["authorize_url"]).query)
+    assert query["redirect_uri"] == [redirect_uri]
+    state = session.verify(
+        query["state"][0],
+        purpose=session.PURPOSE_OAUTH_STATE,
+    )
+    assert state["redirect_uri"] == redirect_uri
+
+
+def test_허용되지_않은_콜백_주소는_거부한다():
+    res = client.get(
+        "/auth/login-url",
+        params={
+            "redirect_uri": "https://attacker.invalid/auth/kakao/callback",
+        },
+    )
+
+    assert res.status_code == 400
+    assert res.json()["detail"]["code"] == "INVALID_REDIRECT_URI"
 
 
 def test_설정이_없으면_로그인을_켜지_않는다(monkeypatch):
@@ -122,6 +157,41 @@ def test_로그인_성공하면_세션_토큰을_준다(kakao_ok):
     )
     assert me.status_code == 200
     assert me.json()["user_id"] == f"kakao:{KAKAO_ID}"
+
+
+def test_토큰_교환에도_로그인_시작과_같은_로컬_콜백을_쓴다(
+    kakao_ok, monkeypatch
+):
+    monkeypatch.setattr(
+        settings,
+        "kakao_redirect_uri",
+        "https://fairsign.example/auth/kakao/callback",
+    )
+    redirect_uri = "http://localhost:3000/auth/kakao/callback"
+    received: dict[str, str | None] = {}
+
+    async def fake_exchange(code, callback_url=None):
+        received["code"] = code
+        received["redirect_uri"] = callback_url
+        return "kakao-access-token"
+
+    monkeypatch.setattr(kakao, "exchange_code", fake_exchange)
+    authorize_url = client.get(
+        "/auth/login-url",
+        params={"redirect_uri": redirect_uri},
+    ).json()["authorize_url"]
+    state = parse_qs(urlparse(authorize_url).query)["state"][0]
+
+    res = client.post(
+        "/auth/kakao/callback",
+        json={"code": "local-code", "state": state, "role": "WORKER"},
+    )
+
+    assert res.status_code == 200, res.text
+    assert received == {
+        "code": "local-code",
+        "redirect_uri": redirect_uri,
+    }
 
 
 def test_우리가_발급하지_않은_state_는_거부한다(kakao_ok):
@@ -177,7 +247,7 @@ def test_위조된_토큰은_거부한다():
 
 
 def test_카카오가_실패하면_502로_알린다(monkeypatch):
-    async def boom(code):
+    async def boom(code, redirect_uri=None):
         raise kakao.KakaoError("카카오 로그인에 실패했습니다. 다시 시도해 주세요")
 
     monkeypatch.setattr(kakao, "exchange_code", boom)
