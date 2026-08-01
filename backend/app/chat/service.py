@@ -21,9 +21,7 @@ OUT_OF_SCOPE_MESSAGE = (
     "이 질문은 계약서만으로 판단할 수 없습니다. 개별 상황에 따라 답이 달라질 수 있어 "
     "고용노동부 고객상담센터 1350 또는 전문가에게 확인해 주세요."
 )
-OUT_OF_SCOPE_LIMITATION = (
-    "실제 근무기록, 사업장 적용 조건, 당사자 간의 사실관계는 이 서비스에서 확인할 수 없습니다."
-)
+OUT_OF_SCOPE_LIMITATION = "실제 근무기록, 사업장 적용 조건, 당사자 간의 사실관계는 이 서비스에서 확인할 수 없습니다."
 
 SUGGESTIONS = [
     "계약서에 적힌 급여·근무시간은 어떻게 되나요?",
@@ -157,7 +155,9 @@ def _field_lookup(question: str, terms: ContractTerms) -> ContractChatResponse:
     return _clarification()
 
 
-def _calculation(question: str, terms: ContractTerms, report: ValidationReport) -> ContractChatResponse:
+def _calculation(
+    question: str, terms: ContractTerms, report: ValidationReport
+) -> ContractChatResponse:
     if report.estimated_monthly_pay is not None:
         amount = f"{report.estimated_monthly_pay:,}원"
         return ContractChatResponse(
@@ -177,7 +177,10 @@ def _calculation(question: str, terms: ContractTerms, report: ValidationReport) 
     if check:
         return ContractChatResponse(
             intent=ChatIntent.CALCULATION,
-            answer=(check.detail or "확인된 계약 조건으로는 추가 계산 결과를 만들 수 없습니다."),
+            answer=(
+                check.detail
+                or "확인된 계약 조건으로는 추가 계산 결과를 만들 수 없습니다."
+            ),
             limitations="계산은 검증 엔진 결과만 사용하며, 실제 근무기록은 반영하지 않습니다.",
             evidence=_check_evidence(check),
         )
@@ -221,7 +224,11 @@ def _legal_standard(question: str, report: ValidationReport) -> ContractChatResp
             answer="이 서비스에서 확인된 법정 기준은 최저임금, 주휴일, 휴게시간입니다.",
             limitations="지원하지 않는 법정 기준이나 개별 분쟁 판단은 안내하지 않습니다.",
             evidence=[],
-            suggestions=["최저임금 기준을 알려주세요.", "주휴일 기준을 알려주세요.", "휴게시간 기준을 알려주세요."],
+            suggestions=[
+                "최저임금 기준을 알려주세요.",
+                "주휴일 기준을 알려주세요.",
+                "휴게시간 기준을 알려주세요.",
+            ],
         )
     return ContractChatResponse(
         intent=ChatIntent.LEGAL_STANDARD,
@@ -257,7 +264,9 @@ def _clarification() -> ContractChatResponse:
     )
 
 
-def answer(question: str, terms: ContractTerms, report: ValidationReport) -> ContractChatResponse:
+def answer(
+    question: str, terms: ContractTerms, report: ValidationReport
+) -> ContractChatResponse:
     """질문을 분류하고, 허용된 출처에서만 근거 카드를 조립한다."""
     intent = classify(question)
     if intent == ChatIntent.OUT_OF_SCOPE:

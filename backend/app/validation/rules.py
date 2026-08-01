@@ -4,7 +4,8 @@
 """
 
 from collections.abc import Iterable
-from datetime import date
+from dataclasses import dataclass
+from datetime import date, timedelta
 from math import isfinite
 
 from app.schemas import (
@@ -17,10 +18,11 @@ from app.schemas import (
     WageType,
 )
 from app.validation.constants import (
+    ANNUAL_LEAVE_SOURCE_IDS,
     BREAK_RULES,
     BREAK_SOURCE_ID,
-    DISABLED_ACCOMMODATION_SOURCE_ID,
-    DISABLED_EQUAL_TREATMENT_SOURCE_ID,
+    DISMISSAL_NOTICE_MIN_MONTHS,
+    DISMISSAL_NOTICE_SOURCE_ID,
     MINIMUM_WAGE_2026,
     MINIMUM_WAGE_SOURCE_ID,
     MINOR_AGE_LIMIT,
@@ -38,12 +40,19 @@ from app.validation.constants import (
     PREGNANT_NIGHT_END,
     PREGNANT_NIGHT_SOURCE_ID,
     PREGNANT_NIGHT_START,
-    PREGNANT_OVERTIME_SOURCE_ID,
+    PREGNANT_OVERTIME_SOURCE_IDS,
     PREGNANT_SHORTENED_DAILY_HOURS,
     PREGNANT_SHORTENED_EARLY_WEEK_MAX,
     PREGNANT_SHORTENED_LATE_WEEK_MIN,
     PREGNANT_SHORTENED_SOURCE_ID,
     PREGNANT_STATUTORY_WEEKLY_HOURS,
+    PROBATION_MINIMUM_WAGE_2026,
+    PROBATION_SOURCE_IDS,
+    SEVERANCE_CONTINUOUS_YEARS,
+    SEVERANCE_MIN_WEEKLY_HOURS,
+    SEVERANCE_SOURCE_IDS,
+    SOCIAL_INSURANCE_SOURCE_IDS,
+    SOCIAL_INSURANCE_WEEKLY_HOURS,
     STANDARD_YEAR,
     STATUTORY_DAILY_HOURS,
     WEEKLY_HOLIDAY_MIN_HOURS,
@@ -58,7 +67,8 @@ BREAK_TIME_BASIS = f"근로기준법 제54조 ({BREAK_SOURCE_ID})"
 MINOR_WORKING_HOURS_BASIS = f"근로기준법 제69조·2026-07-29 확인 ({MINOR_SOURCE_ID})"
 MINOR_NIGHT_WORK_BASIS = f"근로기준법 제70조·2026-07-29 확인 ({MINOR_NIGHT_SOURCE_ID})"
 PREGNANT_OVERTIME_BASIS = (
-    f"근로기준법 제74조제5항·2026-07-31 확인 ({PREGNANT_OVERTIME_SOURCE_ID})"
+    "근로기준법 제50조·제74조제5항·2026-08-02 확인 "
+    f"({', '.join(PREGNANT_OVERTIME_SOURCE_IDS)})"
 )
 PREGNANT_SHORTENED_HOURS_BASIS = (
     f"근로기준법 제74조제7항·제8항·2026-07-31 확인 ({PREGNANT_SHORTENED_SOURCE_ID})"
@@ -69,13 +79,64 @@ PREGNANT_NIGHT_WORK_BASIS = (
 POSTPARTUM_OVERTIME_BASIS = (
     f"근로기준법 제71조·2026-07-31 확인 ({POSTPARTUM_OVERTIME_SOURCE_ID})"
 )
-DISABLED_ACCOMMODATION_BASIS = (
-    f"근로기준법 제6조·장애인차별금지법 제11조·2026-07-31 확인 "
-    f"({DISABLED_EQUAL_TREATMENT_SOURCE_ID}, {DISABLED_ACCOMMODATION_SOURCE_ID})"
-)
 REQUIRED_FIELDS_BASIS = (
     "근로기준법 제17조·고용노동부 표준근로계약서 (SRC-LSA-17, SRC-MOEL-CONTRACT-FORMS)"
 )
+SEVERANCE_PAY_BASIS = (
+    "근로자퇴직급여 보장법 제4조·제8조 및 고용노동부 2025 상담 "
+    f"({', '.join(SEVERANCE_SOURCE_IDS)})"
+)
+
+
+@dataclass(frozen=True)
+class SeveranceEligibility:
+    """계약에서 확인 가능한 퇴직급여 관련 두 조건의 결정론적 결과."""
+
+    planned_one_year: bool | None
+    weekly_hours_15: bool | None
+    period_calculation: str
+    weekly_hours_calculation: str
+    legal_basis: str = SEVERANCE_PAY_BASIS
+
+
+@dataclass(frozen=True)
+class DurationIndicator:
+    planned_three_months: bool | None
+    calculation: str
+    legal_basis: str = f"근로기준법 제26조 ({DISMISSAL_NOTICE_SOURCE_ID})"
+
+
+@dataclass(frozen=True)
+class ProbationWageIndicators:
+    planned_one_year: bool | None
+    hourly_wage: int | None
+    meets_regular_minimum: bool | None
+    meets_discounted_floor: bool | None
+    period_calculation: str
+    wage_calculation: str
+    legal_basis: str = (
+        f"최저임금법 제5조·2026년 최저임금 ({', '.join(PROBATION_SOURCE_IDS)})"
+    )
+
+
+@dataclass(frozen=True)
+class SocialInsuranceIndicators:
+    weekly_hours_15: bool | None
+    weekly_hours_calculation: str
+    legal_basis: str = (
+        f"4대보험별 적용·제외 기준 ({', '.join(SOCIAL_INSURANCE_SOURCE_IDS)})"
+    )
+
+
+@dataclass(frozen=True)
+class AnnualLeaveIndicators:
+    planned_one_year: bool | None
+    weekly_hours_15: bool | None
+    period_calculation: str
+    weekly_hours_calculation: str
+    legal_basis: str = (
+        f"근로기준법 제60조·제11조·제18조 ({', '.join(ANNUAL_LEAVE_SOURCE_IDS)})"
+    )
 
 
 def _is_missing(field: ExtractedField) -> bool:
@@ -162,6 +223,164 @@ def _safe_weekly_hours(terms: ContractTerms) -> float | None:
     if not isfinite(weekly_hours) or weekly_hours <= 0:
         return None
     return weekly_hours
+
+
+def _one_year_anniversary(start: date) -> date:
+    """시작일을 포함한 1년 기간 직후 날짜를 반환한다."""
+
+    try:
+        return start.replace(year=start.year + SEVERANCE_CONTINUOUS_YEARS)
+    except ValueError:
+        # 2월 29일부터 시작한 1년 기간은 다음 해 2월 28일까지로 본다.
+        return date(start.year + SEVERANCE_CONTINUOUS_YEARS, 3, 1)
+
+
+def check_severance_pay(terms: ContractTerms) -> SeveranceEligibility:
+    """계약상 예정 기간 1년과 주 소정근로시간 15시간 조건만 확인한다.
+
+    실제 입·퇴사일, 계속근로, 기간 중 시간 변경, 실제 퇴직 여부는 계약서로
+    확인하지 않으며 퇴직급여 금액도 계산하지 않는다.
+    """
+
+    planned_one_year: bool | None = None
+    period_calculation = "계약 시작일 또는 종료일 정보 부족 → 예정 기간 비교 불가"
+    if not _is_missing(terms.contract_start) and not _is_missing(terms.contract_end):
+        try:
+            start = date.fromisoformat(str(terms.contract_start.value).strip())
+            end = date.fromisoformat(str(terms.contract_end.value).strip())
+        except (TypeError, ValueError):
+            period_calculation = (
+                "계약 시작일 또는 종료일 형식 확인 필요 → 예정 기간 비교 불가"
+            )
+        else:
+            if end >= start:
+                # 시작일과 종료일을 모두 포함한 예정 계약기간을 비교한다.
+                one_year_end = _one_year_anniversary(start) - timedelta(days=1)
+                planned_one_year = end >= one_year_end
+                operator = "≥" if planned_one_year else "<"
+                period_calculation = (
+                    f"계약상 {start.isoformat()}~{end.isoformat()} {operator} "
+                    f"1년 예정 기준 종료일 {one_year_end.isoformat()}"
+                )
+            else:
+                period_calculation = (
+                    "계약 종료일이 시작일보다 이름 → 예정 기간 비교 불가"
+                )
+
+    weekly_hours = _safe_weekly_hours(terms)
+    if weekly_hours is None:
+        weekly_hours_15 = None
+        weekly_hours_calculation = "주 소정근로시간 정보 부족 → 15시간 기준 비교 불가"
+    else:
+        weekly_hours_15 = weekly_hours >= SEVERANCE_MIN_WEEKLY_HOURS
+        operator = "≥" if weekly_hours_15 else "<"
+        weekly_hours_calculation = (
+            "4주 평균 기준(현재 계약상 주간 일정으로 비교): "
+            f"주 소정근로시간 {weekly_hours:g}시간 {operator} "
+            f"{SEVERANCE_MIN_WEEKLY_HOURS:g}시간"
+        )
+
+    return SeveranceEligibility(
+        planned_one_year=planned_one_year,
+        weekly_hours_15=weekly_hours_15,
+        period_calculation=period_calculation,
+        weekly_hours_calculation=weekly_hours_calculation,
+    )
+
+
+def check_annual_leave_indicators(terms: ContractTerms) -> AnnualLeaveIndicators:
+    """연차 답변에 쓰는 계약상 예정기간·주 15시간 지표만 반환한다."""
+
+    base = check_severance_pay(terms)
+    return AnnualLeaveIndicators(
+        planned_one_year=base.planned_one_year,
+        weekly_hours_15=base.weekly_hours_15,
+        period_calculation=base.period_calculation,
+        weekly_hours_calculation=base.weekly_hours_calculation,
+    )
+
+
+def _add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    month_end = (
+        date(year + (month == 12), 1 if month == 12 else month + 1, 1)
+        - timedelta(days=1)
+    ).day
+    return date(year, month, min(value.day, month_end))
+
+
+def check_dismissal_notice_indicator(terms: ContractTerms) -> DurationIndicator:
+    """계약상 예정기간이 3개월 이상인지 여부만 확인한다."""
+
+    if _is_missing(terms.contract_start) or _is_missing(terms.contract_end):
+        return DurationIndicator(
+            None, "계약 시작일 또는 종료일 정보 부족 → 3개월 비교 불가"
+        )
+    try:
+        start = date.fromisoformat(str(terms.contract_start.value).strip())
+        end = date.fromisoformat(str(terms.contract_end.value).strip())
+    except (TypeError, ValueError):
+        return DurationIndicator(None, "계약 날짜 형식 확인 필요 → 3개월 비교 불가")
+    if end < start:
+        return DurationIndicator(
+            None, "계약 종료일이 시작일보다 이름 → 3개월 비교 불가"
+        )
+    threshold_end = _add_months(start, DISMISSAL_NOTICE_MIN_MONTHS) - timedelta(days=1)
+    result = end >= threshold_end
+    operator = "≥" if result else "<"
+    return DurationIndicator(
+        result,
+        f"계약상 {start.isoformat()}~{end.isoformat()} {operator} "
+        f"3개월 예정 기준 종료일 {threshold_end.isoformat()}",
+    )
+
+
+def check_probation_minimum_wage(terms: ContractTerms) -> ProbationWageIndicators:
+    """수습 감액의 계약기간 지표와 시간급 하한만 비교한다."""
+
+    period = check_severance_pay(terms)
+    hourly_wage = None
+    if not _is_missing(terms.wage_type) and not _is_missing(terms.wage_amount):
+        hourly_wage = terms.hourly_wage
+    if hourly_wage is None:
+        wage_calculation = "시간급 정보 부족 → 최저임금·수습 감액 하한 비교 불가"
+        regular = discounted = None
+    else:
+        regular = hourly_wage >= MINIMUM_WAGE_2026
+        discounted = hourly_wage >= PROBATION_MINIMUM_WAGE_2026
+        wage_calculation = (
+            f"계약상 시급 {hourly_wage:,}원 / 일반 최저 {MINIMUM_WAGE_2026:,}원 / "
+            f"수습 감액 가능 시 최저 {PROBATION_MINIMUM_WAGE_2026:,}원"
+        )
+    return ProbationWageIndicators(
+        planned_one_year=period.planned_one_year,
+        hourly_wage=hourly_wage,
+        meets_regular_minimum=regular,
+        meets_discounted_floor=discounted,
+        period_calculation=period.period_calculation,
+        wage_calculation=wage_calculation,
+    )
+
+
+def check_social_insurance_indicators(
+    terms: ContractTerms,
+) -> SocialInsuranceIndicators:
+    """보험별 결론이 아닌 계약상 주 15시간 지표만 계산한다."""
+
+    weekly_hours = _safe_weekly_hours(terms)
+    if weekly_hours is None:
+        return SocialInsuranceIndicators(
+            None, "주 소정근로시간 정보 부족 → 시간 지표 비교 불가"
+        )
+    result = weekly_hours >= SOCIAL_INSURANCE_WEEKLY_HOURS
+    operator = "≥" if result else "<"
+    return SocialInsuranceIndicators(
+        result,
+        f"현재 계약상 주 소정근로시간 {weekly_hours:g}시간 {operator} "
+        f"{SOCIAL_INSURANCE_WEEKLY_HOURS:g}시간",
+    )
 
 
 def _minor_context(
@@ -490,30 +709,34 @@ def check_pregnant_overtime(
     terms: ContractTerms,
     is_pregnant: bool,
 ) -> CheckResult | None:
-    """임신 중인 근로자의 계약상 소정근로시간이 법정근로시간(주 40시간)을 넘는지 확인한다."""
+    """임신 중 계약상 소정근로시간이 법정근로시간(1일 8시간·1주 40시간)을 넘는지 확인한다."""
 
     if not is_pregnant:
         return None
 
+    daily_hours = _safe_hours_per_day(terms)
     weekly_hours = _safe_weekly_hours(terms)
-    if weekly_hours is None:
+    if daily_hours is None or weekly_hours is None:
         return CheckResult(
             code="PREGNANT_OVERTIME",
             label="임신중 시간외근로 금지",
             status=CheckStatus.UNKNOWN,
             legal_basis=PREGNANT_OVERTIME_BASIS,
             standard_year=STANDARD_YEAR,
-            calculation="주 소정근로시간 정보 없음",
+            calculation="1일 또는 주 소정근로시간 정보 없음",
             detail="근무 시각 또는 주 근무일 수를 확인할 수 없어 비교하지 못했습니다.",
         )
 
-    operator = ">" if weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS else "≤"
+    daily_over = daily_hours > STATUTORY_DAILY_HOURS
+    weekly_over = weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS
     calculation = (
-        f"주 소정근로시간 {_hours(weekly_hours)} {operator} "
+        f"1일 소정근로시간 {_hours(daily_hours)} {'>' if daily_over else '≤'} "
+        f"법정근로시간 {STATUTORY_DAILY_HOURS:g}시간 · "
+        f"주 소정근로시간 {_hours(weekly_hours)} {'>' if weekly_over else '≤'} "
         f"법정근로시간 {PREGNANT_STATUTORY_WEEKLY_HOURS:g}시간"
     )
 
-    if weekly_hours > PREGNANT_STATUTORY_WEEKLY_HOURS:
+    if daily_over or weekly_over:
         return CheckResult(
             code="PREGNANT_OVERTIME",
             label="임신중 시간외근로 금지",
@@ -522,7 +745,7 @@ def check_pregnant_overtime(
             standard_year=STANDARD_YEAR,
             calculation=calculation,
             detail=(
-                "임신 중인 근로자에게는 법정근로시간(주 40시간)을 초과하는 시간외근로를 "
+                "임신 중인 근로자에게는 법정근로시간(1일 8시간·주 40시간)을 초과하는 시간외근로를 "
                 "시킬 수 없습니다. 당사자 합의로도 예외가 인정되지 않으며, 근로자가 "
                 "요구하면 쉬운 종류의 근로로 전환해야 합니다."
             ),
@@ -630,7 +853,8 @@ def check_pregnant_shortened_hours(
             f"임신 {PREGNANT_SHORTENED_EARLY_WEEK_MAX}주 이내 또는 "
             f"{PREGNANT_SHORTENED_LATE_WEEK_MIN}주 이후에 해당해 "
             f"1일 {PREGNANT_SHORTENED_DAILY_HOURS}시간 단축근로를 신청할 수 있습니다. "
-            "신청해도 임금은 삭감되지 않습니다."
+            "다만 1일 소정근로시간이 8시간 미만이면 단축 후 1일 근로시간이 6시간이 "
+            "되도록 하는 범위에서 신청할 수 있습니다. 신청해도 임금은 삭감되지 않습니다."
         )
         if eligible
         else "현재 임신 주수는 근로시간 단축 신청 대상 기간이 아닙니다."
@@ -717,28 +941,6 @@ def check_pregnant_night_work(
         detail=(
             "확인된 계약상 근무 시각만 비교한 결과입니다. "
             "휴일근로 포함 여부는 이 판정에 포함되어 있지 않습니다."
-        ),
-    )
-
-
-def check_disabled_accommodation(is_disabled: bool) -> CheckResult | None:
-    """장애인 근로자는 시간 상한 대신 균등처우·편의제공 협의를 안내한다."""
-
-    if not is_disabled:
-        return None
-
-    return CheckResult(
-        code="DISABLED_ACCOMMODATION",
-        label="장애인 근로자 편의제공 협의",
-        status=CheckStatus.OK,
-        legal_basis=DISABLED_ACCOMMODATION_BASIS,
-        standard_year=STANDARD_YEAR,
-        calculation=None,
-        detail=(
-            "FairSign은 근로시간 등 계약 조건을 장애를 이유로 자동 조정하지 않습니다. "
-            "근무시간·업무·시설 등 필요한 편의가 있다면 사업주와 미리 협의해 두는 것을 "
-            "권장합니다. 균등처우(근로기준법 제6조)와 정당한 편의제공(장애인차별금지법 "
-            "제11조) 의무가 있습니다."
         ),
     )
 
@@ -848,9 +1050,7 @@ def check_weekly_holiday(terms: ContractTerms) -> CheckResult:
             status=CheckStatus.OK,
             legal_basis=WEEKLY_HOLIDAY_BASIS,
             standard_year=STANDARD_YEAR,
-            calculation=(
-                f"{calculation} — {_hours(shortfall)} 모자람"
-            ),
+            calculation=(f"{calculation} — {_hours(shortfall)} 모자람"),
             detail=(
                 f"계약상 주 소정근로시간이 15시간에서 {_hours(shortfall)} "
                 "모자랍니다. 주 15시간 미만이면 주휴수당·연차유급휴가·퇴직금이 "
@@ -1084,7 +1284,6 @@ def validate(
         check_pregnant_night_work(
             terms, worker_is_pregnant, worker_is_postpartum_within_year
         ),
-        check_disabled_accommodation(worker_is_disabled),
     )
     checks = [
         check_minimum_wage(terms),

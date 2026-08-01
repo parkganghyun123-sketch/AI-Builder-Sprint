@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Upstage
     upstage_api_key: str = ""
 
+    # OpenAI Responses API — 근거 제한 자유 설명과 근거 포함 여부 검증에만 사용한다.
+    # 질문·계약서 원문·개인정보는 이 제공자에 보내지 않는다.
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5.6"
+
     # ---------------------------------------------------------- 카카오 로그인
     #
     # ⚠️ 로그인은 **서명 단계에서만** 요구한다.

@@ -14,7 +14,7 @@
 | 백엔드 | Python 3.10+ / FastAPI | `backend/app/` |
 | 스키마 | Pydantic | `backend/app/schemas.py` |
 | 검증 엔진 | 순수 Python 함수 | `backend/app/validation/` |
-| AI 연동 | Upstage REST (httpx) | `backend/app/ai/` |
+| AI 연동 | Upstage·OpenAI REST (httpx) | `backend/app/ai/`, `backend/app/chat/` |
 | PDF 생성 | WeasyPrint + Jinja2 | `backend/app/pdf/` |
 | 전자서명 | 모두싸인 REST | `backend/app/signing/` |
 | 프론트엔드 | Next.js + TypeScript | `web/` |
@@ -22,11 +22,12 @@
 ## 책임
 
 - 배정된 기능을 위 스택으로 구현합니다.
-- Upstage와 모두싸인을 각각 `backend/app/ai/`, `backend/app/signing/` 모듈을 통해
-  연동합니다.
+- Upstage, OpenAI와 모두싸인을 각각 `backend/app/ai/`, `backend/app/chat/`,
+  `backend/app/signing/`의 제공자 모듈을 통해 연동합니다.
 - 사용자 입력, 모델 출력, 웹훅, 외부 응답을 **Pydantic 모델로 검증**합니다.
 - 결정론적 규칙을 LLM 프롬프트·외부 연동 코드와 분리해서 유지합니다.
-- LLM은 허용된 추출·분류·문장 다듬기에만 사용합니다.
+- LLM은 허용된 추출·분류·근거 제한 설명 계획에만 사용합니다. 사용자에게 보이는 법률
+  설명은 승인된 문구, 결정론적 사실과 검증 KB 원문만으로 서버가 조립합니다.
 - 출처, 계산 입력값, 계산식, 판정 한계를 결과에 보존합니다.
 - `OUT_OF_SCOPE`, 재시도, 타임아웃, 외부 서비스 실패 동작을 구현합니다.
 - 로컬 개발과 데모용 목(mock) 제공자를 명시적으로 유지합니다.

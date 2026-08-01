@@ -100,9 +100,7 @@ def test_대상별로_골라준다():
 
 def test_여러_대상을_한꺼번에_고를_수_있다():
     """임신 중인 미성년 근로자도 있을 수 있다."""
-    codes = {
-        i["code"] for i in for_audiences({Audience.MINOR, Audience.PREGNANT})
-    }
+    codes = {i["code"] for i in for_audiences({Audience.MINOR, Audience.PREGNANT})}
 
     assert "MINOR_GUARDIAN_CONSENT" in codes
     assert "PREGNANT_REDUCED_HOURS" in codes
@@ -146,6 +144,50 @@ def test_핵심_수치가_조문과_일치한다(code, must_contain):
     item = by_code(code)
     assert item is not None
     assert must_contain in f"{item.summary} {item.detail}"
+
+
+def test_임신기_단축은_8시간_미만일_때_6시간_하한을_안내한다():
+    item = by_code("PREGNANT_REDUCED_HOURS")
+    text = f"{item.summary} {item.detail}"
+
+    assert "8시간 미만" in text
+    assert "6시간" in text
+    assert "8시간 미만" in item.summary
+    assert "6시간" in item.summary
+
+
+def test_미성년자_임금은_독자적_청구_범위만_안내한다():
+    item = by_code("MINOR_OWN_CONTRACT")
+    text = f"{item.summary} {item.detail}"
+
+    assert "독자적으로 청구" in text
+    assert "본인이 직접 받" not in text
+    assert "본인 명의 계좌" not in text
+
+
+def test_장애인_편의는_체크리스트만_안내하고_차별을_확정하지_않는다():
+    item = by_code("DISABILITY_REASONABLE_ACCOMMODATION")
+    text = f"{item.summary} {item.detail}"
+
+    assert "필요한 편의의 종류" in text
+    assert "담당 직무" in text
+    assert "사업주와 협의한 내용" in text
+    assert "거부하는 것도 차별" not in text
+    assert "동일하게 적용" not in text
+    assert "결론 내리지 않습니다" in text
+
+
+def test_수유시간은_대상_청구_횟수와_유급을_정확히_안내한다():
+    item = by_code("POSTPARTUM_NURSING_TIME")
+    text = f"{item.summary} {item.detail}"
+
+    assert item.audience == Audience.FEMALE
+    assert "생후 1년 미만" in text
+    assert "여성 근로자" in text
+    assert "청구" in text
+    assert "1일 2회" in text
+    assert "각각 30분 이상" in text
+    assert "유급" in text
 
 
 def test_주15시간_안내가_세_가지를_모두_말한다():

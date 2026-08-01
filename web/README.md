@@ -41,11 +41,11 @@ NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 |---|---|
 | `/upload` | JPG·PNG·PDF를 `POST /contracts/extract`로 전송 |
 | `/review` | AI 추출값 또는 직접 입력값 23개를 확인·수정하고, 선택 생년월일과 함께 `POST /contracts/validate` 호출 |
-| `/result` | 백엔드 `ValidationReport`만 표시 |
+| `/result` | 백엔드 `ValidationReport`를 표시하고, 확인한 조건을 `POST /chat`에 보내 근거형 답변 제공 |
 | `/contract` | `POST /contracts/preview` PDF를 메모리 URL로 미리보기·다운로드 |
 | `/sign` | 현재 탭의 선택 생년월일을 재사용해 `POST /contracts/analyze-sign`, 409 확인 후 명시적 재요청 |
 | `/complete` | `GET /contracts/{id}/status`를 폴링하고 실제 완료 상태와 다운로드 주소 표시 |
-| `/archive` | 보관 API가 없어 `준비 중`만 표시 |
+| `/archive` | 로그인한 사용자의 계약 목록을 `GET /contracts`로 조회하고 상태·상대방·PDF 다운로드 표시 |
 
 계약 조건·검증 결과·서명 문서 ID와 선택 입력한 근로자 생년월일은 현재 브라우저
 탭의 `sessionStorage`에만 저장합니다. 생년월일은 `ContractTerms`나 계약서·PDF에
@@ -55,6 +55,17 @@ NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 경우에는 재시도를 위해 유지하되 탭을 닫으면 사라집니다. 업로드한 파일 원본과 PDF
 Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생년월일 보관·삭제 정책은
 아직 검증되지 않았으므로 서버 측 자동 삭제를 보장하지 않습니다.
+
+계약 비서의 질문은 FairSign 백엔드로 전송됩니다. 대화 UI 상태는 React 메모리에만
+두고 브라우저 저장소에 기록하지 않으며, FairSign 백엔드는 대화 내역을 영구 저장하지
+않습니다. 백엔드는 비식별 판정 사실 카드·분류 키·검증된 KB 문장·출처 후보만
+Upstage와 OpenAI에 보냅니다. 사실 카드에는 판정에 필요한 근로시간·임금 같은 파생
+조건이 포함될 수 있지만, 질문 원문, 계약서 파일·원문, 이름·연락처·생년월일·사업장
+정보는 보내지 않습니다. OpenAI Responses API에는 `store:false`를 지정하며, GPT는
+근거 범위 안에서 사용할 사실·KB와 설명 순서만 구조화해 선택합니다. 화면 문장은 서버가
+검증된 사실 원문·승인 연결 문구·KB 원문만으로 조립합니다. 실패하면 기존 Upstage 설명,
+이어서 결정론적 답변 순으로 폴백합니다.
+외부 제공자의 데이터 보관 정책은 아직 검증되지 않았으며 별도로 적용될 수 있습니다.
 
 ## API 안전 규칙
 
@@ -66,7 +77,10 @@ Blob은 브라우저 저장소에 넣지 않습니다. 서버의 파일 및 생�
   `proceed_with_violations=true`를 보냅니다.
 - 오류 메시지와 콘솔에 파일 내용, 추출 원문, 이름, 이메일을 남기지 않습니다.
 - `COMPLETED`는 상태 API가 해당 값을 반환했을 때만 표시합니다.
-- 보관함은 실제 API가 연결되기 전까지 저장 기능처럼 표시하지 않습니다.
+- 보관함은 로그인한 소유자의 계약만 조회하며, 저장소가 메모리인지 DB인지
+  `GET /health`의 `store` 값으로 확인합니다.
+- 계약 비서 답변은 백엔드가 반환한 결론·근거·한계를 그대로 표시하고 프론트에서
+  추가 해석하거나 계산하지 않습니다.
 
 ## 검사
 
