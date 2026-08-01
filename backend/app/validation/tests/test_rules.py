@@ -14,10 +14,15 @@ from app.validation.cli import main as cli_main
 from app.validation.rules import (
     check_annual_leave_indicators,
     check_break_time,
+    check_disabled_accommodation,
     check_dismissal_notice_indicator,
     check_minimum_wage,
     check_minor_night_work,
     check_minor_working_hours,
+    check_postpartum_overtime_limit,
+    check_pregnant_night_work,
+    check_pregnant_overtime,
+    check_pregnant_shortened_hours,
     check_probation_minimum_wage,
     check_required_fields,
     check_severance_pay,
@@ -143,8 +148,20 @@ def test_weekly_hours_14_point_9_does_not_meet_time_threshold() -> None:
     )
 
     assert result.status == CheckStatus.OK
-    assert "14.9시간 < 15시간" in result.calculation
-    assert "충족하지 않습니다" in result.detail
+    # 시간은 분 단위로 끊어 표시한다. 이 문자열이 사용자가 사장님에게 보낼
+    # 문구에 그대로 들어가므로 부동소수점(14.9000000000001)이 새면 안 된다.
+    # 근거: app/validation/rules.py _hours()
+    assert "14시간 54분 < 15시간" in result.calculation
+
+    # ⚠️ "충족하지 않습니다" 로 끝내지 않는다.
+    #    주 15시간 미만이면 주휴수당뿐 아니라 연차·퇴직금까지 함께 빠진다.
+    #    무엇을 못 받는지, 얼마나 모자란지를 알려줘야 사용자가 대응할 수 있다.
+    #    (30분 모자란 것과 5시간 모자란 것은 대응이 완전히 다르다)
+    assert "6분 모자람" in result.calculation
+    assert "연차유급휴가" in result.detail
+    assert "퇴직금" in result.detail
+    # 주 15시간 미만 계약 자체는 위법이 아니다. 사업주를 탓하지 않는다.
+    assert "위법한 것은 아니며" in result.detail
 
 
 def test_weekly_hours_missing_is_unknown() -> None:
@@ -721,6 +738,245 @@ def test_policy_indicators_keep_missing_values_unknown() -> None:
     assert check_social_insurance_indicators(contract).weekly_hours_15 is None
 
 
+# ============================================================
+# 임산부·장애인 보호 규정
+# ============================================================
+
+
+def test_pregnant_overtime_none_when_not_pregnant() -> None:
+    assert check_pregnant_overtime(terms(), is_pregnant=False) is None
+
+
+def test_pregnant_overtime_exact_boundary_is_ok() -> None:
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("18:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(5),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.OK
+    assert "40시간" in result.calculation
+
+
+def test_pregnant_overtime_over_forty_hours_is_violation() -> None:
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(5),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "합의로도 예외가 인정되지" in result.detail
+
+
+def test_pregnant_overtime_unknown_when_schedule_missing() -> None:
+    result = check_pregnant_overtime(
+        terms(work_start_time=field(None)), is_pregnant=True
+    )
+
+    assert result.status == CheckStatus.UNKNOWN
+
+
+@pytest.mark.parametrize("week", [12, 32])
+def test_pregnant_shortened_hours_eligible_at_boundaries(week: int) -> None:
+    result = check_pregnant_shortened_hours(True, week)
+
+    assert result is not None
+    assert "신청할 수 있습니다" in result.detail
+
+
+def test_pregnant_shortened_hours_not_eligible_mid_pregnancy() -> None:
+    result = check_pregnant_shortened_hours(True, 20)
+
+    assert result is not None
+    assert "대상 기간이 아닙니다" in result.detail
+
+
+def test_pregnant_shortened_hours_none_when_week_not_given() -> None:
+    assert check_pregnant_shortened_hours(True, None) is None
+
+
+def test_pregnant_shortened_hours_none_when_not_pregnant() -> None:
+    assert check_pregnant_shortened_hours(False, 10) is None
+
+
+def test_pregnant_night_work_none_when_not_applicable() -> None:
+    result = check_pregnant_night_work(
+        terms(), is_pregnant=False, is_postpartum_within_year=False
+    )
+    assert result is None
+
+
+def test_pregnant_night_work_ok_for_daytime_shift() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("09:00"), work_end_time=field("18:00")),
+        is_pregnant=True,
+        is_postpartum_within_year=False,
+    )
+
+    assert result.status == CheckStatus.OK
+
+
+def test_pregnant_night_work_violation_when_overlapping_night_window() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("20:00"), work_end_time=field("23:00")),
+        is_pregnant=False,
+        is_postpartum_within_year=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "인가" in result.detail
+
+
+def test_pregnant_night_work_overnight_shift_is_violation() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("22:00"), work_end_time=field("06:00")),
+        is_pregnant=True,
+        is_postpartum_within_year=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+
+
+def test_postpartum_overtime_none_when_not_applicable() -> None:
+    assert (
+        check_postpartum_overtime_limit(
+            terms(), is_postpartum_within_year=False, is_pregnant=False
+        )
+        is None
+    )
+
+
+def test_postpartum_overtime_none_when_pregnant() -> None:
+    """임신 중이면 제71조 상한이 아니라 제74조제5항 전면 금지가 적용된다."""
+    assert (
+        check_postpartum_overtime_limit(
+            terms(), is_postpartum_within_year=True, is_pregnant=True
+        )
+        is None
+    )
+
+
+def test_postpartum_overtime_daily_exact_boundary_is_ok() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:30"),
+            work_days_per_week=field(3),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.OK
+    assert "상한 2시간" in result.calculation
+
+
+def test_postpartum_overtime_daily_over_limit_is_violation() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:15"),
+            work_days_per_week=field(3),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "150시간" in result.detail
+
+
+def test_postpartum_overtime_weekly_over_limit_is_violation() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("17:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:30"),
+            work_days_per_week=field(6),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "상한 6시간" in result.calculation
+
+
+def test_postpartum_overtime_unknown_when_schedule_missing() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(work_start_time=field(None)),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.UNKNOWN
+
+
+def test_disabled_accommodation_none_when_not_disabled() -> None:
+    assert check_disabled_accommodation(False) is None
+
+
+def test_disabled_accommodation_is_informational_ok() -> None:
+    result = check_disabled_accommodation(True)
+
+    assert result.status == CheckStatus.OK
+    assert "정당한 편의" in result.detail
+
+
+def test_validate_conditionally_includes_pregnant_checks() -> None:
+    report = validate(terms(), worker_is_pregnant=True, worker_pregnancy_week=10)
+    codes = {check.code for check in report.checks}
+
+    assert "PREGNANT_OVERTIME" in codes
+    assert "PREGNANT_SHORTENED_HOURS" in codes
+    assert "PREGNANT_NIGHT_WORK" in codes
+    assert "POSTPARTUM_OVERTIME" not in codes
+
+
+def test_validate_conditionally_includes_postpartum_check() -> None:
+    report = validate(terms(), worker_is_postpartum_within_year=True)
+    codes = {check.code for check in report.checks}
+
+    assert "POSTPARTUM_OVERTIME" in codes
+    assert "PREGNANT_OVERTIME" not in codes
+
+
+def test_validate_conditionally_includes_disabled_check() -> None:
+    report = validate(terms(), worker_is_disabled=True)
+    codes = {check.code for check in report.checks}
+
+    assert "DISABLED_ACCOMMODATION" in codes
+
+
+def test_validate_without_worker_flags_has_no_new_checks() -> None:
+    report = validate(terms())
+    codes = {check.code for check in report.checks}
+
+    assert not codes & {
+        "PREGNANT_OVERTIME",
+        "PREGNANT_SHORTENED_HOURS",
+        "PREGNANT_NIGHT_WORK",
+        "POSTPARTUM_OVERTIME",
+        "DISABLED_ACCOMMODATION",
+    }
+
+
 def test_cli_reads_contract_json_and_prints_report(
     tmp_path,
     capsys,
@@ -734,3 +990,53 @@ def test_cli_reads_contract_json_and_prints_report(
     assert exit_code == 0
     assert output["checks"][0]["code"] == "MINIMUM_WAGE"
     assert output["checks"][0]["status"] == CheckStatus.OK.value
+
+
+# ============================================================
+# 낮은 신뢰도 값으로 '문제 없음'이라고 말하지 않기
+#
+# 실측에서 나온 위험이다. 계약서의 주휴일 칸이 비어 있는데
+# ('주휴일 매주 ( ) 요일') 모델이 요일을 지어냈고, confidence 는
+# LOW 였지만 값이 있다는 이유로 "주휴일 기재됨 = OK" 로 판정되어
+# 실제 위반이 가려졌다.
+#
+# 같은 사진 두 번 실행에서 문제 1건 / 2건으로 결과가 갈렸다.
+# ============================================================
+
+
+def _weekly_holiday_check(**overrides):
+    report = validate(terms(**overrides))
+    return next(c for c in report.checks if c.code == "WEEKLY_HOLIDAY")
+
+
+def test_low_confidence_weekly_holiday_is_not_ok() -> None:
+    """지어냈을 수 있는 값으로 안심시키지 않는다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.LOW)
+    )
+    assert check.status == CheckStatus.UNKNOWN
+
+
+def test_high_confidence_weekly_holiday_is_ok() -> None:
+    """확실한 값이면 정상 판정한다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.HIGH)
+    )
+    assert check.status == CheckStatus.OK
+
+
+def test_absent_weekly_holiday_is_still_missing() -> None:
+    """
+    값이 없으면 여전히 MISSING 이다.
+    보수적으로 경고하는 방향은 그대로 둔다 — 위험한 건 반대 방향이다.
+    """
+    check = _weekly_holiday_check(weekly_holiday_day=field(None))
+    assert check.status == CheckStatus.MISSING
+
+
+def test_low_confidence_detail_tells_user_to_verify() -> None:
+    """사용자가 원본을 확인하도록 안내해야 한다."""
+    check = _weekly_holiday_check(
+        weekly_holiday_day=field("일요일", confidence=Confidence.LOW)
+    )
+    assert "확인" in (check.detail or "")

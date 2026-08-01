@@ -48,10 +48,19 @@ FIELD_DESCRIPTIONS: dict[str, str] = {
         "임금 형태 코드. 계약서에 '시간급'으로 표기되어 있으면 'HOURLY', "
         "'일급'이면 'DAILY', '월급'이면 'MONTHLY'."
     ),
-    "wage_amount": "임금 금액. 숫자만, 쉼표(,)와 '원' 없이 (예: '시간급 금 10,000원'이면 '10000').",
+    "wage_amount": (
+        "임금 금액. 숫자만, 쉼표(,)와 '원' 없이 (예: '시간급 금 10,000원'이면 '10000'). "
+        "⚠️ 손글씨는 자릿수를 띄어 쓰는 경우가 많다. '10 000' 은 '10000' 이고 "
+        "'1 900 000' 은 '1900000' 이다. 공백으로 끊어 읽지 말고 한 금액으로 합칠 것. "
+        "앞자리를 빠뜨리지 말 것."
+    ),
     "has_bonus": "상여금 지급 여부. 계약서에 표기된 대로 '있음' 또는 '없음'.",
     "other_allowance": "기타급여(제수당) 내용. 없으면 null.",
-    "payday": "임금 지급일 (예: '매월 10일').",
+    "payday": (
+        "임금 지급일 (예: '매월 10일'). "
+        "⚠️ 양식의 인쇄 문구('매월(매주 또는 매일) ___일')를 값으로 쓰지 말 것. "
+        "빈칸에 손으로 적힌 날짜가 없으면 null."
+    ),
     "payment_method": "임금 지급 방법 (예: '근로자에게 직접지급', '근로자 명의 예금통장에 입금').",
     "employer_business_name": "사업체명.",
     "employer_phone": "사업주(사업체) 전화번호.",
@@ -127,7 +136,107 @@ def _normalize_extracted_value(value):
     core = _LEADING_PUNCTUATION.sub("", stripped).strip()
     if core.lower() in _NULL_TOKENS:
         return None
-    return value
+
+    # 체크 표시가 값에 섞여 들어온다: '없음 [✓]' → '없음'
+    cleaned = _CHECKMARK.sub("", stripped).strip()
+
+    # 라벨이 값 앞에 붙어 오는 경우: '사업체명 : 편의점' → '편의점'
+    #
+    # ⚠️ 라벨이 보인다고 통째로 버리면 안 된다.
+    #    실제로 그렇게 만들었다가 '사업체명 : 편의점' 의 '편의점' 까지
+    #    잃었다. 라벨만 떼고 남는 게 있으면 그것이 값이다.
+    cleaned = _strip_label_prefix(cleaned)
+
+    # 라벨을 떼고도 값이 없으면 빈칸이다.
+    #   payday 칸이 비어 있는데 '매월(매주 또는 매일) 일' 을 반환한 사례.
+    if _looks_like_form_label(cleaned):
+        return None
+
+    return cleaned or None
+
+
+def _strip_label_prefix(text: str) -> str:
+    """
+    '사업체명 : 편의점' → '편의점'
+    라벨만 있으면 빈 문자열이 되어 _looks_like_form_label 이 잡는다.
+    """
+    if ":" not in text or _TIME_LIKE.search(text):
+        return text
+
+    head, _, tail = text.rpartition(":")
+    head_compact = re.sub(r"[\s_()\[\]]", "", head)
+
+    # 콜론 앞이 라벨로 보이고 뒤에 내용이 있으면 뒤만 취한다
+    if tail.strip() and any(w in head_compact for w in _FIELD_LABEL_WORDS):
+        return tail.strip()
+    return text
+
+
+# 체크박스·괄호 표시. 값 뒤에 붙어 오는 경우가 있다.
+_CHECKMARK = re.compile(r"[\[\(]\s*[✓✔vVoO×xX√]?\s*[\]\)]")
+
+# 인쇄된 양식 문구의 흔적. 값이 아니라 라벨이다.
+_FORM_LABEL_HINTS = (
+    "매주 또는 매일",
+    "휴일의 경우",
+    "약정수당",
+    "대체공휴일",
+    "필요시",
+    "이하",
+)
+
+# 표준근로계약서의 항목 이름들.
+# 빈칸을 만나면 모델이 이 라벨을 값으로 집어온다.
+#   worker_address  → '소 :'
+#   worker_contact  → '주연성 락 처 :'
+# 양식에 자간이 들어가 있어('주  소', '연 락 처') 조각으로 잘려 나온다.
+_FIELD_LABEL_WORDS = (
+    "주소", "연락처", "성명", "사업체명", "대표자", "전화",
+    "근무장소", "업무의내용", "소정근로시간", "근무일", "휴일",
+    "임금", "상여금", "지급일", "지급방법", "서명", "근로계약기간",
+)
+
+
+def _looks_like_form_label(text: str) -> bool:
+    """
+    추출된 값이 사실은 인쇄된 양식 문구인지 판단.
+
+    빈칸을 만나면 모델이 옆의 인쇄 문구를 값으로 집어오는 일이 있다.
+    이것은 '지어낸 값'과 같은 효과를 낸다 — 비어 있는 항목이
+    채워진 것처럼 보여 누락 판정이 무력화된다.
+
+    ⚠️ 시각(work_start_time 등)은 'HH:MM' 이라 콜론을 쓴다.
+       그 필드는 _normalize_extracted_value 에서 이 함수를 거치기 전에
+       형식 검사로 걸러지므로 여기서는 콜론을 라벨 신호로 봐도 된다.
+    """
+    if any(hint in text for hint in _FORM_LABEL_HINTS):
+        return True
+
+    compact = re.sub(r"[\s_()\[\]:]", "", text)
+
+    # 괄호 안내문만 남고 실제 값이 없는 경우: '( ) 요일', '____일'
+    if compact in {"일", "요일", "원", "시분", ""}:
+        return True
+
+    # 라벨 단어가 통째로 남은 경우: '주소', '연락처', '성명'
+    if compact in _FIELD_LABEL_WORDS:
+        return True
+
+    # 라벨 조각 + 콜론. 값에는 콜론이 없다(시각은 위 주석 참고).
+    #   '소 :'  '주연성 락 처 :'
+    if ":" in text and not _TIME_LIKE.search(text):
+        return True
+
+    # 라벨 단어를 품고 있으면서 그 외 내용이 거의 없는 경우
+    for word in _FIELD_LABEL_WORDS:
+        if word in compact and len(compact) <= len(word) + 3:
+            return True
+
+    return False
+
+
+# 'HH:MM' 형태가 들어있는지. 시각 값은 라벨로 오인하면 안 된다.
+_TIME_LIKE = re.compile(r"\d{1,2}:\d{2}")
 
 
 # confidence_score(0~1)가 이 값 이상이면 HIGH.
@@ -152,6 +261,71 @@ def _confidence_from_upstage(
         return Confidence.HIGH if score >= CONFIDENCE_THRESHOLD else Confidence.LOW
     # 점수가 없으면 등급 문자열로 대체
     return Confidence.HIGH if raw == "high" else Confidence.LOW
+
+
+# 값이 상식적인 범위인지 코드가 검사한다.
+#
+# ⚠️ 실측에서 드러난 위험:
+#    손글씨 '10 000'(띄어쓰기)을 '0000'으로 읽고 confidence를 HIGH로 냈다.
+#    시급 0원은 있을 수 없는데 AI는 자신 있다고 했다.
+#    판정에 가장 중요한 필드라 그대로 두면 없는 위반을 만들어낼 수 있다.
+#
+# AI의 확신을 코드가 검증한다. 말이 안 되면 HIGH여도 LOW로 내려
+# 사용자가 반드시 확인하게 만든다. 값 자체는 지우지 않는다 —
+# 사용자가 무엇을 고쳐야 하는지 보이려면 남겨야 한다.
+_HOURLY_WAGE_RANGE = (1_000, 200_000)
+_DAILY_WAGE_RANGE = (10_000, 1_000_000)
+_MONTHLY_WAGE_RANGE = (100_000, 20_000_000)
+
+_WAGE_RANGES = {
+    "HOURLY": _HOURLY_WAGE_RANGE,
+    "DAILY": _DAILY_WAGE_RANGE,
+    "MONTHLY": _MONTHLY_WAGE_RANGE,
+}
+
+_TIME_PATTERN = re.compile(r"^([01]?\d|2[0-3]):[0-5]\d$")
+
+
+def _is_implausible(name: str, value, wage_type: str | None) -> bool:
+    """이 값이 코드가 보기에 말이 되는가. 되면 False."""
+    if value is None:
+        return False
+    text = str(value).strip()
+
+    if name == "wage_amount":
+        digits = re.sub(r"[^\d]", "", text)
+        if not digits:
+            return True  # 금액인데 숫자가 없다
+        amount = int(digits)
+        low, high = _WAGE_RANGES.get(wage_type or "", (1_000, 20_000_000))
+        return not (low <= amount <= high)
+
+    if name.endswith("_time"):
+        return not _TIME_PATTERN.match(text)
+
+    if name == "work_days_per_week":
+        digits = re.sub(r"[^\d]", "", text)
+        return not digits or not (1 <= int(digits) <= 7)
+
+    return False
+
+
+def apply_sanity_check(fields: dict[str, ExtractedField]) -> dict[str, ExtractedField]:
+    """
+    코드가 보기에 이상한 값은 HIGH → LOW 로 내린다.
+
+    화면에서 확인을 요구하게 되고, 검증 단계에서도
+    LOW 값으로는 '문제 없음' 판정을 내리지 않는다.
+    """
+    wage_type = fields["wage_type"].value if "wage_type" in fields else None
+
+    for name, field in fields.items():
+        if field.confidence != Confidence.HIGH:
+            continue
+        if _is_implausible(name, field.value, wage_type):
+            fields[name] = field.model_copy(update={"confidence": Confidence.LOW})
+
+    return fields
 
 
 # 값이 짧으면 아무 줄에나 걸린다. 실측에서 work_days_per_week='3' 이
@@ -404,8 +578,9 @@ def build_contract_terms(
             source_text=_find_source_text(source_text_pool, value, name),
         )
 
+    # AI가 자신 있다고 한 값도 코드가 한 번 더 본다.
     try:
-        return ContractTerms(**fields)
+        return ContractTerms(**apply_sanity_check(fields))
     except ValidationError:
         raise ExtractError("Upstage Information Extract 응답 검증 실패") from None
 

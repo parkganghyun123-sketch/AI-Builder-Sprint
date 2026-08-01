@@ -19,6 +19,7 @@ sys.modules.setdefault("app.pdf.generator", pdf_generator_stub)
 
 from app.ai.document_parse import DocumentParseError  # noqa: E402
 from app.ai.extract import ExtractError  # noqa: E402
+from app.review.fields import build_review_items  # noqa: E402
 from app.routers import contracts, sign  # noqa: E402
 from app.routers import extract as extract_router  # noqa: E402
 from app.schemas import (  # noqa: E402
@@ -27,6 +28,31 @@ from app.schemas import (  # noqa: E402
     ExtractedField,
     ValidationReport,
 )
+from app.store import MemoryDocumentStore, get_store, set_store  # noqa: E402
+
+# 서명 발송은 로그인이 필요하다(익명 발송을 허용하면 스팸 도구가 된다).
+# 이 파일은 문서 안전성을 검증하므로 로그인은 통과한 상태로 둔다.
+# 로그인 관문 자체는 tests/test_api_gates.py 가 검증한다.
+TEST_USER = {
+    "user_id": "kakao:safety-test",
+    "provider": "kakao",
+    "nickname": "가상 사용자",
+    "role": "WORKER",
+}
+
+
+def fresh_store() -> MemoryDocumentStore:
+    """
+    빈 메모리 저장소로 갈아끼운다.
+
+    ⚠️ 예전에는 sign._store.clear() 를 호출했다. 저장소가 라우터 모듈의
+       전역 딕셔너리였기 때문이다. 지금은 app/store.py 가 소유하고
+       DATABASE_URL 유무로 구현이 바뀌므로, 테스트는 항상 메모리를 심는다.
+       (테스트가 실수로 실제 DB를 건드리는 일도 이렇게 막는다)
+    """
+    store = MemoryDocumentStore()
+    set_store(store)
+    return store
 
 
 def _field(value=None, source_text: str | None = None) -> ExtractedField:
@@ -35,6 +61,22 @@ def _field(value=None, source_text: str | None = None) -> ExtractedField:
         confidence="NOT_FOUND" if value is None else "HIGH",
         source_text=source_text,
     )
+
+
+def _all_must_confirm(terms) -> list[str]:
+    """
+    확인 관문(app/review/)을 통과한 상태를 만든다.
+
+    임금·신원 항목은 AI 신뢰도와 무관하게 사용자 확인을 요구한다.
+    실측에서 '박강현' → '박강헌' 이 HIGH 로 나와, 신뢰도만으로는
+    막을 수 없다는 게 확인됐기 때문이다.
+    이 테스트들은 확인을 마친 뒤의 동작을 검증하므로 전부 확인 처리한다.
+    """
+    return [
+        item["field"]
+        for item in build_review_items(terms)
+        if item["priority"] == "high"
+    ]
 
 
 def _terms() -> ContractTerms:
@@ -137,7 +179,7 @@ def test_preview_is_always_a_watermarked_request_draft(monkeypatch) -> None:
         return b"%PDF-synthetic"
 
     monkeypatch.setattr(contracts, "render_contract_pdf", fake_render)
-    monkeypatch.setattr(contracts, "validate", lambda terms: _empty_report())
+    monkeypatch.setattr(contracts, "validate", lambda terms, **kwargs: _empty_report())
 
     response = asyncio.run(
         contracts.preview_pdf(
@@ -161,7 +203,7 @@ def test_preview_is_always_a_watermarked_request_draft(monkeypatch) -> None:
 def test_validate_request_forwards_worker_birth_date(monkeypatch) -> None:
     captured: dict = {}
 
-    def fake_validate(terms, worker_birth_date=None):
+    def fake_validate(terms, worker_birth_date=None, **kwargs):
         captured["terms"] = terms
         captured["worker_birth_date"] = worker_birth_date
         return _empty_report()
@@ -192,7 +234,7 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
         captured["verification_note"] = verification_note
         return b"%PDF-synthetic"
 
-    def fake_validate(terms, worker_birth_date=None):
+    def fake_validate(terms, worker_birth_date=None, **kwargs):
         captured["worker_birth_date"] = worker_birth_date
         return _empty_report()
 
@@ -214,17 +256,33 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
                 employer_email="employer@example.com",
                 worker_birth_date="2009-07-31",
                 entry_path="PHOTO",
-            )
+                confirmed_fields=_all_must_confirm(_terms()),
+            ),
+            TEST_USER,
         )
     )
 
-    assert captured["is_draft"] is True
+    # 서명할 문서에는 '확인 전 초안' 워터마크를 찍지 않는다.
+    # 체결된 계약서에 '초안' 표기가 남으면 분쟁 시 빌미가 되고,
+    # 근로기준법 제17조 교부 의무를 이행한 증거로도 약해진다.
+    # 경로 B의 투명성은 검증 문단의 출처 표시로 확보한다.
+    assert captured["is_draft"] is False
+    # 제목에 이름을 넣지 않는다 — 모두싸인 문서 목록·메일 제목에 노출된다.
+    assert "가상 근로자" not in captured["title"]
+    assert "가상 사업주" not in captured["title"]
+    # 근로자가 만든 문서는 '확인 요청서'다. 이미 합의된 계약서로
+    # 오해하지 않도록 제목을 구분한다(contracts.DOCUMENT_TITLES).
     assert captured["title"] == "근로조건 확인 요청서"
+    assert captured["employer_first"] is False
     assert captured["terms"].worker_contact.value is None
     assert captured["worker_birth_date"] == "2009-07-31"
     assert "2009-07-31" not in captured["verification_note"]
     assert response.status == DocumentStatus.ON_PROCESSING
-    assert "체결 완료 여부" in response.message
+    # ⚠️ 발송을 체결로 말하지 않는다. 이 구분이 무너지면 사용자가 아직
+    #    효력 없는 문서를 근거로 행동하게 된다.
+    assert "체결 완료" in response.message
+    assert "체결이 완료됐" not in response.message
+    assert "체결되었" not in response.message
 
 
 def test_verification_note_preserves_minor_calculation_and_limit_details() -> None:
@@ -276,7 +334,9 @@ def test_analyze_sign_pdf_note_preserves_minor_limits_with_mock_provider(
                 employer_email="employer@example.com",
                 entry_path="PHOTO",
                 proceed_with_violations=True,
-            )
+                confirmed_fields=_all_must_confirm(_minor_problem_terms()),
+            ),
+            TEST_USER,
         )
     )
 
@@ -319,14 +379,15 @@ def test_analyze_sign_409_preserves_minor_details_without_sending(
                         employer_name="가상 사업주",
                         employer_email="employer@example.com",
                         entry_path="PHOTO",
-                    )
-                )
+                        confirmed_fields=_all_must_confirm(_minor_problem_terms()),
+                    ),
+            TEST_USER,
+        )
             )
 
     assert caught.value.status_code == 409
-    assert caught.value.detail["message"] == (
-        "기본 기준 초과·누락 또는 추가 확인이 필요한 항목이 있습니다."
-    )
+    # 문구 자체보다 "막았고 이유를 말한다"는 사실이 중요하다.
+    assert "법정 기준" in caught.value.detail["message"]
     assert isinstance(caught.value.detail["problems"], list)
     details = {
         detail["code"]: detail for detail in caught.value.detail["problem_details"]
@@ -355,7 +416,7 @@ def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None
 
     monkeypatch.setattr(sign, "render_contract_pdf", fake_render)
     monkeypatch.setattr(sign.modusign, "request_signature", fake_request_signature)
-    sign._store.clear()
+    fresh_store()
 
     response = asyncio.run(
         sign.create_and_send(
@@ -370,16 +431,31 @@ def test_direct_sign_does_not_store_terms_or_names_in_title(monkeypatch) -> None
         )
     )
 
+    # /contracts/sign 은 법정 기준 검증도 확인 관문도 거치지 않는 직접 경로다.
+    # 무엇에 서명하는지 보증할 수 없으므로 초안 표기를 유지한다.
+    # (검증·확인을 마치는 /contracts/analyze-sign 은 워터마크를 찍지 않는다)
     assert captured["is_draft"] is True
     assert captured["title"] == "근로조건 확인 요청서"
-    assert "terms" not in sign._store[response.document_id]
-    assert sign._store[response.document_id]["title"] == "근로조건 확인 요청서"
+
+    record = asyncio.run(get_store().get(response.document_id))
+    assert record is not None
+    assert "terms" not in record
+    assert record["title"] == "근로조건 확인 요청서"
 
 
-def test_webhook_logs_only_event_and_document_identifiers(caplog) -> None:
+def test_webhook_logs_only_event_and_document_identifiers(caplog, monkeypatch) -> None:
     private_email = "private-person@example.com"
     private_name = "로그에 남으면 안 되는 이름"
-    sign._store.clear()
+
+    # ⚠️ 웹훅 토큰을 명시적으로 비운다.
+    #
+    #    이 테스트는 로그 내용만 검증한다. 그런데 토큰 검증이 앞단에 있어서,
+    #    개발자의 로컬 .env 에 WEBHOOK_PATH_TOKEN 이 들어 있으면
+    #    404 로 막히고 테스트가 깨졌다. 실제로 그런 일이 있었다.
+    #    테스트는 로컬 환경 설정에 좌우되어서는 안 된다.
+    monkeypatch.setattr(sign.settings, "webhook_path_token", "")
+
+    fresh_store()
     request = _request_with_json(
         {
             "event": {"type": "document_started"},
@@ -440,8 +516,9 @@ def test_extract_router_hides_private_upstream_error_from_response_and_log(
             asyncio.run(extract_router.extract_terms(upload))
 
     assert caught.value.status_code == 502
+    # ⚠️ 핵심은 문구가 아니라 **상류 오류 내용이 새지 않는 것**이다.
     assert caught.value.detail == (
-        "계약서 추출 서비스를 사용할 수 없습니다. 잠시 후 다시 시도해 주세요."
+        "지금은 계약서를 읽을 수 없어요. 잠시 뒤 다시 시도해 주세요."
     )
     assert caught.value.__suppress_context__ is True
     assert f"error_type={error_type.__name__}" in caplog.text

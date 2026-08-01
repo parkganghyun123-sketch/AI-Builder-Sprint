@@ -44,7 +44,15 @@ const sessionSchema = z.object({
   entryPath: entryPathSchema,
   report: validationReportSchema.nullable(),
   workerBirthDate: z.string().nullable().default(null),
+  // 0단계 근로자 유형 확인 — 자기신고. 민감정보이므로 workerBirthDate와 같은
+  // 취급(탭 세션에만 저장, 서버 미영구화, 서명 성공 시 즉시 삭제)을 따른다.
+  workerIsPregnant: z.boolean().default(false),
+  workerPregnancyWeek: z.number().nullable().default(null),
+  workerIsPostpartumWithinYear: z.boolean().default(false),
+  workerIsDisabled: z.boolean().default(false),
   userEditedFields: z.array(contractTermKeySchema).default([]),
+  // 사용자가 "값이 맞다"고 확인한 필드 키. 서명 시 confirmed_fields 로 보낸다.
+  confirmedFields: z.array(z.string()).default([]),
   sign: z
     .object({
       documentId: z.string().min(1),
@@ -60,7 +68,12 @@ export const EMPTY_SESSION: FairSignSession = {
   entryPath: "PHOTO",
   report: null,
   workerBirthDate: null,
+  workerIsPregnant: false,
+  workerPregnancyWeek: null,
+  workerIsPostpartumWithinYear: false,
+  workerIsDisabled: false,
   userEditedFields: [],
+  confirmedFields: [],
   sign: null,
 };
 
@@ -168,7 +181,12 @@ export function startSession(
     entryPath,
     report: null,
     workerBirthDate: null,
+    workerIsPregnant: false,
+    workerPregnancyWeek: null,
+    workerIsPostpartumWithinYear: false,
+    workerIsDisabled: false,
     userEditedFields: [],
+    confirmedFields: [],
     sign: null,
   };
   writeSession(session);

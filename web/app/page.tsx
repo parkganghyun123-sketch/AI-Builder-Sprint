@@ -1,7 +1,9 @@
 import Link from "next/link";
+import Image from "next/image";
 import { BrandHeader } from "@/components/ScreenShell";
 import { ButtonLink, Card, Pill, SectionLabel } from "@/components/ui";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
+import { GeneralQuestionAssistant } from "@/components/GeneralQuestionAssistant";
 
 /**
  * 홈 / 랜딩 (단계 1 접속).
@@ -58,7 +60,7 @@ export default function HomePage() {
 
         <p className="mx-auto mt-5 max-w-xl leading-relaxed text-ink-muted">
           계약서에서 읽은 조건을 사람이 확인하고, FairSign이 지원하는 법정
-          기준과 백엔드 코드로 비교해 근거와 함께 보여드려요.
+          기준과 하나씩 비교해 근거와 함께 보여드려요.
         </p>
 
         <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
@@ -69,8 +71,19 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* 두 경로 선택 */}
-      <section className="mx-auto w-full max-w-3xl px-5 py-6">
+      {/* 진입 경로 선택
+          ⚠️ 회원가입으로 역할을 묻지 않는다. 열여섯 살이 첫 계약서를
+             확인하려고 가입부터 해야 한다면 그 벽을 넘지 못한다.
+             역할은 여기서 고르고 세션에만 둔다. */}
+      <section
+        id="start"
+        className="mx-auto w-full max-w-3xl px-5 py-6"
+        aria-label="시작하기"
+      >
+        <h2 className="mb-4 text-center text-sm font-extrabold text-ink-muted">
+          어떤 상황이신가요?
+        </h2>
+
         <div className="grid gap-4 sm:grid-cols-2">
           <Link href="/upload" className="group">
             <Card className="h-full transition group-hover:border-brand/50 group-hover:shadow-cta">
@@ -102,6 +115,29 @@ export default function HomePage() {
             </Card>
           </Link>
         </div>
+
+        {/* 사업주 경로.
+            근거: 미작성 이유 1위가 "작성해야 하는지 몰라서"(40.4%)다.
+            나쁜 마음이 아니라 무지가 원인이고, 그건 사장님 쪽도 마찬가지다.
+            그래서 고발 도구가 아니라 양쪽이 같은 기준을 보게 만든다. */}
+        <Link href="/review?path=EMPLOYER" className="group mt-4 block">
+          <Card className="flex items-center gap-4 transition group-hover:border-brand/50 group-hover:shadow-cta">
+            <div aria-hidden="true" className="text-2xl">
+              🏪
+            </div>
+            <div className="flex-1">
+              <div className="font-extrabold text-ink">
+                사람을 고용하려는 사장님이세요?
+              </div>
+              <p className="mt-1 text-sm leading-relaxed text-ink-muted">
+                법정 기준을 함께 확인하면서 계약서를 만들어 보내드려요.
+              </p>
+            </div>
+            <span className="shrink-0 text-sm font-bold text-brand">
+              계약서 만들기 →
+            </span>
+          </Card>
+        </Link>
       </section>
 
       {/* 1. 문제의식 */}
@@ -170,7 +206,7 @@ export default function HomePage() {
               "법정 기준 검증 — 근거와 계산식까지",
               "근로조건 확인 요청서 미리보기",
               "모두싸인 전자서명 요청",
-              "보관함 기능은 준비 중",
+              "보관함에서 체결 문서 내려받기",
             ].map((label, i) => (
               <li key={label} className="flex items-center gap-3">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-brand-tint text-xs font-extrabold text-brand-deep">
@@ -189,10 +225,19 @@ export default function HomePage() {
 
       <footer className="mx-auto w-full max-w-3xl px-5 pb-16">
         <LegalDisclaimer />
-        <p className="mt-4 text-center text-xs text-ink-soft">
-          ✓ 페어사인 · AI BUILDER SPRINT 2026
+        <p className="mt-4 flex items-center justify-center gap-1.5 text-center text-xs text-ink-soft">
+          <Image
+            src="/brand/fairsign-mark-transparent.png"
+            alt=""
+            width={27}
+            height={14}
+            className="h-3.5 w-[27px] shrink-0 object-contain"
+          />
+          페어사인 · AI BUILDER SPRINT 2026
         </p>
       </footer>
+
+      <GeneralQuestionAssistant />
     </>
   );
 }

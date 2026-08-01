@@ -78,7 +78,7 @@ def _money(value) -> str:
     if value is None or value == "":
         return ""
 
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
+    if isinstance(value, int | float) and not isinstance(value, bool):
         return f"{int(value):,}"
 
     s = str(value).strip()

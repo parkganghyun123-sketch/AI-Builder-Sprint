@@ -5,9 +5,9 @@ import { FormEvent, useId, useState } from "react";
 import { askContractQuestion, ApiError } from "@/lib/api";
 import type {
   ChatConditionGroups,
-  ChatEvidenceKind,
   ChatResponse,
   ContractTerms,
+  GroundedChatEvidenceKind,
 } from "@/lib/types";
 
 const INITIAL_SUGGESTIONS = [
@@ -24,7 +24,7 @@ const INITIAL_SUGGESTIONS = [
 const SUGGESTIONS_PER_PAGE = 4;
 
 const EVIDENCE_META: Record<
-  ChatEvidenceKind,
+  GroundedChatEvidenceKind,
   { icon: string; label: string }
 > = {
   CONTRACT: { icon: "📄", label: "계약 조건" },

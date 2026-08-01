@@ -5,10 +5,42 @@ A(AI 추출)와 B(검증 엔진)는 이 파일만 보고 작업한다.
 변경 시 반드시 상대 담당자에게 알릴 것.
 """
 
-from datetime import date
 from enum import Enum
+from typing import Annotated
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StringConstraints
+
+# ============================================================
+# 0. 공용 타입
+# ============================================================
+
+# 서명 요청을 보낼 이메일 주소.
+#
+# ⚠️ 이 값이 검증되지 않으면 API를 직접 호출해 아무 주소로나 서명 요청을
+#    발송할 수 있다. 화면에서만 막는 것으로는 부족하다 — 프론트엔드 검증은
+#    URL 직접 접근·개발자 도구·curl 로 우회된다.
+#
+# pydantic 의 EmailStr 을 쓰지 않는 이유:
+#   email-validator 의존성이 추가되고, 그 패키지 설치가 실패하면 배포가
+#   전부 멈춘다. 마감이 가까운 시점에 감수할 위험이 아니다.
+#   여기서 필요한 것은 "발송 가능한 형태인가"이고 형식 검사로 충분하다.
+#   web/app/sign/page.tsx 의 EMAIL_PATTERN 과 같은 규칙이다.
+EmailAddress = Annotated[
+    str,
+    StringConstraints(
+        strip_whitespace=True,
+        min_length=5,
+        max_length=254,  # RFC 5321 이 정한 주소 최대 길이
+        pattern=r"^[^\s@]+@[^\s@]+\.[^\s@]+$",
+    ),
+]
+
+# 계약서에 그대로 인쇄되는 이름. 빈 문자열로 서명 요청이 나가면
+# 모두싸인 문서 참여자 이름이 비어버린다.
+PartyName = Annotated[
+    str,
+    StringConstraints(strip_whitespace=True, min_length=1, max_length=100),
+]
 
 # ============================================================
 # 1. 계약 조건 — A의 출력 = B의 입력
@@ -201,6 +233,86 @@ class ValidationReport(BaseModel):
 
 
 # ============================================================
+# 2-1. 계약 비서 챗봇 — 근거 검색형 답변
+# ============================================================
+
+
+class ChatIntent(str, Enum):
+    """챗봇이 지원하는 질문 범주. 모호한 질문은 추측하지 않고 되묻는다."""
+
+    FIELD_LOOKUP = "FIELD_LOOKUP"
+    CALCULATION = "CALCULATION"
+    MISSING_CLAUSE = "MISSING_CLAUSE"
+    LEGAL_STANDARD = "LEGAL_STANDARD"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+    NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+
+
+class ChatEvidenceKind(str, Enum):
+    CONTRACT = "CONTRACT"
+    VALIDATION = "VALIDATION"
+    LEGAL_STANDARD = "LEGAL_STANDARD"
+    OFFICIAL_GUIDANCE = "OFFICIAL_GUIDANCE"
+
+
+class ChatEvidence(BaseModel):
+    """답변에서 실제로 꺼낸 값의 출처. 프런트는 이 값을 그대로 표시한다."""
+
+    kind: ChatEvidenceKind
+    label: str
+    value: str
+    url: str | None = None
+
+
+class ChatAction(BaseModel):
+    label: str
+    href: str
+
+
+class ContractChatRequest(BaseModel):
+    """원문 계약서는 받지 않고, 사용자가 확인한 구조화된 조건만 받는다."""
+
+    terms: ContractTerms
+    question: str = Field(min_length=1, max_length=500)
+    worker_birth_date: str | None = None
+
+
+class ContractChatResponse(BaseModel):
+    intent: ChatIntent
+    answer: str
+    limitations: str
+    evidence: list[ChatEvidence]
+    action: ChatAction | None = None
+    suggestions: list[str] = Field(default_factory=list)
+
+
+class GeneralQuestionTopic(str, Enum):
+    WEEKLY_HOLIDAY = "WEEKLY_HOLIDAY"
+    MINIMUM_WAGE = "MINIMUM_WAGE"
+    BREAK_TIME = "BREAK_TIME"
+    WRITTEN_CONTRACT = "WRITTEN_CONTRACT"
+    MINOR_WORK = "MINOR_WORK"
+    EXTRA_WORK = "EXTRA_WORK"
+    OUT_OF_SCOPE = "OUT_OF_SCOPE"
+
+
+class GeneralQuestionRequest(BaseModel):
+    """계약서 없이 묻는 일반 기준 질문. 개인 식별정보는 받지 않는다."""
+
+    question: str = Field(min_length=1, max_length=500)
+    context: GeneralQuestionTopic | None = None
+
+
+class GeneralQuestionResponse(BaseModel):
+    topic: GeneralQuestionTopic
+    answer: str
+    limitations: str
+    evidence: list[ChatEvidence]
+    action: ChatAction | None = None
+    suggestions: list[str] = Field(default_factory=list)
+
+
+# ============================================================
 # 3. 계약 문서 상태 — C가 관리
 # ============================================================
 
@@ -222,8 +334,17 @@ class DocumentStatus(str, Enum):
 
 
 class EntryPath(str, Enum):
-    PHOTO = "PHOTO"  # 경로 A — 계약서 사진 업로드
-    MANUAL = "MANUAL"  # 경로 B — 직접 입력 (구두계약 / OCR 실패)
+    """
+    조건이 어디서 왔는가. 문서의 출처 표시와 서명 순서를 결정한다.
+
+    ⚠️ 이 값은 "누가 이 문서를 만들었는가"를 뜻한다.
+       계약서는 종이에 무엇이 적혀 있었는지의 기록이므로,
+       상대방이 무엇에 서명하는지 알 수 있게 출처를 밝혀야 한다.
+    """
+
+    PHOTO = "PHOTO"  # 경로 A — 근로자가 받은 계약서 사진
+    MANUAL = "MANUAL"  # 경로 B — 근로자가 직접 입력 (구두계약 / OCR 실패)
+    EMPLOYER = "EMPLOYER"  # 경로 C — 사업주가 계약서를 작성
 
 
 # ============================================================
@@ -232,10 +353,10 @@ class EntryPath(str, Enum):
 
 
 class SignRequest(BaseModel):
-    worker_name: str
-    worker_email: str
-    employer_name: str
-    employer_email: str
+    worker_name: PartyName
+    worker_email: EmailAddress
+    employer_name: PartyName
+    employer_email: EmailAddress
 
 
 class SignResponse(BaseModel):

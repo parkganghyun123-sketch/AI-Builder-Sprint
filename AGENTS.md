@@ -19,7 +19,8 @@ FairSign은 처음 아르바이트를 시작하는 근로자가 근로계약서�
 | AI 연동 | Upstage REST (httpx) | `backend/app/ai/` |
 | PDF 생성 | WeasyPrint | `backend/app/pdf/` |
 | 전자서명 | 모두싸인 REST | `backend/app/signing/` |
-| 프론트엔드 | Next.js + TypeScript + Tailwind | `web/` (미착수) |
+| 프론트엔드 | Next.js + TypeScript + Tailwind | `web/` (화면 8종, 백엔드 연결됨) |
+| 배포 | 백엔드 Railway · 프론트 Vercel | 둘 다 배포됨 |
 
 문서에 적힌 스택보다 **실제 코드가 우선**입니다. 불일치를 발견하면 구현하지 말고
 Lead 에이전트에게 보고하세요.

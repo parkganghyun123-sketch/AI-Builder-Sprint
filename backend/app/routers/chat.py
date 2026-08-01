@@ -1,4 +1,9 @@
-"""근거 추적형 계약 비서 API."""
+"""계약 비서 API.
+
+``/chat``은 폐쇄형 특징 분류와 검증된 KB 검색을 사용하는 근거형 응답을,
+``/contracts/chat``은 확인된 계약 조건과 검증 보고서만 조회하는 계약 비서를 제공한다.
+두 경로 모두 질문 원문이나 계약 내용을 저장하지 않는다.
+"""
 
 import logging
 
@@ -13,6 +18,9 @@ from app.chat.features import classification_is_consistent, extract_safe_feature
 from app.chat.models import ChatRequest, ChatResponse
 from app.chat.provider import ChatProviderError, classify_features
 from app.chat.rag import enrich_with_grounded_rag
+from app.chat.service import answer
+from app.schemas import ContractChatRequest, ContractChatResponse
+from app.validation.rules import validate
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -52,3 +60,10 @@ async def chat(body: ChatRequest) -> ChatResponse:
         features=features,
         response=deterministic,
     )
+
+
+@router.post("/contracts/chat", response_model=ContractChatResponse)
+async def contract_chat(body: ContractChatRequest) -> ContractChatResponse:
+    """확인된 계약 조건과 검증 결과를 검색해 근거가 있는 답변만 반환한다."""
+    report = validate(body.terms, worker_birth_date=body.worker_birth_date)
+    return answer(body.question, body.terms, report)

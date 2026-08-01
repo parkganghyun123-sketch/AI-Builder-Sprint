@@ -6,8 +6,18 @@ httpx==0.28.1
 python-multipart==0.0.20
 weasyprint==63.1
 jinja2==3.1.5
-sqlalchemy==2.0.36
+sqlalchemy[asyncio]==2.0.36
+# ⚠️ SQLAlchemy async 실행에 greenlet 이 반드시 필요하다.
+#
+#    plain `sqlalchemy` 는 greenlet 을 끌어오지 않는다. 그런데 없을 때
+#    SQLAlchemy 는 ImportError 가 아니라 **ValueError** 를 낸다.
+#    그래서 "DATABASE_URL 형식이 틀렸나?" 로 한참 헤맸다.
+#
+#    [asyncio] extra 가 자동으로 설치해 주지만, 이 프로젝트는 모든 버전을
+#    고정하므로 여기에도 명시한다. 진단은 scripts/check_database_url.py 참고.
+greenlet==3.1.1
 psycopg[binary]==3.2.3
+PyJWT==2.10.1
 python-dotenv==1.0.1
 
 # 개발용

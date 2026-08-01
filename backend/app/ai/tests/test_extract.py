@@ -343,3 +343,147 @@ class TestWhitespaceNormalization:
             )
             == "(근로자) 주 소 : 부산광역시 금정구 구서동 00-0"
         )
+
+
+# ============================================================
+# 손글씨 실측에서 드러난 실패 (spikes/fixtures/handwritten_01.png)
+#
+#   wage_amount   '10 000'(띄어쓰기) → '0000' 으로 읽고 confidence HIGH
+#   payday        빈칸인데 인쇄 문구 '매월(매주 또는 매일) 일' 을 값으로 반환
+#   other_allowance '없음' 에 체크표시가 섞여 '없음 [✓]'
+#
+# 시급은 판정에 가장 중요한 값이라, 틀린 채 HIGH로 두면
+# 없는 위반을 만들거나 있는 위반을 가린다.
+# ============================================================
+
+# ⚠️ _normalize_extracted_value 는 파일 상단에서 이미 import 했다.
+#    여기서 다시 import 하면 상단 import 가 죽고(F811), 어느 쪽을
+#    검증하는지 읽는 사람이 알 수 없게 된다.
+from app.ai.extract import _is_implausible, apply_sanity_check  # noqa: E402
+from app.schemas import ExtractedField  # noqa: E402
+
+
+class TestFormLabelLeak:
+    def test_printed_label_becomes_null(self):
+        """빈칸 옆 인쇄 문구를 값으로 가져오면 빈칸으로 되돌린다."""
+        assert _normalize_extracted_value("매월(매주 또는 매일) 일") is None
+
+    def test_empty_parentheses_becomes_null(self):
+        assert _normalize_extracted_value("( ) 요일") is None
+        assert _normalize_extracted_value("____일") is None
+
+    def test_real_value_survives(self):
+        assert _normalize_extracted_value("매월 10일") == "매월 10일"
+
+
+class TestCheckmarkStripping:
+    def test_removes_checkbox_marker(self):
+        assert _normalize_extracted_value("없음 [✓]") == "없음"
+        assert _normalize_extracted_value("있음 [ ]") == "있음"
+
+    def test_keeps_plain_value(self):
+        assert _normalize_extracted_value("없음") == "없음"
+
+
+class TestSanityCheck:
+    """코드가 AI의 확신을 검증한다."""
+
+    def test_zero_hourly_wage_is_implausible(self):
+        """'10 000' → '0000' 사례. 시급 0원은 있을 수 없다."""
+        assert _is_implausible("wage_amount", "0000", "HOURLY")
+
+    def test_normal_hourly_wage_passes(self):
+        assert not _is_implausible("wage_amount", "10000", "HOURLY")
+
+    def test_spaced_digits_pass_after_normalization(self):
+        assert not _is_implausible("wage_amount", "10 000", "HOURLY")
+
+    def test_monthly_wage_uses_its_own_range(self):
+        """월급 190만원은 정상, 시급이었다면 비정상."""
+        assert not _is_implausible("wage_amount", "1900000", "MONTHLY")
+        assert _is_implausible("wage_amount", "1900000", "HOURLY")
+
+    def test_invalid_time_is_implausible(self):
+        assert _is_implausible("work_start_time", "25:00", None)
+        assert not _is_implausible("work_start_time", "12:00", None)
+
+    def test_impossible_work_days(self):
+        assert _is_implausible("work_days_per_week", "9", None)
+        assert not _is_implausible("work_days_per_week", "3", None)
+
+
+class TestSanityDowngrade:
+    def test_high_confidence_is_downgraded_when_implausible(self):
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="0000", confidence=Confidence.HIGH),
+        }
+        result = apply_sanity_check(fields)
+        assert result["wage_amount"].confidence == Confidence.LOW
+
+    def test_value_is_kept_so_user_can_correct_it(self):
+        """값을 지우지 않는다. 무엇을 고쳐야 하는지 보여야 한다."""
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="0000", confidence=Confidence.HIGH),
+        }
+        assert apply_sanity_check(fields)["wage_amount"].value == "0000"
+
+    def test_plausible_value_keeps_high(self):
+        fields = {
+            "wage_type": ExtractedField(value="HOURLY", confidence=Confidence.HIGH),
+            "wage_amount": ExtractedField(value="10320", confidence=Confidence.HIGH),
+        }
+        assert apply_sanity_check(fields)["wage_amount"].confidence == Confidence.HIGH
+
+
+class TestFieldLabelLeak:
+    """
+    빈칸을 만나면 모델이 인쇄된 항목 이름을 값으로 집어온다.
+    표준양식은 자간이 넓어('주  소', '연 락 처') 조각으로 잘려 나온다.
+
+    실측(handwritten_01.png):
+      worker_address → '소 :'
+      worker_contact → '주연성 락 처 :'
+
+    빈칸이 채워진 것처럼 보이면 누락 판정이 무력화되므로 반드시 걸러야 한다.
+    """
+
+    @pytest.mark.parametrize(
+        "leaked",
+        [
+            "소 :",
+            "주연성 락 처 :",
+            "주 소 :",
+            "연 락 처 :",
+            "성    명 :",
+            "대 표 자 :",
+            "(서명)",
+            "( ) 요일",
+            "____일",
+            "매월(매주 또는 매일) 일",
+        ],
+    )
+    def test_label_fragments_become_null(self, leaked):
+        assert _normalize_extracted_value(leaked) is None
+
+    @pytest.mark.parametrize(
+        "real",
+        [
+            "박강현",
+            "부산광역시 금정구 구서동 00-0",
+            "010-0000-0000",
+            "매월 10일",
+            "근로자 명의 계좌에 입금",
+            "음료 제조 및 매장 관리",
+            "카페 000",
+            "편의점",
+            "2026년 11월 1일",
+        ],
+    )
+    def test_real_values_survive(self, real):
+        assert _normalize_extracted_value(real) == real
+
+    def test_time_value_keeps_colon(self):
+        """시각은 콜론을 쓴다. 라벨로 오인하면 안 된다."""
+        assert _normalize_extracted_value("12:00") == "12:00"

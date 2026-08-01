@@ -10,6 +10,44 @@ STANDARD_YEAR = 2026
 MINIMUM_WAGE_2026 = 10_320
 MINIMUM_WAGE_SOURCE_ID = "SRC-MINWAGE-2026"
 
+# 연도별 최저임금 (시간급, 원)
+#
+# ⚠️ 이 값을 외부 API에서 실시간으로 가져오지 않는다.
+#
+#    판정에 쓰는 기준값이라 외부에 맡기면
+#      · 같은 계약서에 다른 판정이 나올 수 있다 (재현성이 이 제품의 핵심 주장이다)
+#      · API가 죽으면 판정도 멈춘다
+#      · 잘못된 값이 와도 대조할 대상이 없어 알아챌 방법이 없다
+#
+#    대신 여기에 상수로 두고, 새 고시가 나면
+#    scripts/check_minimum_wage.py 가 알려준다. 반영은 사람이 한다.
+#
+# 출처: 고용노동부 고시
+#   2026 https://www.moel.go.kr/news/enews/report/enewsView.do?news_seq=18144
+#   2025 https://www.moel.go.kr/news/enews/report/enewsView.do?news_seq=16902
+MINIMUM_WAGE_BY_YEAR: dict[int, int] = {
+    2024: 9_860,
+    2025: 10_030,
+    2026: 10_320,
+}
+
+
+def minimum_wage_for(year: int) -> tuple[int, int]:
+    """
+    해당 연도의 최저임금과 실제 적용된 기준 연도.
+
+    표에 없는 연도(아직 고시 안 된 미래, 너무 오래된 과거)는
+    가장 가까운 연도 값을 쓰고 그 사실을 함께 돌려준다.
+    화면과 계약서에 "○○년 기준" 으로 표시해 오해를 막기 위해서다.
+    """
+    if year in MINIMUM_WAGE_BY_YEAR:
+        return MINIMUM_WAGE_BY_YEAR[year], year
+
+    known = sorted(MINIMUM_WAGE_BY_YEAR)
+    nearest = known[0] if year < known[0] else known[-1]
+    return MINIMUM_WAGE_BY_YEAR[nearest], nearest
+
+
 # KB.md: KB-WEEKLY-HOLIDAY-TIME / SRC-LSA-18
 # 근로기준법 제18조제3항
 WEEKLY_HOLIDAY_MIN_HOURS = 15.0
@@ -73,3 +111,31 @@ SOCIAL_INSURANCE_SOURCE_IDS = (
     "SRC-NPS-COVERAGE",
     "SRC-IACI-COVERAGE",
 )
+
+# KB.md: KB-PREGNANT-WORKER / SRC-LSA-74, SRC-LSA-70
+# 근로기준법 제74조제5항·제7항·제8항, 제70조제2항 (2026-07-31 확인)
+STATUTORY_DAILY_HOURS = 8.0  # 법정근로시간(1일) — 시간외근로 판단 기준
+PREGNANT_STATUTORY_WEEKLY_HOURS = 40.0  # 법정근로시간(1주) — 시간외근로 판단 기준
+PREGNANT_SHORTENED_EARLY_WEEK_MAX = 12  # 임신 12주 이내
+PREGNANT_SHORTENED_LATE_WEEK_MIN = 32  # 임신 32주 이후 (2025-02-23 시행 확대)
+PREGNANT_SHORTENED_DAILY_HOURS = 2
+PREGNANT_NIGHT_START = MINOR_NIGHT_START
+PREGNANT_NIGHT_END = MINOR_NIGHT_END
+PREGNANT_OVERTIME_SOURCE_ID = "SRC-LSA-74"
+PREGNANT_SHORTENED_SOURCE_ID = "SRC-LSA-74"
+PREGNANT_NIGHT_SOURCE_ID = "SRC-LSA-70"
+
+# KB.md: KB-POSTPARTUM-WORKER / SRC-LSA-71
+# 근로기준법 제71조 (2026-07-31 확인)
+# ⚠️ 임신 중과는 다른 규정이다. 임신 중은 시간외근로 "전면 금지"(제74조제5항),
+#    산후 1년 이내는 단체협약이 있어도 넘을 수 없는 "상한"(1일 2시간·1주 6시간·
+#    1년 150시간)이다. 같은 취급으로 합치지 않는다.
+POSTPARTUM_DAILY_OVERTIME_LIMIT = 2.0
+POSTPARTUM_WEEKLY_OVERTIME_LIMIT = 6.0
+POSTPARTUM_YEARLY_OVERTIME_LIMIT = 150.0  # 계약 조건만으로는 판정하지 않음
+POSTPARTUM_OVERTIME_SOURCE_ID = "SRC-LSA-71"
+
+# KB.md: KB-DISABLED-WORKER / SRC-LSA-6, SRC-ADA-11
+# 근로기준법 제6조, 장애인차별금지 및 권리구제 등에 관한 법률 제11조 (2026-07-31 확인)
+DISABLED_EQUAL_TREATMENT_SOURCE_ID = "SRC-LSA-6"
+DISABLED_ACCOMMODATION_SOURCE_ID = "SRC-ADA-11"
