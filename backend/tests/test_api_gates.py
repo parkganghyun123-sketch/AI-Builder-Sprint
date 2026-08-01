@@ -448,9 +448,7 @@ def test_계약서_사진_경로는_출처_문구를_붙이지_않는다():
         ("worker_name", "   "),  # 공백만
     ],
 )
-def test_잘못된_이메일과_이름은_발송_전에_422로_막는다(
-    no_provider_call, field, value
-):
+def test_잘못된_이메일과_이름은_발송_전에_422로_막는다(no_provider_call, field, value):
     """
     ⚠️ 화면 검증만으로는 부족하다.
 
@@ -866,7 +864,9 @@ def test_계약서_없는_주휴_질문은_시간_요건과_한계를_함께_안
 
     assert res.status_code == 200
     body = res.json()
-    assert "15시간 미만" in body["answer"]
+    assert "15시간 이상" in body["answer"]
+    assert "소정근로일 개근" in body["answer"]
+    assert "해당 주까지 근로관계 유지" in body["limitations"]
     assert body["evidence"][0]["kind"] == "LEGAL_STANDARD"
     assert body["action"]["href"] == "/upload"
 
@@ -878,9 +878,7 @@ def test_계약서_없는_주휴_질문은_시간_요건과_한계를_함께_안
         ("계약서에 휴게시간이 안 적혀 있어요.", "4시간", "law.go.kr"),
     ],
 )
-def test_추천_질문은_질문별_공식_근거로_답한다(
-    question, expected, source_fragment
-):
+def test_추천_질문은_질문별_공식_근거로_답한다(question, expected, source_fragment):
     res = client.post("/questions/general", json={"question": question})
 
     assert res.status_code == 200
@@ -898,9 +896,7 @@ def test_추천_질문은_질문별_공식_근거로_답한다(
         ("해고 신고는 어떻게 하나요?", "OUT_OF_SCOPE", "1350"),
     ],
 )
-def test_계약서_없는_주요_노동_질문을_주제별로_답한다(
-    question, topic, expected
-):
+def test_계약서_없는_주요_노동_질문을_주제별로_답한다(question, topic, expected):
     res = client.post("/questions/general", json={"question": question})
 
     assert res.status_code == 200
@@ -913,7 +909,7 @@ def test_계약서_없는_주요_노동_질문을_주제별로_답한다(
     "question,context,topic,expected",
     [
         ("그럼 6시간이면?", "BREAK_TIME", "BREAK_TIME", "30분"),
-        ("그럼 14시간은?", "WEEKLY_HOLIDAY", "WEEKLY_HOLIDAY", "15시간 미만"),
+        ("그럼 14시간은?", "WEEKLY_HOLIDAY", "WEEKLY_HOLIDAY", "15시간 이상"),
         ("시급 10,000원은?", "MINIMUM_WAGE", "MINIMUM_WAGE", "320원"),
     ],
 )
@@ -929,3 +925,6 @@ def test_짧은_후속_질문은_직전_주제_문맥을_이어받는다(
     body = res.json()
     assert body["topic"] == topic
     assert expected in body["answer"]
+    if topic == "WEEKLY_HOLIDAY":
+        assert "소정근로일 개근" in body["answer"]
+        assert "해당 주까지 근로관계 유지" in body["limitations"]
