@@ -159,16 +159,22 @@ ENTITLEMENTS: tuple[Entitlement, ...] = (
     # ---------------------------------------------------------- 임신 중
     Entitlement(
         code="PREGNANT_NO_OVERTIME_NIGHT",
-        label="연장·야간·휴일근로 금지",
+        label="시간외근로 전면 금지·야간·휴일근로 금지",
         audience=Audience.PREGNANT,
-        summary="임신 중에는 연장근로를 시킬 수 없고, 야간·휴일근로도 원칙적으로 금지됩니다.",
+        summary="임신 중에는 시간외근로를 시킬 수 없고, 야간·휴일근로도 원칙적으로 금지됩니다.",
         detail=(
             "사용자는 임신 중인 여성 근로자에게 시간외근로를 시키지 못합니다. "
-            "야간(오후 10시~오전 6시) 및 휴일근로도 본인의 명시적 청구와 "
-            "고용노동부장관의 인가가 있는 경우에만 가능합니다."
+            "당사자 합의로도 예외가 인정되지 않으며, 근로자가 요구하면 쉬운 "
+            "종류의 근로로 전환해야 합니다. 야간(오후 10시~오전 6시) 및 "
+            "휴일근로도 본인의 명시적 청구와 고용노동부장관의 인가가 있는 "
+            "경우에만 가능합니다."
         ),
-        legal_basis="근로기준법 제70조제2항·제71조 (SRC-LSA-70, SRC-LSA-71)",
-        verifiable=True,  # 계약 시각과 대조할 수 있다
+        # ⚠️ 이전 버전은 제71조를 근거로 들었으나, 제71조는 "산후 1년이 지나지
+        #    아니한 여성"에게 적용되는 상한(1일 2시간·1주 6시간·1년 150시간)
+        #    규정이다. 임신 중에 적용되는 전면 금지는 제74조제5항이다.
+        #    산후 1년 이내의 상한 규정은 POSTPARTUM_NO_OVERTIME 항목을 볼 것.
+        legal_basis="근로기준법 제70조제2항·제74조제5항 (SRC-LSA-70, SRC-LSA-74)",
+        verifiable=True,  # rules.check_pregnant_overtime·check_pregnant_night_work 가 판정한다
     ),
     Entitlement(
         code="PREGNANT_REDUCED_HOURS",
@@ -213,6 +219,20 @@ ENTITLEMENTS: tuple[Entitlement, ...] = (
         verifiable=False,
     ),
     # ---------------------------------------------------------- 출산 후
+    Entitlement(
+        code="POSTPARTUM_NO_OVERTIME",
+        label="시간외근로 상한",
+        audience=Audience.POSTPARTUM,
+        summary="출산 후 1년 이내에는 단체협약이 있어도 1일 2시간·1주 6시간을 넘는 시간외근로를 시킬 수 없습니다.",
+        detail=(
+            "산후 1년이 지나지 않은 여성 근로자에게는 단체협약이 있는 경우라도 "
+            "1일 2시간, 1주 6시간, 1년 150시간을 초과하는 시간외근로를 시킬 수 "
+            "없습니다. 임신 중의 전면 금지(제74조제5항)와 달리, 이 규정은 "
+            "정해진 한도 안에서는 시간외근로가 허용된다는 점이 다릅니다."
+        ),
+        legal_basis="근로기준법 제71조 (SRC-LSA-71)",
+        verifiable=True,  # rules.check_postpartum_overtime_limit 이 1일·1주 상한만 판정한다
+    ),
     Entitlement(
         code="POSTPARTUM_NURSING_TIME",
         label="육아 시간",

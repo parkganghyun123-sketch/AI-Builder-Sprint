@@ -179,7 +179,7 @@ def test_preview_is_always_a_watermarked_request_draft(monkeypatch) -> None:
         return b"%PDF-synthetic"
 
     monkeypatch.setattr(contracts, "render_contract_pdf", fake_render)
-    monkeypatch.setattr(contracts, "validate", lambda terms: _empty_report())
+    monkeypatch.setattr(contracts, "validate", lambda terms, **kwargs: _empty_report())
 
     response = asyncio.run(
         contracts.preview_pdf(
@@ -203,7 +203,7 @@ def test_preview_is_always_a_watermarked_request_draft(monkeypatch) -> None:
 def test_validate_request_forwards_worker_birth_date(monkeypatch) -> None:
     captured: dict = {}
 
-    def fake_validate(terms, worker_birth_date=None):
+    def fake_validate(terms, worker_birth_date=None, **kwargs):
         captured["terms"] = terms
         captured["worker_birth_date"] = worker_birth_date
         return _empty_report()
@@ -234,7 +234,7 @@ def test_analyze_sign_keeps_request_pdf_draft_and_uses_neutral_title(
         captured["verification_note"] = verification_note
         return b"%PDF-synthetic"
 
-    def fake_validate(terms, worker_birth_date=None):
+    def fake_validate(terms, worker_birth_date=None, **kwargs):
         captured["worker_birth_date"] = worker_birth_date
         return _empty_report()
 

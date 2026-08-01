@@ -13,9 +13,14 @@ from app.schemas import (
 from app.validation.cli import main as cli_main
 from app.validation.rules import (
     check_break_time,
+    check_disabled_accommodation,
     check_minimum_wage,
     check_minor_night_work,
     check_minor_working_hours,
+    check_postpartum_overtime_limit,
+    check_pregnant_night_work,
+    check_pregnant_overtime,
+    check_pregnant_shortened_hours,
     check_required_fields,
     check_weekly_holiday,
     validate,
@@ -602,6 +607,243 @@ def test_validation_report_marks_violation_as_problem() -> None:
     report = validate(terms(wage_amount=field(10_319)))
 
     assert report.has_problem is True
+
+
+# ============================================================
+# 임산부·장애인 보호 규정
+# ============================================================
+
+
+def test_pregnant_overtime_none_when_not_pregnant() -> None:
+    assert check_pregnant_overtime(terms(), is_pregnant=False) is None
+
+
+def test_pregnant_overtime_exact_boundary_is_ok() -> None:
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("18:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(5),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.OK
+    assert "40시간" in result.calculation
+
+
+def test_pregnant_overtime_over_forty_hours_is_violation() -> None:
+    result = check_pregnant_overtime(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:00"),
+            break_start_time=field("12:00"),
+            break_end_time=field("13:00"),
+            work_days_per_week=field(5),
+        ),
+        is_pregnant=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "합의로도 예외가 인정되지" in result.detail
+
+
+def test_pregnant_overtime_unknown_when_schedule_missing() -> None:
+    result = check_pregnant_overtime(terms(work_start_time=field(None)), is_pregnant=True)
+
+    assert result.status == CheckStatus.UNKNOWN
+
+
+@pytest.mark.parametrize("week", [12, 32])
+def test_pregnant_shortened_hours_eligible_at_boundaries(week: int) -> None:
+    result = check_pregnant_shortened_hours(True, week)
+
+    assert result is not None
+    assert "신청할 수 있습니다" in result.detail
+
+
+def test_pregnant_shortened_hours_not_eligible_mid_pregnancy() -> None:
+    result = check_pregnant_shortened_hours(True, 20)
+
+    assert result is not None
+    assert "대상 기간이 아닙니다" in result.detail
+
+
+def test_pregnant_shortened_hours_none_when_week_not_given() -> None:
+    assert check_pregnant_shortened_hours(True, None) is None
+
+
+def test_pregnant_shortened_hours_none_when_not_pregnant() -> None:
+    assert check_pregnant_shortened_hours(False, 10) is None
+
+
+def test_pregnant_night_work_none_when_not_applicable() -> None:
+    result = check_pregnant_night_work(
+        terms(), is_pregnant=False, is_postpartum_within_year=False
+    )
+    assert result is None
+
+
+def test_pregnant_night_work_ok_for_daytime_shift() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("09:00"), work_end_time=field("18:00")),
+        is_pregnant=True,
+        is_postpartum_within_year=False,
+    )
+
+    assert result.status == CheckStatus.OK
+
+
+def test_pregnant_night_work_violation_when_overlapping_night_window() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("20:00"), work_end_time=field("23:00")),
+        is_pregnant=False,
+        is_postpartum_within_year=True,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "인가" in result.detail
+
+
+def test_pregnant_night_work_overnight_shift_is_violation() -> None:
+    result = check_pregnant_night_work(
+        terms(work_start_time=field("22:00"), work_end_time=field("06:00")),
+        is_pregnant=True,
+        is_postpartum_within_year=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+
+
+def test_postpartum_overtime_none_when_not_applicable() -> None:
+    assert (
+        check_postpartum_overtime_limit(
+            terms(), is_postpartum_within_year=False, is_pregnant=False
+        )
+        is None
+    )
+
+
+def test_postpartum_overtime_none_when_pregnant() -> None:
+    """임신 중이면 제71조 상한이 아니라 제74조제5항 전면 금지가 적용된다."""
+    assert (
+        check_postpartum_overtime_limit(
+            terms(), is_postpartum_within_year=True, is_pregnant=True
+        )
+        is None
+    )
+
+
+def test_postpartum_overtime_daily_exact_boundary_is_ok() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:30"),
+            work_days_per_week=field(3),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.OK
+    assert "상한 2시간" in result.calculation
+
+
+def test_postpartum_overtime_daily_over_limit_is_violation() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("19:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:15"),
+            work_days_per_week=field(3),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "150시간" in result.detail
+
+
+def test_postpartum_overtime_weekly_over_limit_is_violation() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(
+            work_start_time=field("09:00"),
+            work_end_time=field("17:30"),
+            break_start_time=field("12:00"),
+            break_end_time=field("12:30"),
+            work_days_per_week=field(6),
+        ),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.VIOLATION
+    assert "상한 6시간" in result.calculation
+
+
+def test_postpartum_overtime_unknown_when_schedule_missing() -> None:
+    result = check_postpartum_overtime_limit(
+        terms(work_start_time=field(None)),
+        is_postpartum_within_year=True,
+        is_pregnant=False,
+    )
+
+    assert result.status == CheckStatus.UNKNOWN
+
+
+def test_disabled_accommodation_none_when_not_disabled() -> None:
+    assert check_disabled_accommodation(False) is None
+
+
+def test_disabled_accommodation_is_informational_ok() -> None:
+    result = check_disabled_accommodation(True)
+
+    assert result.status == CheckStatus.OK
+    assert "정당한 편의" in result.detail
+
+
+def test_validate_conditionally_includes_pregnant_checks() -> None:
+    report = validate(terms(), worker_is_pregnant=True, worker_pregnancy_week=10)
+    codes = {check.code for check in report.checks}
+
+    assert "PREGNANT_OVERTIME" in codes
+    assert "PREGNANT_SHORTENED_HOURS" in codes
+    assert "PREGNANT_NIGHT_WORK" in codes
+    assert "POSTPARTUM_OVERTIME" not in codes
+
+
+def test_validate_conditionally_includes_postpartum_check() -> None:
+    report = validate(terms(), worker_is_postpartum_within_year=True)
+    codes = {check.code for check in report.checks}
+
+    assert "POSTPARTUM_OVERTIME" in codes
+    assert "PREGNANT_OVERTIME" not in codes
+
+
+def test_validate_conditionally_includes_disabled_check() -> None:
+    report = validate(terms(), worker_is_disabled=True)
+    codes = {check.code for check in report.checks}
+
+    assert "DISABLED_ACCOMMODATION" in codes
+
+
+def test_validate_without_worker_flags_has_no_new_checks() -> None:
+    report = validate(terms())
+    codes = {check.code for check in report.checks}
+
+    assert not codes & {
+        "PREGNANT_OVERTIME",
+        "PREGNANT_SHORTENED_HOURS",
+        "PREGNANT_NIGHT_WORK",
+        "POSTPARTUM_OVERTIME",
+        "DISABLED_ACCOMMODATION",
+    }
 
 
 def test_cli_reads_contract_json_and_prints_report(

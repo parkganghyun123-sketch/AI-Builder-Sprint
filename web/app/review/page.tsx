@@ -210,6 +210,13 @@ function ReviewContent() {
   const [terms, setTerms] = useState<ContractTerms | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
   const [workerBirthDate, setWorkerBirthDate] = useState("");
+  const [workerIsPregnant, setWorkerIsPregnant] = useState(false);
+  const [workerPregnancyWeek, setWorkerPregnancyWeek] = useState<number | null>(
+    null,
+  );
+  const [workerIsPostpartumWithinYear, setWorkerIsPostpartumWithinYear] =
+    useState(false);
+  const [workerIsDisabled, setWorkerIsDisabled] = useState(false);
   const [userEditedFields, setUserEditedFields] = useState<
     (keyof ContractTerms)[]
   >([]);
@@ -236,12 +243,20 @@ function ReviewContent() {
       if (existing.entryPath === blankFormPath && existing.terms) {
         setTerms(existing.terms);
         setWorkerBirthDate(existing.workerBirthDate ?? "");
+        setWorkerIsPregnant(existing.workerIsPregnant);
+        setWorkerPregnancyWeek(existing.workerPregnancyWeek);
+        setWorkerIsPostpartumWithinYear(existing.workerIsPostpartumWithinYear);
+        setWorkerIsDisabled(existing.workerIsDisabled);
         setUserEditedFields(existing.userEditedFields);
         setConfirmedFields(existing.confirmedFields);
       } else {
         const created = startSession(createEmptyTerms(), blankFormPath);
         setTerms(created.terms);
         setWorkerBirthDate(created.workerBirthDate ?? "");
+        setWorkerIsPregnant(created.workerIsPregnant);
+        setWorkerPregnancyWeek(created.workerPregnancyWeek);
+        setWorkerIsPostpartumWithinYear(created.workerIsPostpartumWithinYear);
+        setWorkerIsDisabled(created.workerIsDisabled);
         setUserEditedFields(created.userEditedFields);
         setConfirmedFields(created.confirmedFields);
       }
@@ -250,6 +265,10 @@ function ReviewContent() {
       setTerms(existing.terms);
       setEntryPath(existing.entryPath);
       setWorkerBirthDate(existing.workerBirthDate ?? "");
+      setWorkerIsPregnant(existing.workerIsPregnant);
+      setWorkerPregnancyWeek(existing.workerPregnancyWeek);
+      setWorkerIsPostpartumWithinYear(existing.workerIsPostpartumWithinYear);
+      setWorkerIsDisabled(existing.workerIsDisabled);
       setUserEditedFields(existing.userEditedFields);
       setConfirmedFields(existing.confirmedFields);
     }
@@ -265,7 +284,14 @@ function ReviewContent() {
     const timer = setTimeout(async () => {
       // 진행 차단 판정과 확인 필요 항목을 함께 갱신한다.
       const [stateResult, reviewResult] = await Promise.allSettled([
-        getValidationState({ terms, worker_birth_date: workerBirthDate || null }),
+        getValidationState({
+          terms,
+          worker_birth_date: workerBirthDate || null,
+          worker_is_pregnant: workerIsPregnant,
+          worker_pregnancy_week: workerPregnancyWeek,
+          worker_is_postpartum_within_year: workerIsPostpartumWithinYear,
+          worker_is_disabled: workerIsDisabled,
+        }),
         getReviewItems({ terms }),
       ]);
       // 더 늦게 보낸 요청이 이미 있으면 이 응답은 버린다.
@@ -285,7 +311,15 @@ function ReviewContent() {
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [ready, terms, workerBirthDate]);
+  }, [
+    ready,
+    terms,
+    workerBirthDate,
+    workerIsPregnant,
+    workerPregnancyWeek,
+    workerIsPostpartumWithinYear,
+    workerIsDisabled,
+  ]);
 
   function changeField(key: keyof ContractTerms, value: string) {
     if (!terms) return;
@@ -335,6 +369,44 @@ function ReviewContent() {
     setError(null);
   }
 
+  function changeWorkerIsPregnant(value: boolean) {
+    setWorkerIsPregnant(value);
+    // 임신 중이 아니게 되면 주수 입력도 함께 지운다 — 화면에서 숨겨질 값이
+    // 세션에 남아 다음 방문 때 불쑥 나타나지 않게 한다.
+    const nextWeek = value ? workerPregnancyWeek : null;
+    setWorkerPregnancyWeek(nextWeek);
+    updateSession({
+      workerIsPregnant: value,
+      workerPregnancyWeek: nextWeek,
+      report: null,
+      sign: null,
+    });
+    setError(null);
+  }
+
+  function changeWorkerPregnancyWeek(value: string) {
+    const week = value === "" ? null : Number(value);
+    setWorkerPregnancyWeek(week);
+    updateSession({ workerPregnancyWeek: week, report: null, sign: null });
+    setError(null);
+  }
+
+  function changeWorkerIsPostpartumWithinYear(value: boolean) {
+    setWorkerIsPostpartumWithinYear(value);
+    updateSession({
+      workerIsPostpartumWithinYear: value,
+      report: null,
+      sign: null,
+    });
+    setError(null);
+  }
+
+  function changeWorkerIsDisabled(value: boolean) {
+    setWorkerIsDisabled(value);
+    updateSession({ workerIsDisabled: value, report: null, sign: null });
+    setError(null);
+  }
+
   async function submit() {
     if (!terms || loading) return;
     // 차단 항목이 남아 있으면 진행하지 않는다. 버튼 비활성과 이중 방어.
@@ -356,11 +428,19 @@ function ReviewContent() {
       const report = await validateTerms({
         terms,
         worker_birth_date: workerBirthDate || null,
+        worker_is_pregnant: workerIsPregnant,
+        worker_pregnancy_week: workerPregnancyWeek,
+        worker_is_postpartum_within_year: workerIsPostpartumWithinYear,
+        worker_is_disabled: workerIsDisabled,
       });
       updateSession({
         terms,
         entryPath,
         workerBirthDate: workerBirthDate || null,
+        workerIsPregnant,
+        workerPregnancyWeek,
+        workerIsPostpartumWithinYear,
+        workerIsDisabled,
         report,
         sign: null,
       });
@@ -494,12 +574,13 @@ function ReviewContent() {
       <Card className="flex flex-col gap-4">
         <div>
           <h2 className="text-base font-extrabold text-ink">
-            연령별 근로조건 확인
+            근로자 유형별 근로조건 확인
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-ink-muted">
-            생년월일을 입력하면 계약 시작일을 기준으로
-            15세 이상 18세 미만 근로시간과 야간근로 항목을 확인합니다.
-            입력하지 않으면 해당 검사를 결과에 추가하지 않습니다.
+            생년월일을 입력하면 계약 시작일을 기준으로 15세 이상 18세 미만
+            근로시간과 야간근로 항목을, 임신·출산·장애 여부를 선택하면 해당
+            보호 규정을 함께 확인합니다. 입력하지 않으면 해당 검사를 결과에
+            추가하지 않습니다.
           </p>
         </div>
         <div className="flex flex-col gap-1.5">
@@ -530,6 +611,75 @@ function ReviewContent() {
             재시도가 필요하면 탭을 닫을 때까지만 유지합니다. 브라우저
             자동완성은 사용하지 않고 결과 화면, 오류 메시지, 로그에도 표시하지
             않습니다. 서버의 보관·삭제 정책은 아직 검증되지 않았습니다.
+          </p>
+        </div>
+
+        <div className="flex flex-col gap-2 border-t border-brand-line pt-4">
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+            <input
+              type="checkbox"
+              checked={workerIsPregnant}
+              disabled={loading}
+              onChange={(event) => changeWorkerIsPregnant(event.target.checked)}
+              className="h-5 w-5"
+            />
+            임신 중이에요
+          </label>
+          {workerIsPregnant && (
+            <div className="ml-7 flex flex-col gap-1.5">
+              <label
+                htmlFor="worker-pregnancy-week"
+                className="text-sm font-bold text-ink"
+              >
+                임신 주수 (선택)
+              </label>
+              <input
+                id="worker-pregnancy-week"
+                type="number"
+                min={1}
+                max={42}
+                inputMode="numeric"
+                value={workerPregnancyWeek ?? ""}
+                disabled={loading}
+                onChange={(event) =>
+                  changeWorkerPregnancyWeek(event.target.value)
+                }
+                className="min-h-14 w-32 rounded-field border border-slate-400 bg-white px-4 py-3 text-ink outline-none transition disabled:cursor-not-allowed disabled:bg-slate-100 focus:border-brand focus:ring-2 focus:ring-brand/20"
+              />
+              <p className="text-xs leading-relaxed text-ink-muted">
+                12주 이내 또는 32주 이후면 하루 2시간 단축근로를 신청할 수
+                있는지 함께 안내합니다.
+              </p>
+            </div>
+          )}
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+            <input
+              type="checkbox"
+              checked={workerIsPostpartumWithinYear}
+              disabled={loading}
+              onChange={(event) =>
+                changeWorkerIsPostpartumWithinYear(event.target.checked)
+              }
+              className="h-5 w-5"
+            />
+            출산한 지 1년이 안 됐어요
+          </label>
+          <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm font-bold text-ink">
+            <input
+              type="checkbox"
+              checked={workerIsDisabled}
+              disabled={loading}
+              onChange={(event) => changeWorkerIsDisabled(event.target.checked)}
+              className="h-5 w-5"
+            />
+            장애가 있어요
+          </label>
+          <p className="text-xs leading-relaxed text-ink-muted">
+            임신·출산·장애 여부는 민감정보입니다. 생년월일과 같은 방식으로
+            현재 탭의 sessionStorage에만 임시 저장하고, 검증·서명 요청 때만
+            서버로 보냅니다. 서명 요청이 성공하면 즉시 지우며, 결과 화면·오류
+            메시지·로그에는 표시하지 않습니다. 증빙 서류 제출은 요구하지
+            않습니다.
           </p>
         </div>
       </Card>

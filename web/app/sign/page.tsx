@@ -47,6 +47,13 @@ export default function SignPage() {
   const [report, setReport] = useState<ValidationReport | null>(null);
   const [entryPath, setEntryPath] = useState<EntryPath>("PHOTO");
   const [workerBirthDate, setWorkerBirthDate] = useState<string | null>(null);
+  const [workerIsPregnant, setWorkerIsPregnant] = useState(false);
+  const [workerPregnancyWeek, setWorkerPregnancyWeek] = useState<number | null>(
+    null,
+  );
+  const [workerIsPostpartumWithinYear, setWorkerIsPostpartumWithinYear] =
+    useState(false);
+  const [workerIsDisabled, setWorkerIsDisabled] = useState(false);
   const [form, setForm] = useState<PartyForm>(EMPTY_FORM);
   const [ready, setReady] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -96,6 +103,10 @@ export default function SignPage() {
     setReport(session.report);
     setEntryPath(session.entryPath);
     setWorkerBirthDate(session.workerBirthDate);
+    setWorkerIsPregnant(session.workerIsPregnant);
+    setWorkerPregnancyWeek(session.workerPregnancyWeek);
+    setWorkerIsPostpartumWithinYear(session.workerIsPostpartumWithinYear);
+    setWorkerIsDisabled(session.workerIsDisabled);
     setConfirmedFields(session.confirmedFields);
     setForm({
       workerName: String(session.terms?.worker_name.value ?? ""),
@@ -111,7 +122,14 @@ export default function SignPage() {
   useEffect(() => {
     if (!terms) return;
     let cancelled = false;
-    getValidationState({ terms, worker_birth_date: workerBirthDate })
+    getValidationState({
+      terms,
+      worker_birth_date: workerBirthDate,
+      worker_is_pregnant: workerIsPregnant,
+      worker_pregnancy_week: workerPregnancyWeek,
+      worker_is_postpartum_within_year: workerIsPostpartumWithinYear,
+      worker_is_disabled: workerIsDisabled,
+    })
       .then((state) => {
         if (!cancelled) {
           setBlockingIssues(state.issues.filter((issue) => issue.blocks));
@@ -124,7 +142,14 @@ export default function SignPage() {
     return () => {
       cancelled = true;
     };
-  }, [terms, workerBirthDate]);
+  }, [
+    terms,
+    workerBirthDate,
+    workerIsPregnant,
+    workerPregnancyWeek,
+    workerIsPostpartumWithinYear,
+    workerIsDisabled,
+  ]);
 
   function setValue(key: keyof PartyForm, value: string) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -174,6 +199,10 @@ export default function SignPage() {
       const response = await analyzeAndSign({
         terms,
         worker_birth_date: workerBirthDate,
+        worker_is_pregnant: workerIsPregnant,
+        worker_pregnancy_week: workerPregnancyWeek,
+        worker_is_postpartum_within_year: workerIsPostpartumWithinYear,
+        worker_is_disabled: workerIsDisabled,
         worker_name: form.workerName.trim(),
         worker_email: form.workerEmail.trim(),
         employer_name: form.employerName.trim(),
@@ -185,8 +214,16 @@ export default function SignPage() {
           blockedProblems !== null && acknowledged,
       });
       setWorkerBirthDate(null);
+      setWorkerIsPregnant(false);
+      setWorkerPregnancyWeek(null);
+      setWorkerIsPostpartumWithinYear(false);
+      setWorkerIsDisabled(false);
       updateSession({
         workerBirthDate: null,
+        workerIsPregnant: false,
+        workerPregnancyWeek: null,
+        workerIsPostpartumWithinYear: false,
+        workerIsDisabled: false,
         report: response.report,
         sign: {
           documentId: response.document_id,
