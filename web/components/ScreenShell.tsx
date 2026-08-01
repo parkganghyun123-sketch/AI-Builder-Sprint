@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { getMe } from "@/lib/api";
@@ -20,6 +21,10 @@ const STEPS = [
   { href: "/sign", label: "서명" },
   { href: "/archive", label: "보관함" },
 ];
+
+/** 링크와 버튼의 태그 기본값 차이 없이 헤더 문구를 같은 줄에 맞춘다. */
+const HEADER_ACTION_CLASS =
+  "inline-flex h-11 shrink-0 items-center justify-center rounded-full px-2 text-xs font-semibold leading-none text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand sm:h-12 sm:px-3 sm:text-sm";
 
 /** 스텝 번호 (1~6) */
 export type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -57,6 +62,7 @@ export function BrandHeader() {
   }, []);
 
   async function login() {
+    if (loggingIn) return;
     setLoggingIn(true);
     setLoginError(null);
     try {
@@ -65,7 +71,9 @@ export function BrandHeader() {
     } catch (caught) {
       setLoggingIn(false);
       setLoginError(
-        caught instanceof Error ? caught.message : "로그인 화면을 열지 못했어요. 다시 시도해 주세요.",
+        caught instanceof Error
+          ? caught.message
+          : "로그인 화면을 열지 못했어요. 다시 시도해 주세요.",
       );
     }
   }
@@ -77,62 +85,71 @@ export function BrandHeader() {
     window.location.href = "/";
   }
 
+  const userLabel = me?.nickname.trim() ? `${me.nickname}님` : "로그인됨";
+
   return (
     <header className="sticky top-0 z-10 border-b border-brand-line/60 bg-white/80 backdrop-blur">
-      <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between px-5">
-        <Link href="/" className="flex items-center gap-1.5 text-lg font-extrabold text-ink">
-          <span aria-hidden="true" className="text-brand">
-            ✓
-          </span>{" "}
+      <div className="mx-auto flex h-16 w-full max-w-3xl items-center justify-between gap-2 px-4 sm:px-5">
+        <Link
+          href="/"
+          className="flex shrink-0 items-center gap-1.5 text-lg font-extrabold text-ink"
+        >
+          <Image
+            src="/brand/fairsign-mark-transparent.png"
+            alt=""
+            width={42}
+            height={22}
+            className="h-[22px] w-[42px] shrink-0 object-contain"
+            priority
+          />
           페어사인
         </Link>
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center justify-end gap-0.5 sm:gap-1">
           {me ? (
             <>
               {/* ⚠️ 닉네임은 없을 수 있다.
                   카카오 동의항목을 '선택 동의'로 두면 사용자가 거부할 수 있고,
                   거부해도 로그인은 성립한다. 그대로 두면 "님" 만 남는다. */}
-              <span className="px-2 text-sm font-semibold text-ink-muted">
-                {me.nickname.trim() ? `${me.nickname}님` : "로그인됨"}
+              <span
+                title={userLabel}
+                className="inline-flex min-h-11 max-w-16 items-center truncate px-1 text-xs font-semibold text-ink-muted sm:min-h-12 sm:max-w-32 sm:px-2 sm:text-sm"
+              >
+                {userLabel}
               </span>
               <Link
                 href="/archive"
-                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+                className={HEADER_ACTION_CLASS}
               >
                 보관함
               </Link>
               <button
                 type="button"
                 onClick={logout}
-                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand"
+                className={HEADER_ACTION_CLASS}
               >
                 로그아웃
               </button>
             </>
           ) : checked ? (
-            <>
-              {/* ⚠️ 예전에는 이 버튼이 /archive 로 가는 Link 였다.
-                     그래서 "로그인"을 누르면 보관함으로 끌려가서 거기서
-                     다시 "카카오로 계속하기"를 눌러야 했다. 두 번 눌러야 하고,
-                     가려던 곳도 아닌 화면으로 이동한다.
-                     로그인 버튼은 로그인을 시작해야 한다. */}
-              <button
-                type="button"
-                onClick={login}
-                disabled={loggingIn}
-                className="min-h-12 rounded-full px-3 py-3 text-sm font-semibold text-ink-muted hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand disabled:opacity-60"
-              >
-                {loggingIn ? "이동 중…" : "로그인"}
-              </button>
-              {loginError && (
-                <span role="alert" className="px-2 text-xs text-red-900">
-                  {loginError}
-                </span>
-              )}
-            </>
+            <button
+              type="button"
+              onClick={login}
+              disabled={loggingIn}
+              className={`${HEADER_ACTION_CLASS} disabled:cursor-wait disabled:opacity-60`}
+            >
+              {loggingIn ? "이동 중…" : "로그인"}
+            </button>
           ) : null}
         </div>
       </div>
+      {loginError && (
+        <p
+          role="alert"
+          className="fixed right-4 top-20 z-20 max-w-xs rounded-field border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-900 shadow-card"
+        >
+          {loginError}
+        </p>
+      )}
     </header>
   );
 }

@@ -12,6 +12,12 @@ export async function startKakaoLogin(returnTo?: string): Promise<void> {
   writeReturnTo(
     returnTo ?? `${window.location.pathname}${window.location.search}`,
   );
-  const { authorize_url } = await getLoginUrl();
+  const isLocal = ["localhost", "127.0.0.1"].includes(
+    window.location.hostname,
+  );
+  const redirectUri = isLocal
+    ? `${window.location.origin}/auth/kakao/callback`
+    : undefined;
+  const { authorize_url } = await getLoginUrl(redirectUri);
   window.location.href = authorize_url;
 }

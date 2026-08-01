@@ -459,9 +459,12 @@ export async function getSignStatus(documentId: string) {
 // 5. 로그인 — backend/app/routers/auth.py 대응
 // ============================================================
 
-/** 카카오 로그인 주소. 프론트엔드에는 카카오 키를 두지 않는다. */
-export function getLoginUrl() {
-  return getJson("/auth/login-url", loginUrlResponseSchema);
+/** 카카오 로그인 주소. 로컬 개발일 때는 돌아올 로컬 주소를 함께 보낸다. */
+export function getLoginUrl(redirectUri?: string) {
+  const query = redirectUri
+    ? `?redirect_uri=${encodeURIComponent(redirectUri)}`
+    : "";
+  return getJson(`/auth/login-url${query}`, loginUrlResponseSchema);
 }
 
 /** 인가 코드 → 우리 세션 토큰. state 는 login-url 이 발급한 값을 그대로 넘긴다. */
