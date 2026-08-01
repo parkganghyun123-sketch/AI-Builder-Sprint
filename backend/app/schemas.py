@@ -293,6 +293,16 @@ class GeneralQuestionTopic(str, Enum):
     WRITTEN_CONTRACT = "WRITTEN_CONTRACT"
     MINOR_WORK = "MINOR_WORK"
     EXTRA_WORK = "EXTRA_WORK"
+    SEVERANCE_PAY = "SEVERANCE_PAY"
+    ANNUAL_LEAVE = "ANNUAL_LEAVE"
+    DISMISSAL_NOTICE = "DISMISSAL_NOTICE"
+    PROBATION_MINIMUM_WAGE = "PROBATION_MINIMUM_WAGE"
+    SOCIAL_INSURANCE = "SOCIAL_INSURANCE"
+    MINOR_DOCUMENTS = "MINOR_DOCUMENTS"
+    PREGNANCY_PROTECTION = "PREGNANCY_PROTECTION"
+    DISABILITY_ACCOMMODATION = "DISABILITY_ACCOMMODATION"
+    WAGE_PAYMENT = "WAGE_PAYMENT"
+    POST_EMPLOYMENT_SETTLEMENT = "POST_EMPLOYMENT_SETTLEMENT"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
 
 
@@ -310,6 +320,8 @@ class GeneralQuestionResponse(BaseModel):
     evidence: list[ChatEvidence]
     action: ChatAction | None = None
     suggestions: list[str] = Field(default_factory=list)
+    retrieved_kb_ids: list[str] = Field(default_factory=list)
+    retrieved_source_ids: list[str] = Field(default_factory=list)
 
 
 # ============================================================

@@ -16,7 +16,7 @@ FairSign은 처음 아르바이트를 시작하는 근로자가 근로계약서�
 | 백엔드 | Python 3.10+ / FastAPI | `backend/` |
 | 스키마·검증 | Pydantic | `backend/app/schemas.py` |
 | 법정 기준 판정 | 순수 Python 함수 | `backend/app/validation/` |
-| AI 연동 | Upstage REST (httpx) | `backend/app/ai/` |
+| AI 연동 | Upstage·OpenAI REST (httpx) | `backend/app/ai/`, `backend/app/chat/` |
 | PDF 생성 | WeasyPrint | `backend/app/pdf/` |
 | 전자서명 | 모두싸인 REST | `backend/app/signing/` |
 | 프론트엔드 | Next.js + TypeScript + Tailwind | `web/` (화면 8종, 백엔드 연결됨) |
