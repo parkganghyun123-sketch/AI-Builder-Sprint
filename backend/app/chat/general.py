@@ -116,17 +116,15 @@ class GeneralQuestionIntent(str, Enum):
 
 _WRITTEN_BLOCKS = {
     GeneralBlockId.CORE_STANDARD: (
-        "사장님(법에서는 사용자라고 부릅니다)은 임금, 소정근로시간, 휴일 등 "
-        "주요 근로조건을 서면으로 적어 근로자에게 주어야 합니다."
+        "사용자는 임금, 소정근로시간, 휴일 등 주요 근로조건을 서면으로 "
+        "적어 근로자에게 교부해야 합니다."
     ),
     GeneralBlockId.BEFORE_WORK: (
-        "근무 시작 전이라면: 사장님과 임금, 근무시간, 휴일 같은 조건을 적은 "
-        "계약서를 작성하고, 서명한 계약서 한 부를 받은 뒤 시작하는 것이 좋습니다."
+        "근무 전이라면 주요 조건을 적은 계약서를 작성하고 사본을 받은 뒤 시작하세요."
     ),
     GeneralBlockId.WORK_STARTED: (
-        "이미 근무를 시작했다면: 지금이라도 사장님께 합의한 근로조건을 서면으로 "
-        "적어 달라고 요청하고, 지금까지 주고받은 메시지와 출퇴근·근무·급여 기록을 "
-        "함께 보관하세요."
+        "이미 근무 중이면 지금 계약서 작성과 사본 교부를 요청하고, 합의·근무·급여 "
+        "기록을 보관하세요."
     ),
     GeneralBlockId.CHECK_REQUIRED: (
         "추가 확인 항목: 임금과 급여일, 근무시간과 휴게시간, 근무일과 휴일, "
@@ -136,14 +134,13 @@ _WRITTEN_BLOCKS = {
 
 _NEXT_ACTION_BLOCKS = {
     GeneralDocumentStatus.NOT_WRITTEN: (
-        "계약서를 아직 작성하지 않았다면 그냥 넘기지 말고, 지금 사장님과 주요 "
-        "조건을 서면으로 정리하세요."
+        "계약서를 아직 작성하지 않았다면 지금 주요 조건을 서면으로 정리하세요."
     ),
     GeneralDocumentStatus.NOT_RECEIVED: (
         "계약서를 작성했지만 받지 못했다면, 사장님께 서명한 계약서 사본을 요청하세요."
     ),
     GeneralDocumentStatus.UNKNOWN: (
-        "계약서 작성 여부와 사본을 받았는지부터 확인하고, 빠진 쪽을 사장님께 요청하세요."
+        "계약서 작성 여부와 사본 수령 여부를 확인하고 빠진 부분을 요청하세요."
     ),
 }
 
@@ -158,24 +155,20 @@ _BLOCK_SOURCE_IDS = {
 _SEVERANCE_SOURCE_IDS = ["SRC-ERBA-4", "SRC-ERBA-8", "SRC-MOEL-SEVERANCE-2025"]
 _SEVERANCE_BLOCKS = {
     GeneralBlockId.CORE_LIMITATION: (
-        "지금 질문만으로는 퇴직금 지급 대상인지 확정할 수 없습니다. 퇴직금은 "
-        "계약서 한 장의 현재 조건만이 아니라 실제 근무 이력과 퇴직 여부를 함께 확인해야 합니다."
+        "퇴직급여는 계약 조건뿐 아니라 실제 근무 이력과 퇴직 여부도 충족해야 합니다."
     ),
     GeneralBlockId.LEGAL_INDICATORS: (
-        "확인 기준: 계속근로기간이 통상 1년 이상인지, 4주를 평균한 1주 소정근로시간이 "
-        "15시간 이상인지 확인해야 합니다. 이 두 숫자만으로 지급 대상을 확정하지는 않습니다."
+        "계속근로기간이 1년 이상이고 4주 평균 주 소정근로시간이 15시간 이상이면 "
+        "퇴직급여 적용 기준에 해당합니다."
     ),
     GeneralBlockId.CONTRACT_SCOPE: (
-        "계약서는 예정한 계약기간과 현재 소정근로시간을 보여줄 수 있지만, 실제 입·퇴사일과 "
-        "전체 근무기간의 시간 변화까지 그대로 보여주지는 않을 수 있습니다."
+        "계약서는 예정 기간과 현재 근로시간만 보여주므로 실제 전체 이력은 별도 자료가 필요합니다."
     ),
     GeneralBlockId.NEEDS_CHECK: (
-        "추가 확인 항목: 실제 입사일과 퇴사일, 근무가 중단된 기간, 기간별 주 소정근로시간의 "
-        "변화와 주 15시간 미만인 기간, 실제 퇴직 여부, 계약 내용과 실제 근무의 차이입니다."
+        "확인 항목: 실제 입·퇴사일, 근무 중단, 기간별 주 근로시간, 실제 퇴직 여부입니다."
     ),
     GeneralBlockId.NEXT_ACTION: (
-        "다음 단계: 계약서가 있으면 올려 예정 조건을 확인하고, 계약서가 없으면 사장님과 합의한 "
-        "조건 및 출퇴근·급여·근무표 기록을 모아 확인하세요. 필요하면 고용노동부 1350에 문의하세요."
+        "계약서와 출퇴근·급여·근무표 기록을 함께 확인하고, 필요하면 1350에 문의하세요."
     ),
 }
 
@@ -617,7 +610,7 @@ def _weekly_holiday(question: str) -> GeneralQuestionResponse:
     compact = _compact_for_safety(question)
     limitations = (
         "실제 근무시간이 아니라 계약에서 정한 소정근로시간을 기준으로 보며, "
-        "개근·근로관계 유지 여부는 이 질문만으로 확인할 수 없습니다."
+        "확인할 항목은 해당 주 소정근로일 개근과 해당 주까지 근로관계 유지입니다."
     )
     hours = (
         _hours(question)
@@ -641,20 +634,17 @@ def _weekly_holiday(question: str) -> GeneralQuestionResponse:
         answer, limitations = _weekly_holiday_amount_answer(question)
     elif hours is not None and hours < 15:
         answer = (
-            f"입력하신 주 {hours:g}시간이 4주 평균 소정근로시간이라면, "
-            "주 15시간 미만이어서 주휴일 적용 대상에서 제외됩니다."
+            f"입력한 주 {hours:g}시간이 4주 평균 소정근로시간이면 15시간 미만이므로 "
+            "주휴수당 시간 조건을 충족하지 않습니다."
         )
     elif hours is not None:
         answer = (
-            f"입력하신 주 {hours:g}시간은 주 15시간 시간 요건은 충족합니다. "
-            "다만 약정한 근무일의 개근과 근로관계 유지도 확인해야 합니다."
+            f"입력한 주 {hours:g}시간이 4주 평균 소정근로시간이면 시간 요건을 "
+            "충족합니다. 소정근로일 개근도 주요 조건입니다."
         )
     else:
         answer = (
-            "주휴일은 일반적으로 4주 평균 1주 소정근로시간이 15시간 이상인지와 "
-            "약정한 근무일의 개근 여부 등을 확인합니다. 소정근로시간이 15시간 "
-            "미만이면 시간 기준에서 제외되지만, 질문에 적은 실제 근무시간을 "
-            "소정근로시간으로 대신하여 판단하지 않습니다."
+            "주요 조건은 4주 평균 주 소정근로시간 15시간 이상과 소정근로일 개근입니다."
         )
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.WEEKLY_HOLIDAY,
@@ -703,10 +693,7 @@ def _minimum_wage(question: str) -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.MINIMUM_WAGE,
         answer=answer,
-        limitations=(
-            "월급·일급 비교는 소정근로시간과 최저임금에 산입되는 임금 항목을 "
-            "함께 확인해야 하므로 계약서 없이 단정할 수 없습니다."
-        ),
+        limitations="월급·일급은 소정근로시간과 최저임금 산입 임금 항목이 필요합니다.",
         evidence=[
             _evidence(
                 "2026년 최저임금",
@@ -738,10 +725,7 @@ def _break_time(question: str) -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.BREAK_TIME,
         answer=answer,
-        limitations=(
-            "계약서에 기재가 없다는 사실만으로 실제 휴게 부여 여부나 법 위반을 "
-            "확정할 수 없습니다. 실제로 자유롭게 이용한 휴게인지도 확인해야 합니다."
-        ),
+        limitations="실제 휴게 부여와 자유로운 이용 여부는 별도로 확인해야 합니다.",
         evidence=[
             _evidence(
                 "휴게시간 기준",
@@ -819,9 +803,9 @@ def _build_plan_context(signals: set[GeneralQuestionSignal]) -> GeneralPlanConte
         GeneralBlockId.CHECK_REQUIRED,
         GeneralBlockId.NEXT_ACTION,
     ]
-    if stage in (GeneralStage.BEFORE_WORK, GeneralStage.UNKNOWN):
+    if stage == GeneralStage.BEFORE_WORK:
         allowed_blocks.append(GeneralBlockId.BEFORE_WORK)
-    if stage in (GeneralStage.WORK_STARTED, GeneralStage.UNKNOWN):
+    if stage == GeneralStage.WORK_STARTED:
         allowed_blocks.append(GeneralBlockId.WORK_STARTED)
     allowed_actions = [GeneralActionId.STANDARD_FORM, GeneralActionId.GUIDANCE_1350]
     if status != GeneralDocumentStatus.NOT_RECEIVED:
@@ -838,12 +822,12 @@ def _build_plan_context(signals: set[GeneralQuestionSignal]) -> GeneralPlanConte
 
 
 def _deterministic_plan(context: GeneralPlanContext) -> GeneralResponsePlan:
-    blocks = [GeneralBlockId.NEXT_ACTION, GeneralBlockId.CORE_STANDARD]
-    if context.stage in (GeneralStage.BEFORE_WORK, GeneralStage.UNKNOWN):
+    blocks = [GeneralBlockId.CORE_STANDARD]
+    if context.stage == GeneralStage.BEFORE_WORK:
         blocks.append(GeneralBlockId.BEFORE_WORK)
-    if context.stage in (GeneralStage.WORK_STARTED, GeneralStage.UNKNOWN):
+    if context.stage == GeneralStage.WORK_STARTED:
         blocks.append(GeneralBlockId.WORK_STARTED)
-    blocks.append(GeneralBlockId.CHECK_REQUIRED)
+    blocks.extend([GeneralBlockId.NEXT_ACTION, GeneralBlockId.CHECK_REQUIRED])
     action = (
         GeneralActionId.STANDARD_FORM
         if context.document_status == GeneralDocumentStatus.NOT_RECEIVED
@@ -882,11 +866,13 @@ def _validate_plan(
         or GeneralBlockId.BEFORE_WORK in plan.block_ids
     ):
         raise GeneralProviderError("근무 단계와 답변 블록이 맞지 않습니다.")
-    if context.stage == GeneralStage.UNKNOWN and not {
+    if context.stage == GeneralStage.UNKNOWN and {
         GeneralBlockId.BEFORE_WORK,
         GeneralBlockId.WORK_STARTED,
-    }.issubset(plan.block_ids):
-        raise GeneralProviderError("미확인 단계에서는 두 경우를 모두 안내해야 합니다.")
+    } & set(plan.block_ids):
+        raise GeneralProviderError(
+            "미확인 단계에서는 특정 근무 단계를 추정하지 않습니다."
+        )
     expected_sources = {
         source
         for block in plan.block_ids
@@ -923,7 +909,15 @@ def _render_written_contract_plan(
         **_WRITTEN_BLOCKS,
         GeneralBlockId.NEXT_ACTION: _NEXT_ACTION_BLOCKS[context.document_status],
     }
-    return "\n\n".join(blocks[block_id] for block_id in plan.block_ids)
+    ordered = [GeneralBlockId.CORE_STANDARD]
+    if context.stage == GeneralStage.BEFORE_WORK:
+        ordered.append(GeneralBlockId.BEFORE_WORK)
+    elif context.stage == GeneralStage.WORK_STARTED:
+        ordered.append(GeneralBlockId.WORK_STARTED)
+    ordered.append(GeneralBlockId.NEXT_ACTION)
+    return " ".join(
+        blocks[block_id] for block_id in ordered if block_id in plan.block_ids
+    )
 
 
 def _action_from_id(action_id: GeneralActionId) -> ChatAction | None:
@@ -951,8 +945,8 @@ def _written_contract(
         topic=GeneralQuestionTopic.WRITTEN_CONTRACT,
         answer=_render_written_contract_plan(plan, context),
         limitations=(
-            "실제 합의 내용과 계약서를 작성·받지 못한 경위는 질문만으로 확인할 수 "
-            "없습니다. 사장님과 확인이 어렵다면 고용노동부 1350에 문의하세요."
+            "확인: 임금·급여일, 근무·휴게시간, 근무일·휴일, 장소·업무, 계약기간. "
+            "확인이 어렵다면 1350에 문의하세요."
         ),
         evidence=[
             _evidence(
@@ -1061,10 +1055,13 @@ def _severance_pay(
 ) -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.SEVERANCE_PAY,
-        answer="\n\n".join(_SEVERANCE_BLOCKS[block] for block in plan.block_ids),
+        answer=(
+            "계속근로기간이 1년 이상이고 4주 평균 주 소정근로시간이 15시간 이상이면 "
+            "퇴직급여 적용 기준에 해당합니다. 실제 근무 이력과 퇴직 여부도 충족해야 합니다."
+        ),
         limitations=(
-            "지급 대상이나 금액을 확정하지 않습니다. 계약 조건과 실제 근무 이력이 "
-            "다르면 실제 기록을 추가로 확인해야 합니다."
+            "확인: 실제 입·퇴사일, 중단 기간, 기간별 주 근로시간, 실제 퇴직 여부. "
+            "금액은 별도 자료가 필요합니다."
         ),
         evidence=[
             _evidence(
@@ -1092,14 +1089,11 @@ def _annual_leave() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.ANNUAL_LEAVE,
         answer=(
-            "연차 발생 여부를 확인하려면 계속근로기간, 1년간 출근율 또는 1개월 개근, "
-            "상시근로자 수, 주 소정근로시간을 함께 봐야 합니다. 기준에는 1년간 80% "
-            "이상 출근 시 15일, 1년 미만 또는 80% 미만이면 1개월 개근마다 1일이 "
-            "포함됩니다."
+            "1년간 80% 이상 출근하면 연차 15일, 1년 미만이거나 80% 미만이면 "
+            "1개월 개근마다 1일이 발생하는 기준이 있습니다."
         ),
         limitations=(
-            "질문만으로는 실제 계속근로기간, 출근율·월 개근, 상시근로자 수, 사용한 "
-            "연차를 확인할 수 없어 개인의 연차 발생 여부나 일수를 확정하지 않습니다."
+            "확인: 계속근로기간, 출근율·월 개근, 상시근로자 수, 주 근로시간, 사용 연차."
         ),
         evidence=[
             _evidence("연차 유급휴가 기준", "근로기준법 제60조", ANNUAL_LEAVE_URL),
@@ -1120,10 +1114,7 @@ def _dismissal_notice() -> GeneralQuestionResponse:
             "해고예고 기준은 원칙적으로 30일 전에 알리거나 30일분 이상의 통상임금을 "
             "지급하는 내용이며, 계속근로 3개월 미만 등 예외가 있습니다."
         ),
-        limitations=(
-            "실제 해고인지 계약기간 만료인지, 해고 당시 계속근로기간, 예고 여부, "
-            "예외 사유와 통상임금을 확인해야 하므로 지급 대상이나 금액을 확정하지 않습니다."
-        ),
+        limitations="확인: 해고 여부, 계속근로기간, 예고, 예외 사유, 통상임금.",
         evidence=[
             _evidence("해고예고와 예외", "근로기준법 제26조", DISMISSAL_NOTICE_URL)
         ],
@@ -1136,14 +1127,10 @@ def _probation_minimum_wage() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.PROBATION_MINIMUM_WAGE,
         answer=(
-            "수습 중 최저임금 감액을 검토하려면 1년 이상 근로계약인지, 수습 시작 후 "
-            "3개월 이내인지, 단순노무 직종이 아닌지 등을 함께 확인해야 합니다. 감액 "
-            "폭은 최대 10% 범위라는 기준이 있습니다."
+            "1년 이상 계약의 수습 시작 후 3개월 이내이고 단순노무 직종이 아니면 "
+            "최저임금을 최대 10% 감액할 수 있습니다."
         ),
-        limitations=(
-            "수습 약정, 실제 수습 시작일, 직종, 최저임금에 넣어 비교할 임금 항목을 "
-            "확인하기 전에는 감액 적용 여부나 개인의 최저 시급을 확정하지 않습니다."
-        ),
+        limitations="확인: 수습 약정·시작일, 계약기간, 직종, 최저임금 산입 임금.",
         evidence=[
             _evidence("수습근로자 최저임금", "최저임금법 제5조", PROBATION_WAGE_URL),
             _evidence(
@@ -1160,14 +1147,10 @@ def _social_insurance() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.SOCIAL_INSURANCE,
         answer=(
-            "4대보험은 하나의 기준으로 가입 여부를 정하지 않습니다. 산재보험은 적용 "
-            "원칙과 업종 예외, 고용보험은 근로시간과 계속근로·일용근로 예외, 건강보험은 "
-            "월 소정근로시간, 국민연금은 근로기간·시간·소득·근로일수·연령을 각각 확인합니다."
+            "4대보험은 보험별 조건을 충족하면 적용됩니다. 산재는 업종, 고용은 근로시간·기간, "
+            "건강은 월 근로시간, 국민연금은 기간·시간·소득·근로일수·연령을 각각 봅니다."
         ),
-        limitations=(
-            "사업장과 고용형태, 월·주 근로시간, 계속근로기간, 소득, 근로일수와 연령을 "
-            "보험별로 확인해야 하므로 네 보험의 개인 가입 대상을 한꺼번에 확정하지 않습니다."
-        ),
+        limitations="확인: 사업장·고용형태, 근로시간·기간, 소득·근로일수·연령과 보험별 예외.",
         evidence=[
             _evidence("산재보험 적용", "산업재해보상보험법", INDUSTRIAL_ACCIDENT_URL),
             _evidence(
@@ -1189,17 +1172,11 @@ def _minor_documents() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.MINOR_DOCUMENTS,
         answer=(
-            "18세 미만 근로자를 고용할 때 사용자는 연령을 증명하는 가족관계기록사항 "
-            "증명서와 친권자 또는 후견인의 동의서를 사업장에 갖추어 두어야 합니다. "
-            "친권자나 후견인이 근로계약을 대신 체결할 수는 없고, 근로조건을 적은 서면 "
-            "또는 전자문서는 근로자 본인에게 교부해야 합니다. 미성년자는 자신의 임금을 "
-            "독자적으로 청구할 수 있습니다."
+            "18세 미만이면 사업장에 연령을 증명하는 가족관계기록사항에 관한 증명서와 "
+            "친권자·후견인 동의서를 갖춰야 합니다. "
+            "대리 계약은 불가하며, 본인에게 근로조건 문서를 교부하고 본인이 임금을 청구합니다."
         ),
-        limitations=(
-            "추가 확인 항목: 근로자의 실제 나이, 연령 증명서와 동의서 비치 여부, 계약을 "
-            "누가 체결했는지, 근로조건 문서를 본인에게 교부했는지입니다. 이 정보만으로 "
-            "개별 계약의 효력이나 법 위반 여부를 확정하지 않습니다."
-        ),
+        limitations="확인: 실제 나이, 서류 비치, 계약 주체, 근로조건 문서 교부. 계약 효력은 별도 판단입니다.",
         evidence=[
             _evidence(
                 "연소자 증명서와 동의서", "근로기준법 제66조", MINOR_DOCUMENT_URL
@@ -1218,19 +1195,12 @@ def _pregnancy_protection() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.PREGNANCY_PROTECTION,
         answer=(
-            "임신 중에는 시간외근로 제한과 야간·휴일근로의 별도 요건이 있습니다. 임신 "
-            "12주 이내 또는 32주 이후에는 1일 2시간 근로시간 단축 기준이 있습니다. 다만 "
-            "1일 소정근로시간이 8시간 미만이면 단축 후 1일 근로시간이 6시간이 되도록 하는 "
-            "범위에서 단축합니다. 출퇴근 "
-            "시각 변경과 태아검진 시간도 확인할 수 있습니다. 산후 1년이 지나지 않은 여성의 "
-            "시간외근로 상한과 생후 1년 미만 유아가 있는 여성 근로자가 청구할 수 있는 1일 "
-            "2회 각각 30분 이상의 유급 수유시간은 별도 기준입니다."
+            "임신 중 시간외근로는 금지되고 야간·휴일근로에는 별도 요건이 적용됩니다. "
+            "근로자가 신청하면 12주 이내·32주 이후에는 원칙적으로 1일 2시간 단축하며, "
+            "8시간 미만이면 단축 후 6시간이 되도록 합니다. 출퇴근 변경·태아검진, 산후 "
+            "상한·유급 수유시간 기준도 있습니다."
         ),
-        limitations=(
-            "추가 확인 항목: 임신 여부와 주수 또는 출산일, 신청 내용, 실제 근무시간과 근무 "
-            "시각, 야간·휴일근로의 별도 요건 충족 여부입니다. 임신 중 기준과 산후 기준을 "
-            "구분하며 개인의 적용 여부나 위반 여부를 확정하지 않습니다."
-        ),
+        limitations="확인: 임신 주수·출산일, 신청, 실제 근무시각, 야간·휴일근로 요건. 임신·산후 기준은 구분합니다.",
         evidence=[
             _evidence("임신 중 야간·휴일근로", "근로기준법 제70조", MINOR_NIGHT_URL),
             _evidence("산후 시간외근로", "근로기준법 제71조", POSTPARTUM_OVERTIME_URL),
@@ -1251,11 +1221,7 @@ def _disability_accommodation() -> GeneralQuestionResponse:
             "정당한 편의를 제공해야 합니다. 근무시간 조정, 업무 전달 방식, 시설 이용 등 "
             "필요한 편의는 담당 직무와 사업장 상황을 바탕으로 구체적으로 협의할 항목입니다."
         ),
-        limitations=(
-            "추가 확인 항목: 담당 직무, 업무 수행에 필요한 구체적 편의, 현재 시설과 업무 "
-            "방식, 사업주와 협의한 내용입니다. 장애 여부를 추정하거나 채용 의무·차별·위반 "
-            "여부를 확정하지 않습니다."
-        ),
+        limitations="확인: 담당 직무, 필요한 편의, 시설·업무 방식, 협의 내용. 차별·위반 여부는 별도 판단입니다.",
         evidence=[
             _evidence(
                 "장애인 근로자의 정당한 편의",
@@ -1272,15 +1238,10 @@ def _wage_payment() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.WAGE_PAYMENT,
         answer=(
-            "임금은 원칙적으로 통화로 근로자에게 직접 전액 지급하고, 매월 1회 이상 "
-            "일정한 날짜를 정하여 지급합니다. 임금을 지급할 때에는 구성항목, 계산방법과 "
-            "공제 내역 등 법정 사항이 적힌 임금명세서를 서면 또는 전자문서로 교부해야 합니다."
+            "임금은 원칙적으로 매월 1회 이상 정한 날에 통화로 직접 전액 지급해야 합니다. "
+            "지급할 때 구성항목·계산방법·공제 내역을 적은 임금명세서도 교부해야 합니다."
         ),
-        limitations=(
-            "추가 확인 항목: 계약서의 지급일과 지급방법, 실제 입금일과 지급액, 공제 사유, "
-            "임금명세서 교부 여부입니다. 법령 또는 단체협약에 따른 예외와 실제 미지급·체불 "
-            "여부는 별도로 확인해야 하며 여기서 금액이나 위반 여부를 확정하지 않습니다."
-        ),
+        limitations="확인: 계약 지급일·방법, 실제 입금·공제, 명세서 교부와 법령·단체협약상 예외.",
         evidence=[
             _evidence("임금 지급 원칙", "근로기준법 제43조", WAGE_PAYMENT_URL),
             _evidence("임금명세서 교부", "근로기준법 제48조", WAGE_STATEMENT_URL),
@@ -1298,11 +1259,7 @@ def _post_employment_settlement() -> GeneralQuestionResponse:
             "14일 이내에 임금, 보상금과 그 밖의 금품을 지급해야 합니다. 특별한 사정이 "
             "있는 경우에는 당사자 사이의 합의로 지급기일을 연장할 수 있습니다."
         ),
-        limitations=(
-            "추가 확인 항목: 실제 퇴직일, 지급 대상 금품의 종류와 금액, 이미 지급된 내역, "
-            "특별한 사정과 기일 연장 합의 여부 및 합의한 지급일입니다. 계약 종료 예정일을 "
-            "실제 퇴직일로 추정하지 않으며 체불·위법 여부, 지급액이나 지연이자를 확정·계산하지 않습니다."
-        ),
+        limitations="확인: 실제 퇴직일, 금품 종류·금액·지급내역, 특별한 사정, 연장 합의와 지급일.",
         evidence=[
             _evidence(
                 "퇴직 후 금품 지급기한",
@@ -1342,10 +1299,7 @@ def _minor_work(question: str) -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.MINOR_WORK,
         answer=answer,
-        limitations=(
-            "나이, 계약기간, 실제 근무시각과 고용노동부장관 인가 여부 등에 따라 "
-            "달라질 수 있으므로 개인별 허용 여부를 단정하지 않습니다."
-        ),
+        limitations="확인: 나이, 계약기간, 실제 근무시각, 당사자 동의와 고용노동부장관 인가.",
         evidence=[
             _evidence(
                 "18세 미만 근로시간",
@@ -1367,14 +1321,10 @@ def _extra_work() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.EXTRA_WORK,
         answer=(
-            "근로기준법 제56조는 연장·야간·휴일근로의 가산임금을 규정하고, "
-            "야간근로는 22시부터 06시까지의 근로를 말합니다."
+            "적용 대상 사업장에서 연장·야간·휴일근로를 하면 가산임금 기준이 적용됩니다. "
+            "야간근로는 22시부터 06시까지입니다."
         ),
-        limitations=(
-            "상시 근로자 수, 실제 근무시각, 휴일 여부와 합의 내용에 따라 적용이 "
-            "달라집니다. 특히 5인 미만 사업장은 적용 규정이 다를 수 있어 계약서와 "
-            "사업장 정보를 확인하기 전에는 지급 여부나 금액을 계산하지 않습니다."
-        ),
+        limitations="확인: 상시근로자 수, 실제 근무시각, 휴일, 합의. 5인 미만은 적용 규정이 다를 수 있습니다.",
         evidence=[
             _evidence(
                 "가산임금 기준",
@@ -1395,15 +1345,8 @@ def _extra_work() -> GeneralQuestionResponse:
 def _out_of_scope() -> GeneralQuestionResponse:
     return GeneralQuestionResponse(
         topic=GeneralQuestionTopic.OUT_OF_SCOPE,
-        answer=(
-            "이 질문은 일반 기준만으로 판단할 수 없습니다. 개별 사실관계에 따라 "
-            "답이 달라질 수 있어 고용노동부 고객상담센터 1350 또는 전문가에게 "
-            "확인해 주세요."
-        ),
-        limitations=(
-            "해고·신고·분쟁의 결론, 실제 근무기록과 당사자 진술이 필요한 판단은 "
-            "지원하지 않습니다."
-        ),
+        answer="개별 사실과 기록이 필요한 질문이어서 일반 기준만으로 결론 낼 수 없습니다. 1350 또는 전문가에게 확인하세요.",
+        limitations="해고·신고·분쟁과 실제 근무기록이 필요한 판단은 지원하지 않습니다.",
         evidence=[
             ChatEvidence(
                 kind=ChatEvidenceKind.OFFICIAL_GUIDANCE,
@@ -1434,29 +1377,28 @@ def _ensure_direct_answer(
 
     missing_by_topic = {
         GeneralQuestionTopic.SEVERANCE_PAY: (
-            "퇴직금 금액을 계산하려면 실제 퇴직일, 퇴직 전 3개월의 임금 총액과 "
-            "그 기간의 총일수, 전체 계속근로기간, 기간별 주 소정근로시간이 필요합니다. "
-            "현재 질문에는 이 값이 없어 금액을 계산할 수 없습니다."
+            "퇴직금 계산에는 실제 퇴직일, 직전 3개월 임금 총액·총일수, 계속근로기간과 "
+            "기간별 주 근로시간이 필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
         GeneralQuestionTopic.EXTRA_WORK: (
-            "연장·야간·휴일근로 수당 금액을 계산하려면 통상시급, 날짜별 실제 근무 시작·종료·휴게시간, "
-            "휴일 여부와 사업장 상시근로자 수가 필요합니다. 현재 질문에는 이 값이 없어 금액을 계산할 수 없습니다."
+            "가산수당 계산에는 통상시급, 날짜별 실제 시작·종료·휴게시간, 휴일 여부와 "
+            "상시근로자 수가 필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
         GeneralQuestionTopic.ANNUAL_LEAVE: (
-            "연차 관련 금액을 계산하려면 어떤 금액을 묻는지(미사용 연차수당 등), 남은 연차 일수, "
-            "통상임금 산정 자료와 퇴직·정산 시점이 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+            "연차 금액 계산에는 수당 종류, 남은 연차, 통상임금 자료와 퇴직·정산 시점이 "
+            "필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
         GeneralQuestionTopic.DISMISSAL_NOTICE: (
-            "해고예고수당 금액을 계산하려면 30일분 통상임금 산정에 필요한 임금 항목과 근로시간, "
-            "실제 해고일 및 예고일, 법정 예외 해당 여부가 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+            "해고예고수당 계산에는 통상임금 자료, 근로시간, 실제 해고일·예고일과 예외 "
+            "해당 여부가 필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
         GeneralQuestionTopic.WAGE_PAYMENT: (
-            "받아야 할 임금 금액을 계산하려면 임금 형태와 통상시급, 실제 근무기록, 이미 지급된 금액과 "
-            "공제 내역이 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+            "임금 계산에는 임금 형태·통상시급, 실제 근무기록, 지급액과 공제 내역이 "
+            "필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
         GeneralQuestionTopic.POST_EMPLOYMENT_SETTLEMENT: (
-            "퇴직 후 정산 금액을 계산하려면 미지급 임금·수당의 종류별 산정 자료, 실제 퇴직일, "
-            "이미 지급된 내역과 지급기일 연장 합의가 필요합니다. 현재 질문만으로는 금액을 계산할 수 없습니다."
+            "퇴직 후 정산 계산에는 금품별 산정 자료, 실제 퇴직일, 지급 내역과 지급기일 "
+            "연장 합의가 필요합니다. 현재 질문만으로는 계산할 수 없습니다."
         ),
     }
     direct = missing_by_topic.get(response.topic)

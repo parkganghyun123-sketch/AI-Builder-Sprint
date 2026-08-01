@@ -73,7 +73,7 @@ GENERAL_PLAN_INSTRUCTIONS = """당신은 FairSign 일반 질문 설명 계획 �
 입력은 질문 원문이 아니라 비식별 신호, 단계, 문서 상태와 승인 ID 목록입니다.
 - 법적 판단, 계산, 문장 작성을 하지 마세요.
 - allowed_block_ids에서 필요한 블록을 골라 이해하기 좋은 순서로 배열하세요.
-- WRITTEN_CONTRACT 주제에서 stage가 UNKNOWN이면 BEFORE_WORK와 WORK_STARTED를 모두 포함해 두 상황을 구분하세요.
+- WRITTEN_CONTRACT에서 stage가 UNKNOWN이면 BEFORE_WORK와 WORK_STARTED를 넣지 말고, 핵심 의무와 중립적인 다음 행동만 고르세요.
 - source_ids는 선택 블록에 매핑된 출처 ID의 정확한 합집합이어야 합니다.
 - action_id는 allowed_action_ids 중 하나만 고르세요.
 - 입력에 없는 ID, 필드, 자유 텍스트를 만들지 마세요.
