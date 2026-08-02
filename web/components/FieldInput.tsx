@@ -109,7 +109,7 @@ export function FieldInput({
           {field.source_text && (
             <span className="text-xs leading-relaxed text-ink-muted">
               <span aria-hidden="true">📄 </span>
-              계약서 근거: “{field.source_text}”
+              계약서에 적힌 내용: “{field.source_text}”
             </span>
           )}
         </div>

@@ -61,10 +61,10 @@ export default function ResultPage() {
     return (
       <ScreenShell
         step={3}
-        title="검증 결과 불러오는 중"
-        description="검토 결과를 불러오는 중이에요."
+        title="확인 결과 불러오는 중"
+        description="계약 조건 확인 결과를 불러오는 중이에요."
       >
-        <SkeletonCard label="검증 결과를 불러오는 중" lines={4} />
+        <SkeletonCard label="확인 결과를 불러오는 중" lines={4} />
         <SkeletonCard lines={3} />
       </ScreenShell>
     );
@@ -74,8 +74,8 @@ export default function ResultPage() {
     return (
       <ScreenShell
         step={3}
-        title="표시할 검증 결과가 없어요"
-        description="현재 브라우저 탭에서 계약 조건을 다시 확인하고 검증해 주세요."
+        title="표시할 확인 결과가 없어요"
+        description="계약 조건을 다시 확인해 주세요."
       >
         <Card className="flex flex-col gap-3">
           <ButtonLink href="/review" className="w-full">
@@ -111,7 +111,7 @@ export default function ResultPage() {
   return (
     <ScreenShell
       step={3}
-      title="검증 결과"
+      title="계약 조건 확인 결과"
       description="직접 확인한 조건을 FairSign이 다루는 법정 기준과 비교한 결과예요."
     >
       <Card className="text-center">
@@ -144,7 +144,7 @@ export default function ResultPage() {
             </dd>
           </div>
           <div className="rounded-field bg-brand-tint/60 p-4">
-            <dt className="font-bold text-ink-muted">소정근로 시각</dt>
+            <dt className="font-bold text-ink-muted">계약상 근무시간</dt>
             <dd className="mt-1 font-extrabold text-ink">
               {start && end ? `${start} ~ ${end}` : "입력되지 않음"}
             </dd>
@@ -156,7 +156,7 @@ export default function ResultPage() {
             </dd>
           </div>
           <div className="rounded-field bg-brand-tint/60 p-4">
-            <dt className="font-bold text-ink-muted">검증 주체</dt>
+            <dt className="font-bold text-ink-muted">확인 방법</dt>
             <dd className="mt-1 font-extrabold text-ink">
               정해진 규칙으로 계산
             </dd>

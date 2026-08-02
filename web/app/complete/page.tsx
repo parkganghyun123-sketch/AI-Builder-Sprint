@@ -7,6 +7,7 @@ import { DocumentStatusBadge } from "@/components/DocumentStatusBadge";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
 import { Button, ButtonLink, Card } from "@/components/ui";
 import { getSignStatus } from "@/lib/api";
+import { DOCUMENT_STATUS_META } from "@/lib/constants";
 import { readSession, updateSession } from "@/lib/session";
 import type { SignStatusResponse } from "@/lib/types";
 
@@ -104,7 +105,7 @@ function CompleteContent() {
         description={
           fromArchive
             ? "이 문서를 찾지 못했어요. 보관함에서 다시 선택해 주세요."
-            : "현재 브라우저 탭에서 서명 요청을 먼저 보내 주세요."
+            : "서명 요청을 먼저 보내 주세요."
         }
       >
         <ButtonLink href={fromArchive ? "/archive" : "/sign"} className="w-full">
@@ -125,12 +126,12 @@ function CompleteContent() {
       step={fromArchive ? 6 : 5}
       title={
         isCompleted
-          ? "서명 상태가 체결 완료로 확인됐어요"
+          ? "계약 체결이 완료됐어요"
           : isFailed
             ? "서명 요청 상태를 확인해 주세요"
-            : "서명 진행 상태"
+            : "서명 진행 상황"
       }
-      description="모두싸인의 실제 서명 상태를 5초마다 확인하고 있어요."
+      description="서명이 끝났는지 자동으로 확인하고 있어요."
     >
       {isCompleted && (
         <Card className="text-center">
@@ -142,7 +143,7 @@ function CompleteContent() {
           </p>
           <p className="mt-2 text-sm leading-relaxed text-ink-muted">
             아래 버튼으로 체결된 문서를 받을 수 있어요.
-            발송 이력과 최신 서명 상태는 페어사인 보관함에서도 다시 확인할 수
+            보낸 기록과 최신 서명 상황은 페어사인 보관함에서도 다시 확인할 수
             있습니다.
           </p>
         </Card>
@@ -186,17 +187,20 @@ function CompleteContent() {
                 ))}
               </ul>
               <p className="mt-3 text-xs leading-relaxed text-ink-muted">
-                이 정보는 저장하지 않고 모두싸인에서 그때그때 조회합니다.
+                화면을 열 때마다 최신 서명 상황을 확인하며, 페어사인에 따로
+                보관하지 않습니다.
               </p>
             </Card>
           )}
 
           <Card>
-            <h2 className="text-sm font-extrabold text-ink">실제 조회 결과</h2>
+            <h2 className="text-sm font-extrabold text-ink">현재 서명 현황</h2>
             <dl className="mt-3 flex flex-col gap-2 text-sm">
               <div className="flex justify-between gap-3">
                 <dt className="text-ink-muted">서명 상태</dt>
-                <dd className="font-bold text-ink">{status.status}</dd>
+                <dd className="font-bold text-ink">
+                  {DOCUMENT_STATUS_META[status.status].title}
+                </dd>
               </div>
               <div className="flex justify-between gap-3">
                 <dt className="text-ink-muted">서명 인원</dt>
@@ -230,14 +234,14 @@ function CompleteContent() {
             onClick={() => setRetry((value) => value + 1)}
             disabled={loading}
           >
-            다시 조회
+            다시 확인
           </Button>
         </div>
       )}
 
       {!error && loading && status && !isCompleted && !isFailed && (
         <p aria-live="polite" className="text-center text-sm text-ink-muted">
-          상태를 다시 확인하는 중
+          진행 상황을 다시 확인하는 중
         </p>
       )}
 
@@ -249,7 +253,7 @@ function CompleteContent() {
             rel="noreferrer"
             className="inline-flex min-h-12 items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-bold text-white shadow-cta transition hover:bg-brand-deep focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
           >
-            체결 문서 다운로드
+            체결 문서 내려받기
           </a>
         )}
 
@@ -258,14 +262,15 @@ function CompleteContent() {
                버튼을 감추기만 하면 "다운로드가 안 되는 서비스"로 보인다. */}
         {isCompleted && !status?.download_url && (
           <p className="rounded-field border border-amber-300 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950">
-            다운로드 주소는 유효시간이 짧아 지금은 만료된 상태입니다.
+            문서 내려받기 버튼의 사용 시간이 지났어요. 아래 버튼을 눌러 새로
+            받아 주세요.
             <Button
               variant="secondary"
               className="mt-3 w-full"
               onClick={() => setRetry((value) => value + 1)}
               disabled={loading}
             >
-              다시 조회해서 링크 받기
+              내려받기 버튼 새로 받기
             </Button>
           </p>
         )}

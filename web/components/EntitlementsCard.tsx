@@ -126,8 +126,9 @@ export function EntitlementsCard() {
         {/* ⚠️ 이 문장을 지우지 말 것. 밝히지 않으면 사용자가 선택을 망설인다. */}
         <p className="text-xs leading-relaxed text-ink-muted">
           <span aria-hidden="true">🔒 </span>
-          선택한 내용은 <strong>이 화면에서만</strong> 쓰이고 서버로 보내지
-          않습니다. 저희는 회원님이 임신 중인지, 장애가 있는지 알지 못합니다.
+          선택한 내용은 <strong>이 화면의 안내를 고르는 데만</strong> 쓰이고 따로
+          보관하지 않습니다. 저희에게 전달되지 않으므로 회원님이 임신 중인지,
+          장애가 있는지 알지 못합니다.
         </p>
       </fieldset>
 

@@ -82,7 +82,7 @@ function CallbackContent() {
   }
 
   return (
-    <ScreenShell title="카카오 로그인 처리 중">
+    <ScreenShell title="카카오로 로그인하는 중">
       <Card>
         {error ? (
           <div role="alert" className="flex flex-col gap-3">

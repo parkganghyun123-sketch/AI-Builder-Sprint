@@ -119,8 +119,7 @@ export const DOCUMENT_STATUS_META: Record<
   REVIEW_REQUESTED: {
     title: "근로조건 확인 요청서",
     icon: "📨",
-    message:
-      "내가 입력한 내용입니다. 사장님 확인 전이며, 체결 완료 상태가 확인되지 않았습니다.",
+    message: "내가 입력한 내용입니다. 사장님이 아직 확인하지 않았고 계약 체결도 끝나지 않았습니다.",
     className: "bg-amber-50 text-amber-900 border-amber-300",
     watermark: true,
   },
@@ -132,7 +131,7 @@ export const DOCUMENT_STATUS_META: Record<
     watermark: false,
   },
   ON_PROCESSING: {
-    title: "처리 중",
+    title: "서명 요청 준비 중",
     icon: "⏳",
     message: "서명 요청을 처리하고 있습니다.",
     className: "bg-sky-50 text-sky-700 border-sky-200",
@@ -148,7 +147,7 @@ export const DOCUMENT_STATUS_META: Record<
   COMPLETED: {
     title: "체결 완료",
     icon: "✅",
-    message: "서명 제공자의 체결 완료 상태가 확인되었습니다.",
+    message: "두 사람의 서명이 모두 끝난 것이 확인됐습니다.",
     className: "bg-emerald-50 text-emerald-900 border-emerald-300",
     watermark: false,
   },
@@ -160,7 +159,7 @@ export const DOCUMENT_STATUS_META: Record<
     watermark: false,
   },
   PROCESSING_FAILED: {
-    title: "처리 실패",
+    title: "서명 요청을 보내지 못함",
     icon: "⚠️",
     message: "서명 처리에 실패했습니다. 다시 시도해 주세요.",
     className: "bg-red-50 text-red-900 border-red-300",
