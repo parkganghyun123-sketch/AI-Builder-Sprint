@@ -65,6 +65,50 @@ body {
   color: transparent;
 }
 
+/* 챗봇 실행 버튼 — 페어사인 청록 계열 안에서 별이 천천히 떠오르며 반짝인다. */
+@keyframes fairsign-chat-float {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-2deg);
+  }
+  50% {
+    transform: translateY(-2px) rotate(2deg);
+  }
+}
+
+@keyframes fairsign-chat-twinkle {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: scale(0.82) rotate(-8deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.12) rotate(8deg);
+  }
+}
+
+.fairsign-chat-sparkle-shell {
+  animation: fairsign-chat-float 3.2s ease-in-out infinite;
+}
+
+.fairsign-chat-sparkle {
+  filter: drop-shadow(0 1px 2px rgba(0, 88, 88, 0.16));
+  transform-origin: center;
+}
+
+.fairsign-chat-sparkle-main {
+  animation: fairsign-chat-twinkle 2.4s ease-in-out infinite;
+}
+
+.fairsign-chat-sparkle-side {
+  animation: fairsign-chat-twinkle 1.9s ease-in-out -0.65s infinite;
+}
+
+.fairsign-chat-sparkle-small {
+  animation: fairsign-chat-twinkle 2.1s ease-in-out -1.2s infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   html {
     scroll-behavior: auto;

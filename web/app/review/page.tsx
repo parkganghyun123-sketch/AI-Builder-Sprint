@@ -709,8 +709,6 @@ function ReviewContent() {
         이어가는 동안만 이 기기에 잠시 보관해요.
       </p>
 
-      {!isManual && workerProtectionCard}
-
       {SECTIONS.map((section) => (
         <Card key={section.title} className="flex flex-col gap-5">
           <div>
@@ -936,7 +934,7 @@ function ReviewContent() {
         </div>
       )}
 
-      {isManual && workerProtectionCard}
+      {workerProtectionCard}
 
       <div className="flex flex-col gap-2">
         <Button

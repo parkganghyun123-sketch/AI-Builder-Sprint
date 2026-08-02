@@ -152,12 +152,43 @@ export function GeneralQuestionAssistant() {
 
       <button
         aria-expanded={open}
-        aria-label="페어사인에게 질문하기"
-        className="flex h-14 w-14 items-center justify-center rounded-full bg-brand text-2xl text-white shadow-2xl transition hover:scale-105 hover:bg-brand-deep focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        aria-label={open ? "질문 창 닫기" : "페어사인에게 질문하기"}
+        className="group flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle_at_35%_25%,#8BE8D3_0%,#22C7A8_46%,#006A6A_100%)] p-2 shadow-[0_14px_32px_rgba(0,106,106,0.28)] transition hover:scale-105 hover:shadow-[0_16px_36px_rgba(0,106,106,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
-        <span aria-hidden="true">?</span>
+        <span
+          aria-hidden="true"
+          className="fairsign-chat-sparkle-shell relative block h-full w-full rounded-full bg-white shadow-[inset_0_0_0_1px_rgba(0,106,106,0.08),0_3px_10px_rgba(0,88,88,0.18)]"
+        >
+          <svg
+            className="fairsign-chat-sparkle fairsign-chat-sparkle-main absolute left-[7px] top-[5px] h-7 w-7 text-[#22AFA2]"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 1.5c.8 5.9 4.6 9.7 10.5 10.5-5.9.8-9.7 4.6-10.5 10.5C11.2 16.6 7.4 12.8 1.5 12 7.4 11.2 11.2 7.4 12 1.5Z"
+              fill="currentColor"
+            />
+          </svg>
+          <svg
+            className="fairsign-chat-sparkle fairsign-chat-sparkle-side absolute right-[6px] top-[15px] h-5 w-5 text-brand-deep"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 1.5c.8 5.9 4.6 9.7 10.5 10.5-5.9.8-9.7 4.6-10.5 10.5C11.2 16.6 7.4 12.8 1.5 12 7.4 11.2 11.2 7.4 12 1.5Z"
+              fill="currentColor"
+            />
+          </svg>
+          <svg
+            className="fairsign-chat-sparkle fairsign-chat-sparkle-small absolute bottom-[6px] left-[17px] h-4 w-4 text-[#67DCC2]"
+            viewBox="0 0 24 24"
+          >
+            <path
+              d="M12 1.5c.8 5.9 4.6 9.7 10.5 10.5-5.9.8-9.7 4.6-10.5 10.5C11.2 16.6 7.4 12.8 1.5 12 7.4 11.2 11.2 7.4 12 1.5Z"
+              fill="currentColor"
+            />
+          </svg>
+        </span>
       </button>
     </div>
   );
