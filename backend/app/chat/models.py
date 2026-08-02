@@ -44,6 +44,7 @@ def natural_template_uses_approved_connectives(template: str) -> bool:
 
 
 class ChatIntent(str, Enum):
+    SMALL_TALK = "SMALL_TALK"
     FIELD_LOOKUP = "FIELD_LOOKUP"
     CALCULATION = "CALCULATION"
     MISSING_CLAUSE = "MISSING_CLAUSE"
@@ -52,6 +53,7 @@ class ChatIntent(str, Enum):
 
 
 class ChatTopic(str, Enum):
+    SMALL_TALK = "SMALL_TALK"
     WEEKLY_HOLIDAY = "WEEKLY_HOLIDAY"
     MINIMUM_WAGE = "MINIMUM_WAGE"
     BREAK_TIME = "BREAK_TIME"

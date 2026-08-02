@@ -32,6 +32,11 @@ from app.chat.models import (
     GenerationFactKind,
     NaturalRealizationInput,
 )
+from app.chat.small_talk import (
+    SMALL_TALK_SUGGESTIONS,
+    classify_small_talk,
+    small_talk_answer,
+)
 from app.config import settings
 from app.schemas import (
     ChatAction,
@@ -616,6 +621,9 @@ def _route_general_question(
         )
     ):
         return GeneralQuestionTopic.OUT_OF_SCOPE, None
+
+    if classify_small_talk(question) is not None:
+        return GeneralQuestionTopic.SMALL_TALK, None
 
     glossary_match = retrieve_glossary_knowledge(question)
     if glossary_match is not None:
@@ -1443,6 +1451,19 @@ def _out_of_scope() -> GeneralQuestionResponse:
     )
 
 
+def _small_talk(question: str) -> GeneralQuestionResponse:
+    kind = classify_small_talk(question)
+    if kind is None:
+        return _out_of_scope()
+    return GeneralQuestionResponse(
+        topic=GeneralQuestionTopic.SMALL_TALK,
+        answer=small_talk_answer(kind),
+        limitations="근로계약과 노동 기준 안내를 중심으로 도와드려요.",
+        evidence=[],
+        suggestions=SMALL_TALK_SUGGESTIONS,
+    )
+
+
 def _ensure_direct_answer(
     question: str,
     response: GeneralQuestionResponse,
@@ -1494,6 +1515,7 @@ def _ensure_direct_answer(
 
 
 _HANDLERS = {
+    GeneralQuestionTopic.SMALL_TALK: _small_talk,
     GeneralQuestionTopic.WEEKLY_HOLIDAY: _weekly_holiday,
     GeneralQuestionTopic.MINIMUM_WAGE: _minimum_wage,
     GeneralQuestionTopic.BREAK_TIME: _break_time,
@@ -1581,7 +1603,10 @@ async def answer_general_question(
     deterministic = _attach_retrieval(
         _ensure_direct_answer(normalized, response), match
     )
-    if topic == GeneralQuestionTopic.OUT_OF_SCOPE:
+    if topic in {
+        GeneralQuestionTopic.OUT_OF_SCOPE,
+        GeneralQuestionTopic.SMALL_TALK,
+    }:
         return deterministic
     return await _naturalize_general_response(
         deterministic,

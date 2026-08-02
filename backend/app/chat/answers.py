@@ -13,6 +13,11 @@ from app.chat.models import (
     ConditionGroups,
     EvidenceKind,
 )
+from app.chat.small_talk import (
+    SMALL_TALK_SUGGESTIONS,
+    classify_small_talk,
+    small_talk_answer,
+)
 from app.schemas import (
     CheckResult,
     CheckStatus,
@@ -44,6 +49,20 @@ COMMON_SUGGESTIONS = [
     "계약서에 빠진 내용이 있나요?",
     "2026년 최저임금은 얼마인가요?",
 ]
+
+
+def build_small_talk_response(question: str) -> ChatResponse | None:
+    kind = classify_small_talk(question)
+    if kind is None:
+        return None
+    return ChatResponse(
+        intent=ChatIntent.SMALL_TALK,
+        topic=ChatTopic.SMALL_TALK,
+        answer=small_talk_answer(kind),
+        evidence=[],
+        limitation="근로계약과 노동 기준 안내를 중심으로 도와드려요.",
+        suggested_questions=SMALL_TALK_SUGGESTIONS,
+    )
 
 
 def _is_amount_question(question: str | None) -> bool:

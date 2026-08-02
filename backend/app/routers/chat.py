@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException
 
 from app.chat.answers import (
     build_response,
+    build_small_talk_response,
     is_fail_closed_question,
     out_of_scope_response,
 )
@@ -32,6 +33,10 @@ async def chat(body: ChatRequest) -> ChatResponse:
 
     if is_fail_closed_question(body.question):
         return out_of_scope_response()
+
+    small_talk = build_small_talk_response(body.question)
+    if small_talk is not None:
+        return small_talk
 
     features = extract_safe_features(body.question)
     if features is None:

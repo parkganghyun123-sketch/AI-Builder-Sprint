@@ -917,6 +917,9 @@ def test_계약서_없는_주요_노동_질문을_주제별로_답한다(questio
     body = res.json()
     assert body["topic"] == topic
     assert expected in body["answer"]
+    if topic == "WEEKLY_HOLIDAY":
+        assert "소정근로일 개근" in body["answer"]
+        assert "해당 주까지 근로관계 유지" in body["limitations"]
 
 
 @pytest.mark.parametrize(
@@ -939,6 +942,23 @@ def test_짧은_후속_질문은_직전_주제_문맥을_이어받는다(
     body = res.json()
     assert body["topic"] == topic
     assert expected in body["answer"]
-    if topic == "WEEKLY_HOLIDAY":
-        assert "소정근로일 개근" in body["answer"]
-        assert "해당 주까지 근로관계 유지" in body["limitations"]
+
+
+@pytest.mark.parametrize(
+    "path,payload,expected_fragment",
+    [
+        ("/questions/general", {"question": "안녕하세요"}, "근로계약"),
+        (
+            "/contracts/chat",
+            {"question": "감사합니다", "terms": _terms()},
+            "다행이에요",
+        ),
+    ],
+)
+def test_두_챗봇_경로에서_일상대화에_응답한다(path, payload, expected_fragment):
+    res = client.post(path, json=payload)
+
+    assert res.status_code == 200
+    body = res.json()
+    assert expected_fragment in body["answer"]
+    assert body["evidence"] == []
