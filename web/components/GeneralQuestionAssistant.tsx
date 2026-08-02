@@ -55,11 +55,12 @@ export function GeneralQuestionAssistant() {
   }
 
   return (
-    <div className="fixed bottom-5 right-5 z-30 sm:bottom-7 sm:right-7">
+    <>
       {open && (
         <section
+          id="general-question-dialog"
           aria-labelledby="general-question-title"
-          className="mb-3 flex max-h-[min(42rem,calc(100vh-7rem))] w-[min(24rem,calc(100vw-2.5rem))] flex-col rounded-card border border-brand-line bg-white p-5 shadow-2xl"
+          className="fixed bottom-24 right-5 z-50 flex max-h-[min(42rem,calc(100dvh-7rem))] w-[min(24rem,calc(100vw-2.5rem))] flex-col rounded-card border border-brand-line bg-white p-5 shadow-2xl sm:bottom-28 sm:right-7"
           role="dialog"
         >
           <div className="flex items-start justify-between gap-3">
@@ -151,9 +152,10 @@ export function GeneralQuestionAssistant() {
       )}
 
       <button
+        aria-controls="general-question-dialog"
         aria-expanded={open}
         aria-label={open ? "질문 창 닫기" : "페어사인에게 질문하기"}
-        className="group flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle_at_35%_25%,#8BE8D3_0%,#22C7A8_46%,#006A6A_100%)] p-2 shadow-[0_14px_32px_rgba(0,106,106,0.28)] transition hover:scale-105 hover:shadow-[0_16px_36px_rgba(0,106,106,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand"
+        className="group fixed bottom-5 right-5 z-[60] flex h-16 w-16 items-center justify-center rounded-full bg-[radial-gradient(circle_at_35%_25%,#8BE8D3_0%,#22C7A8_46%,#006A6A_100%)] p-2 shadow-[0_14px_32px_rgba(0,106,106,0.28)] transition hover:scale-105 hover:shadow-[0_16px_36px_rgba(0,106,106,0.36)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand sm:bottom-7 sm:right-7"
         onClick={() => setOpen((current) => !current)}
         type="button"
       >
@@ -190,6 +192,6 @@ export function GeneralQuestionAssistant() {
           </svg>
         </span>
       </button>
-    </div>
+    </>
   );
 }
