@@ -123,7 +123,7 @@ export default function ResultPage() {
             ? `다시 확인할 항목이 ${problems}건 있습니다`
             : unknowns > 0
               ? `정보 부족으로 확인하지 못한 항목이 ${unknowns}건 있습니다`
-              : "FairSign이 지원하는 항목에서 기준 미달·누락을 찾지 못했습니다"}
+              : "확인한 항목이 모두 기준을 충족했습니다"}
         </p>
         <p className="mt-2 text-sm leading-relaxed text-ink-muted">
           상태는 법률 결론이 아니며, 각 항목의 적용 기준일·근거·계산식과
