@@ -57,3 +57,9 @@ Thumbs.db
 *.log
 npm-debug.log*
 yarn-error.log*
+
+# PowerPoint 임시 잠금 파일
+~$*
+
+# 발표자료 원본(영상 6.5MB 포함) — 심사는 PDF로 본다
+FairSign_발표자료 수정본.pptx
