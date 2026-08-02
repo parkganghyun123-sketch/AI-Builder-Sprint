@@ -107,6 +107,7 @@ export const contractChatResponseSchema = z.object({
 });
 
 export const generalQuestionTopicSchema = z.enum([
+  "SMALL_TALK",
   "WEEKLY_HOLIDAY",
   "MINIMUM_WAGE",
   "BREAK_TIME",
@@ -363,6 +364,7 @@ export const archiveListSchema = z.array(archiveItemSchema);
 // ============================================================
 
 export const groundedChatIntentSchema = z.enum([
+  "SMALL_TALK",
   "FIELD_LOOKUP",
   "CALCULATION",
   "MISSING_CLAUSE",
