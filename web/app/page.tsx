@@ -229,9 +229,9 @@ export default function HomePage() {
           <Image
             src="/brand/fairsign-mark-transparent.png"
             alt=""
-            width={27}
-            height={14}
-            className="h-3.5 w-[27px] shrink-0 object-contain"
+            width={38}
+            height={20}
+            className="h-5 w-[38px] shrink-0 object-contain"
           />
           페어사인 · 근로계약 확인 도우미
         </p>

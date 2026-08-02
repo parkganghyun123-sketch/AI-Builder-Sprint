@@ -97,9 +97,9 @@ export function BrandHeader() {
           <Image
             src="/brand/fairsign-mark-transparent.png"
             alt=""
-            width={42}
-            height={22}
-            className="h-[22px] w-[42px] shrink-0 object-contain"
+            width={62}
+            height={32}
+            className="h-7 w-[54px] shrink-0 object-contain sm:h-8 sm:w-[62px]"
             priority
           />
           페어사인
