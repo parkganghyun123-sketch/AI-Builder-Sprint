@@ -15,6 +15,8 @@ const TIPS = [
 
 export default function UploadPage() {
   const inputId = useId();
+  // 카메라 전용 입력은 별도 id 가 필요하다. 같은 id 면 label 이 첫 input 만 연다.
+  const cameraInputId = useId();
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -129,21 +131,48 @@ export default function UploadPage() {
           </p>
         </div>
 
+        {/*
+          입력을 둘로 나눈다.
+
+          ⚠️ capture 는 "카메라를 선택지로 제공" 이 아니라 "카메라만 써라" 는 지시다.
+             하나의 input 에 capture 를 붙이면 iOS 사파리가 사진 보관함과
+             파일 선택을 숨기고 카메라만 연다. 실제로 아이폰에서 재현됐다.
+
+             그래서 기본 입력에는 capture 를 넣지 않고(보관함·파일·카메라 모두 나옴),
+             바로 촬영하고 싶은 사람을 위한 버튼을 따로 둔다.
+        */}
         <input
           id={inputId}
           type="file"
           accept="image/jpeg,image/png,application/pdf"
+          className="sr-only"
+          disabled={loading}
+          onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
+        />
+        <input
+          id={cameraInputId}
+          type="file"
+          accept="image/*"
           capture="environment"
           className="sr-only"
           disabled={loading}
           onChange={(event) => selectFile(event.target.files?.[0] ?? null)}
         />
-        <label
-          htmlFor={inputId}
-          className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-full border border-slate-400 bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-brand focus-within:outline focus-within:outline-2 focus-within:outline-brand"
-        >
-          {file ? "다시 선택" : "사진 선택 / 촬영"}
-        </label>
+
+        <div className="flex flex-wrap justify-center gap-2">
+          <label
+            htmlFor={inputId}
+            className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-full border border-slate-400 bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-brand focus-within:outline focus-within:outline-2 focus-within:outline-brand"
+          >
+            {file ? "다시 선택" : "사진 · 파일 선택"}
+          </label>
+          <label
+            htmlFor={cameraInputId}
+            className="inline-flex min-h-12 cursor-pointer items-center justify-center rounded-full border border-slate-400 bg-white px-6 py-3 text-sm font-bold text-ink transition hover:border-brand focus-within:outline focus-within:outline-2 focus-within:outline-brand sm:hidden"
+          >
+            바로 촬영
+          </label>
+        </div>
 
         <Button
           onClick={upload}
