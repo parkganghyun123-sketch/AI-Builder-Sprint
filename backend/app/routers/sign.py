@@ -140,7 +140,7 @@ async def create_and_send(body: SignRequestBody) -> SignResponseBody:
             employer_email=body.employer_email,
         )
     except modusign.ModusignError as e:
-        log.error("모두싸인 서명 요청 실패: error_type=%s", type(e).__name__)
+        log.error("모두싸인 서명 요청 실패: error_type=%s reason=%s", type(e).__name__, e)
         raise HTTPException(
             status_code=502,
             detail="지금은 서명 요청을 보낼 수 없어요. 잠시 뒤 다시 시도해 주세요.",
@@ -427,9 +427,10 @@ async def get_status(document_id: str, user: CurrentUser) -> dict:
         return await reconcile(document_id)
     except modusign.ModusignError as e:
         log.error(
-            "서명 상태 조회 실패: document=%s error_type=%s",
+            "서명 상태 조회 실패: document=%s error_type=%s reason=%s",
             document_id,
             type(e).__name__,
+            e,
         )
         raise HTTPException(
             status_code=502,
