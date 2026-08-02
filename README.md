@@ -11,7 +11,7 @@
 
 | 자료 | 링크 |
 |---|---|
-| **시연 영상 (3분)** | [Google Drive에서 보기](https://drive.google.com/file/d/1mE3JA0zw8mDN2TCcGMa3qF3H_gZA12oD/view?usp=sharing) |
+| **시연 영상 (3분)** | [Google Drive에서 보기](https://drive.google.com/file/d/1mE3JA0zw8mDN2TCcGMa3qF3H_gZA12oD/view) |
 | **배포 서비스** | https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/ |
 
 ### 화면
