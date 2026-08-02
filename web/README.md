@@ -21,7 +21,7 @@ python -m uvicorn app.main:app --reload
 ```bash
 cd web
 cp .env.example .env.local
-npm install
+npm ci
 npm run dev
 ```
 
@@ -34,6 +34,15 @@ npm run dev
 ```dotenv
 NEXT_PUBLIC_API_BASE_URL=https://ai-builder-sprint-production.up.railway.app
 ```
+
+공개 프론트 주소:
+
+- https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/
+- https://ai-builder-sprint-ten.vercel.app/
+
+배포 전후에는 백엔드
+[`/health`](https://ai-builder-sprint-production.up.railway.app/health)의
+`cors_origins`에 실제 Vercel 주소가 포함됐는지 확인합니다.
 
 ## 연결된 흐름
 

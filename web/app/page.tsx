@@ -3,7 +3,6 @@ import Image from "next/image";
 import { BrandHeader } from "@/components/ScreenShell";
 import { ButtonLink, Card, Pill, SectionLabel } from "@/components/ui";
 import { LegalDisclaimer } from "@/components/LegalDisclaimer";
-import { GeneralQuestionAssistant } from "@/components/GeneralQuestionAssistant";
 
 /**
  * 홈 / 랜딩 (단계 1 접속).
@@ -236,8 +235,6 @@ export default function HomePage() {
           페어사인 · 근로계약 확인 도우미
         </p>
       </footer>
-
-      <GeneralQuestionAssistant />
     </>
   );
 }
