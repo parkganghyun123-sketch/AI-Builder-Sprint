@@ -161,7 +161,7 @@ function responseError(
   if (status === 502 || status === 503 || status === 504) {
     if (path === "/chat") {
       return new ApiError(
-        "AI 계약 비서와 연결하지 못했어요. API 키와 서버 설정을 확인한 뒤 다시 시도해 주세요.",
+        "계약 비서 답변을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.",
         status,
         "UNAVAILABLE",
         true,

@@ -11,17 +11,33 @@ import type {
 import { Button, ButtonLink, Card, Pill } from "@/components/ui";
 
 const EVIDENCE_LABEL: Record<GroundedChatEvidenceKind, string> = {
-  CONTRACT: "계약 조건",
-  LEGAL: "확인된 기준",
-  CALCULATION: "백엔드 계산",
+  CONTRACT: "계약서에서 확인한 내용",
+  LEGAL: "공식 기준",
+  CALCULATION: "계산 결과",
 };
 
-const ANSWER_MODE_LABEL = {
-  DETERMINISTIC_TEMPLATE: "검증 규칙 기반 답변",
-  GROUNDED_GENERATION: "공식 KB 승인 문장",
-  NATURAL_GROUNDED_GENERATION: "공식 근거 기반 AI 설명",
-  OPENAI_GROUNDED_GENERATION: "GPT 근거 기반 맞춤 설명",
-} as const;
+const TOPIC_LABELS: Record<string, string> = {
+  WEEKLY_HOLIDAY: "주휴수당",
+  MINIMUM_WAGE: "최저임금",
+  BREAK_TIME: "휴게시간",
+  WORKING_HOURS: "근로시간",
+  WAGE: "임금",
+  PAYDAY: "임금 지급일",
+  CONTRACT_PERIOD: "근로계약기간",
+  WORKPLACE: "근무장소",
+  JOB: "업무 내용",
+  MISSING_CLAUSES: "누락된 계약 항목",
+  UNSUPPORTED: "확인할 수 없는 질문",
+  SEVERANCE_PAY: "퇴직금",
+  SOCIAL_INSURANCE: "4대보험",
+  ANNUAL_LEAVE: "연차",
+  DISMISSAL_NOTICE: "해고예고수당",
+  PROBATION_MINIMUM_WAGE: "수습 최저임금",
+};
+
+function topicLabel(topic: string): string {
+  return TOPIC_LABELS[topic] ?? "계약 조건 안내";
+}
 
 const CONDITION_GROUPS: {
   key: keyof ChatConditionGroups;
@@ -30,17 +46,17 @@ const CONDITION_GROUPS: {
 }[] = [
   {
     key: "met",
-    label: "계약에서 확인된 지표",
+    label: "계약에서 확인된 내용",
     className: "border-emerald-200 bg-emerald-50 text-emerald-950",
   },
   {
     key: "unmet",
-    label: "기준과 다른 지표",
+    label: "기준과 다른 내용",
     className: "border-red-200 bg-red-50 text-red-950",
   },
   {
     key: "needs_check",
-    label: "추가 확인 항목",
+    label: "더 확인할 내용",
     className: "border-amber-300 bg-amber-50 text-amber-950",
   },
 ];
@@ -90,19 +106,19 @@ export function ContractAssistant({
   return (
     <Card className="border-brand/40 bg-brand-tint/30">
       <div className="flex flex-col gap-2">
-        <Pill>계약 비서 · 공식 KB 검색</Pill>
+        <Pill>계약 비서 · 확인된 근거로 답변</Pill>
         <h2 className="text-xl font-extrabold tracking-tight text-ink">
           내 계약서에 대해 물어보세요
         </h2>
         <p className="text-sm leading-relaxed text-ink-muted">
-          확인한 계약 조건과 검증된 KB 근거 안에서 답해요. 법적 자격과 금액은
-          AI가 정하지 않고 백엔드 규칙 결과만 사용합니다.
+          확인한 계약 조건과 공식 기준 안에서 필요한 내용을 골라 답해요. 새로운
+          사실이나 금액을 만들지 않고, 정해진 계산 결과만 사용합니다.
         </p>
         <p className="text-xs leading-relaxed text-ink-muted">
-          Upstage와 OpenAI에는 비식별 판정 사실 카드·분류 키·검증된 KB 후보만
-          보냅니다. OpenAI 요청은 저장 비활성화(store:false)로 전송합니다. 질문
-          원문, 계약서 파일·원문, 이름·연락처·생년월일·사업장 정보는 보내지
-          않으며, 외부 제공자의 별도 보관 정책이 적용될 수 있습니다.
+          입력한 질문은 답변을 찾기 위해 페어사인으로 전송됩니다. 계약서 파일과
+          원문, 이름·연락처·생년월일·사업장 정보는 외부 답변 서비스에 보내지
+          않습니다. 개인정보를 뺀 확인 결과 일부만 답변을 정리하는 데 사용될 수
+          있으며, 외부 서비스의 별도 보관 정책이 적용될 수 있습니다.
         </p>
       </div>
 
@@ -143,9 +159,9 @@ export function ContractAssistant({
           aria-live="polite"
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Pill>{answer.topic}</Pill>
+            <Pill>{topicLabel(answer.topic)}</Pill>
             <span className="rounded-full border border-brand-line bg-white px-3 py-1 text-xs font-bold text-brand-deep">
-              {ANSWER_MODE_LABEL[answer.answer_mode]}
+              확인된 근거만 사용
             </span>
           </div>
 
@@ -158,16 +174,11 @@ export function ContractAssistant({
 
           {answer.retrieved_knowledge.length > 0 && (
             <div className="rounded-field border border-brand-line bg-white/80 p-3">
-              <h3 className="text-sm font-bold text-ink">검색된 공식 KB 근거</h3>
+              <h3 className="text-sm font-bold text-ink">답변에 사용한 공식 기준</h3>
               <ul className="mt-2 flex flex-col gap-2 text-sm">
                 {answer.retrieved_knowledge.map((item) => (
                   <li key={item.kb_id}>
                     <span className="font-bold text-brand-deep">{item.title}</span>
-                    {item.source_ids.length > 0 && (
-                      <span className="text-ink-muted">
-                        {" "}· {item.source_ids.join(", ")}
-                      </span>
-                    )}
                   </li>
                 ))}
               </ul>

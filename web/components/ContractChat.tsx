@@ -27,9 +27,9 @@ const EVIDENCE_META: Record<
   GroundedChatEvidenceKind,
   { icon: string; label: string }
 > = {
-  CONTRACT: { icon: "📄", label: "계약 조건" },
-  LEGAL: { icon: "⚖️", label: "확인된 기준" },
-  CALCULATION: { icon: "🧮", label: "백엔드 계산" },
+  CONTRACT: { icon: "📄", label: "계약서에서 확인한 내용" },
+  LEGAL: { icon: "⚖️", label: "공식 기준" },
+  CALCULATION: { icon: "🧮", label: "계산 결과" },
 };
 
 const TOPIC_LABELS: Record<string, string> = {
@@ -51,13 +51,6 @@ const TOPIC_LABELS: Record<string, string> = {
   PROBATION_MINIMUM_WAGE: "수습 최저임금",
 };
 
-const ANSWER_MODE_LABEL = {
-  DETERMINISTIC_TEMPLATE: "검증 규칙 기반 답변",
-  GROUNDED_GENERATION: "공식 KB 승인 문장",
-  NATURAL_GROUNDED_GENERATION: "공식 근거 기반 AI 설명",
-  OPENAI_GROUNDED_GENERATION: "GPT 근거 기반 맞춤 설명",
-} as const;
-
 function topicLabel(topic: string): string {
   return TOPIC_LABELS[topic] ?? "계약 조건 안내";
 }
@@ -71,19 +64,19 @@ interface ConversationItem {
 const CONDITION_GROUP_META = [
   {
     key: "met",
-    label: "계약에서 확인된 지표",
+    label: "계약에서 확인된 내용",
     icon: "✓",
     className: "border-emerald-200 bg-emerald-50 text-emerald-950",
   },
   {
     key: "unmet",
-    label: "기준과 다른 지표",
+    label: "기준과 다른 내용",
     icon: "!",
     className: "border-red-200 bg-red-50 text-red-950",
   },
   {
     key: "needs_check",
-    label: "추가 확인 항목",
+    label: "더 확인할 내용",
     icon: "?",
     className: "border-amber-300 bg-amber-50 text-amber-950",
   },
@@ -204,11 +197,10 @@ export function ContractChat({
           계약서만으로 확인할 수 없는 상황은 답변 범위를 안내합니다.
         </p>
         <p className="text-xs leading-relaxed text-ink-muted">
-          질문은 FairSign 백엔드로 전송됩니다. Upstage와 OpenAI에는 비식별 판정
-          사실 카드·분류 키·검증된 KB 후보만 보냅니다. OpenAI 요청은 저장
-          비활성화(store:false)로 전송합니다. 질문 원문, 계약서 파일·원문,
-          이름·연락처·생년월일·사업장 정보는 보내지 않으며, 외부 제공자의 별도
-          보관 정책이 적용될 수 있습니다.
+          입력한 질문은 답변을 찾기 위해 페어사인으로 전송됩니다. 계약서 파일과
+          원문, 이름·연락처·생년월일·사업장 정보는 외부 답변 서비스에 보내지
+          않습니다. 개인정보를 뺀 확인 결과 일부만 답변을 정리하는 데 사용될 수
+          있으며, 외부 서비스의 별도 보관 정책이 적용될 수 있습니다.
         </p>
       </div>
 
@@ -230,7 +222,7 @@ export function ContractChat({
                     </span>
                   )}
                   <span className="rounded-full border border-brand-line bg-white px-3 py-1 text-xs font-bold text-brand-deep">
-                    {ANSWER_MODE_LABEL[response.answer_mode]}
+                    확인된 근거만 사용
                   </span>
                 </div>
                 <p className="mt-3 whitespace-pre-wrap text-sm font-semibold leading-relaxed text-ink">
@@ -240,15 +232,12 @@ export function ContractChat({
                 {response.retrieved_knowledge.length > 0 && (
                   <section className="mt-4 rounded-field border border-brand-line bg-white/80 px-4 py-3">
                     <h3 className="text-xs font-extrabold text-brand-deep">
-                      검색된 공식 KB 근거
+                      답변에 사용한 공식 기준
                     </h3>
                     <ul className="mt-2 space-y-2 text-xs leading-relaxed text-ink-muted">
                       {response.retrieved_knowledge.map((knowledge) => (
                         <li key={knowledge.kb_id}>
                           <span className="font-bold text-ink">{knowledge.title}</span>
-                          {knowledge.source_ids.length > 0 && (
-                            <span> · {knowledge.source_ids.join(", ")}</span>
-                          )}
                         </li>
                       ))}
                     </ul>
@@ -375,9 +364,9 @@ export function ContractChat({
         </button>
       </form>
       <p className="mt-2 text-xs leading-relaxed text-ink-muted">
-        대화 화면은 브라우저 저장소에 저장하지 않고, FairSign도 대화 내역을
-        서버에 보관하지 않습니다. 다만 외부 제공자의 데이터 보관 정책은 아직
-        검증되지 않았으며 별도로 적용될 수 있습니다.
+        대화 내용은 이 화면을 닫으면 사라지고, 페어사인도 따로 보관하지
+        않습니다. 다만 답변을 정리하는 외부 서비스에는 별도 보관 정책이 적용될
+        수 있습니다.
       </p>
     </section>
   );
