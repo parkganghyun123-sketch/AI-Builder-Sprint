@@ -10,8 +10,52 @@
 
 ---
 
+## 서비스 실행 및 배포
+
+### 공개 배포 주소
+
+| 구분 | 주소 | 확인 내용 |
+|---|---|---|
+| 프론트엔드 | [ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app](https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/) | 전체 사용자 흐름 |
+| 프론트엔드 별칭 | [ai-builder-sprint-ten.vercel.app](https://ai-builder-sprint-ten.vercel.app/) | 기본 주소 접속 실패 시 사용 |
+| 백엔드 상태 | [Railway `/health`](https://ai-builder-sprint-production.up.railway.app/health) | 배포 버전과 외부 연동 설정 여부 |
+| API 문서 | [Railway `/docs`](https://ai-builder-sprint-production.up.railway.app/docs) | FastAPI OpenAPI 문서 |
+| PDF 글꼴 점검 | [Railway `/health/pdf`](https://ai-builder-sprint-production.up.railway.app/health/pdf) | 한글 계약서 렌더링 |
+
+배포 구성은 **Vercel(Next.js) + Railway(FastAPI Docker) + Supabase(PostgreSQL)**입니다.
+Upstage, OpenAI, 모두싸인, 카카오 로그인을 외부 API로 사용하며 각 기능은 환경변수
+설정 상태에 따라 안전하게 비활성화되거나 제한된 방식으로 폴백합니다.
+
+> 제출 전 새 시크릿 창과 모바일 네트워크에서 프론트 주소, `/health`, `/health/pdf`를
+> 각각 확인합니다. 심사 기간에는 프론트·백엔드·DB 배포를 중지하지 않습니다.
+
+### 계약서 없이 재현하는 3분 시나리오
+
+1. 메인 화면 우측 하단 챗봇을 열고 `1주일에 12시간 일하면 주휴수당을 받나요?`를 질문합니다.
+2. 메인 화면에서 **계약서를 못 받았어요**를 선택하고 근무 요일·시간·임금을 직접 입력합니다.
+3. 확인 화면에서 입력값을 검토한 뒤 결과 화면의 법정 기준, 계산식, 말 꺼내기 문구를 확인합니다.
+4. 결과 화면 챗봇에서 `계약서에 휴게시간이 안 적혀 있어요`처럼 이어서 질문합니다.
+5. 모두싸인 테스트 설정이 있는 경우에만 수정 계약서 미리보기와 전자서명 요청까지 진행합니다.
+
+사진 추출을 재현하려면 JPG·PNG·PDF 형식의 근로계약서를 `/upload`에서 올립니다.
+실제 개인정보가 포함된 계약서는 테스트에 사용하지 않습니다.
+
+### 제출용 키 보안
+
+- 실제 운영 키나 `.env` 파일은 Git에 커밋하지 않습니다.
+- 외부 API 키가 필요한 경우 권한과 사용량을 제한한 **테스트 전용 키**를 별도로 전달하고,
+  대회 종료 직후 폐기합니다.
+- 테스트 키 전달처: `minsuk4820@gmail.com`
+- Upstage API 키는 주최 측이 보유하므로 별도 제출 대상이 아닙니다.
+
+로컬 실행 절차와 전체 환경변수는 아래 [시작하기](#시작하기),
+[환경 변수](#환경-변수)에서 확인할 수 있습니다.
+
+---
+
 ## 목차
 
+- [서비스 실행 및 배포](#서비스-실행-및-배포)
 - [무엇을 만드는가](#무엇을-만드는가)
 - [확인 관문](#확인-관문)
 - [왜 만드는가](#왜-만드는가)
@@ -22,10 +66,10 @@
 - [프로젝트 구조](#프로젝트-구조)
 - [시작하기](#시작하기)
 - [환경 변수](#환경-변수)
-- [팀 구성 및 역할](#팀-구성-및-역할)
+- [기능별 책임 영역](#기능별-책임-영역)
 - [개발 규칙](#개발-규칙)
 - [일정 및 제출물](#일정-및-제출물)
-- [미정 사항](#미정-사항)
+- [구현 범위와 운영상 주의사항](#구현-범위와-운영상-주의사항)
 
 ---
 
@@ -160,7 +204,7 @@ AI가 읽은 값을 그대로 판정에 쓰지 않습니다.
 | 10 | 계약서 보관함 | ✅ | ✅ | C·D | `backend/app/routers/sign.py`, `web/app/archive/` |
 | 11 | 카카오 로그인 | ✅ 설정 시 | ✅ | C·D | `backend/app/auth/`, `web/app/auth/` |
 | 12 | 계약 이력 영속 저장 | ✅ DB 설정 시 | ✅ | C | `backend/app/store.py` |
-| 13 | 계약 비서 챗봇 | ✅ 로컬 RAG | ✅ | A·B·D | `backend/app/chat/`, `web/components/ContractAssistant.tsx` |
+| 13 | 계약 비서 챗봇 | ✅ 로컬 RAG | ✅ | A·B·D | `backend/app/chat/`, `web/components/ContractChat.tsx`, `GeneralQuestionAssistant.tsx` |
 
 > 로그인·영속 저장은 환경 변수에 따라 달라집니다. `GET /health`의
 > `kakao_login`, `store` 값을 확인하세요. DB 연결이 없거나 실패하면 문서 이력은
@@ -435,61 +479,109 @@ WeasyPrint는 HTML을 쓰듯 만들면 되고 배포가 간단한 반면, TS 쪽
 
 ## 프로젝트 구조
 
-> 스택 확정 후 실제 디렉터리로 갱신. 아래는 모듈 단위 개념 구조입니다.
+실제 실행 코드 기준의 주요 구조입니다.
 
 ```
 .
-├── ai/                  # A 담당
-│   ├── document-parse/  # 사진 → 텍스트
-│   ├── extract/         # 텍스트 → 항목 JSON
-│   ├── explain/         # 판정 → 쉬운 말 설명
-│   └── schema/          # 추출 항목 스키마 (A ↔ B 인터페이스)
-├── validation/          # B 담당 — AI 호출 금지 구역
-│   ├── rules/           # 최저임금·주휴수당·휴게시간 판정 함수
-│   ├── constants/       # 법정 기준값
-│   └── tests/           # 경계값 단위 테스트
-├── contract/            # C 담당
-│   ├── generate/        # 표준양식 + 조건 → PDF
-│   ├── sign/            # 모두싸인 요청 발송
-│   └── webhook/         # 서명 완료 신호 수신
-├── web/                 # D 담당
-│                        # 업로드 / 확인·수정 / 결과 / 서명 완료 화면
-├── evaluation/          # A 담당 — 제출용 AI 검증 산출물
-│   ├── samples/         # 정상 5종 + 위반을 심은 변형 5종
-│   └── results/         # 추출 정확도 측정 결과
-├── docs/                # 인터뷰 기록, 설계 메모
-├── .claude/             # 코딩 에이전트 설정 (제출물)
-└── AGENTS.md            # 코딩 에이전트 지침 (제출물)
+├── backend/
+│   ├── app/
+│   │   ├── ai/          # Upstage 문서 분석·조건 추출
+│   │   ├── validation/  # 법정 기준 판정 순수 함수
+│   │   ├── chat/        # 폐쇄형 RAG·챗봇 제공자 폴백
+│   │   ├── pdf/         # 표준근로계약서 PDF 생성
+│   │   ├── signing/     # 모두싸인 연동
+│   │   ├── auth/        # 카카오 로그인·세션
+│   │   └── routers/     # FastAPI 엔드포인트
+│   ├── tests/           # API·보안·경계값 테스트
+│   ├── Dockerfile       # Railway 배포 이미지
+│   └── requirements.txt
+├── web/
+│   ├── app/             # Next.js App Router 화면
+│   ├── components/      # 챗봇·검증·서명 UI
+│   ├── lib/             # API 클라이언트·Zod 스키마
+│   └── vercel.json      # Vercel 배포 설정
+├── docs/                # 제품·챗봇·검증 설계 문서
+├── spikes/              # 외부 연동 검증 스크립트
+├── .env.example         # 백엔드 환경변수 예시
+├── KB.md                # 검토된 법정 기준 지식 원본
+└── AGENTS.md            # 코딩 에이전트 지침
 ```
-
-**`ai/schema`가 가장 중요합니다.** A와 B가 여기만 보고 작업하며, 변경 시 반드시 상대에게 알립니다.
 
 ---
 
 ## 시작하기
 
+### 0. 실행 환경
+
+| 도구 | 지원 버전 | 용도 |
+|---|---|---|
+| Python | 3.10 이상 | FastAPI 백엔드·PDF 생성 |
+| Node.js | 18.18 이상 | Next.js 프론트엔드 |
+| npm | `npm ci` 지원 버전 | 잠금 파일 기준 의존성 설치 |
+| Docker | 선택 | Railway와 유사한 백엔드 환경 재현 |
+
 ### 1. 클론 및 환경 변수
 
 ```bash
-git clone https://github.com/<팀-계정>/AI-Builder-Sprint.git
+git clone https://github.com/parkganghyun123-sketch/AI-Builder-Sprint.git
 cd AI-Builder-Sprint
 cp .env.example .env
-# .env에 API 키 입력 (키는 팀 채널로 전달)
+# Windows PowerShell: Copy-Item .env.example .env
 ```
+
+`.env`에 필요한 테스트 키를 입력합니다. 키 없이 확인 가능한 범위와 기능별 필수값은
+아래 [환경 변수](#환경-변수)에 정리되어 있습니다.
 
 ### 2. 백엔드 실행
 
-```bash
+macOS·Linux:
+
+```shell
 cd backend
 python3 -m venv .venv && source .venv/bin/activate
 python -m pip install -r requirements.txt
 python -m uvicorn app.main:app --reload
 ```
 
+Windows PowerShell:
+
+```powershell
+cd backend
+py -3.10 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+python -m uvicorn app.main:app --reload
+```
+
 확인:
 
-- http://localhost:8000/health → `{"status":"ok","modusign":true,"upstage":true}`
+- http://localhost:8000/health → `status`, `commit`, `upstage`, `modusign`, `store`,
+  `webhook_token`, `kakao_login`, `cors_origins` 확인
 - http://localhost:8000/docs → API 문서
+
+### 3. 프론트엔드 실행
+
+새 터미널에서 실행합니다.
+
+```bash
+cd web
+cp .env.example .env.local
+# Windows PowerShell: Copy-Item .env.example .env.local
+npm ci
+npm run dev
+```
+
+- 프론트엔드: http://localhost:3000
+- 기본 백엔드 주소: http://localhost:8000
+- 배포 백엔드를 연결하려면 `web/.env.local`의 `NEXT_PUBLIC_API_BASE_URL`을
+  Railway 주소로 바꿉니다.
+
+### Docker로 백엔드 실행하기
+
+```bash
+docker build -t fairsign-backend ./backend
+docker run --rm --env-file .env -p 8000:8000 fairsign-backend
+```
 
 ### ⚠️ 자주 걸리는 함정 3가지
 
@@ -501,23 +593,30 @@ python -m uvicorn app.main:app --reload
 
 `pip`도 같은 이유로 **`python -m pip`**를 권장합니다.
 
-### 3. 계약서 PDF 생성 테스트
+### 4. 계약서 PDF 생성 테스트
 
 ```bash
-cd backend && python make_test_pdf.py
+cd backend
+python make_test_pdf.py
 open ../spikes/sample_contract.pdf
+# Windows: Invoke-Item ..\spikes\sample_contract.pdf
 ```
 
 가상 계약(시급 10,000원·주휴일 미지정)으로 표준근로계약서 PDF를 만듭니다.
 **한글이 깨지지 않았는지, `대표자`·`성명` 텍스트가 보이는지** 확인하세요.
 이 두 문구가 모두싸인 anchor 기준점입니다.
 
-### 4. 검사
+### 5. 검사
 
 ```bash
 cd backend
-python -m pytest -v        # 테스트 (B 담당 작성 중)
-ruff check .               # 린트
+python -m pytest -v
+ruff check .
+
+cd ../web
+npm run typecheck
+npm run lint
+npm run build
 ```
 
 ---
@@ -526,31 +625,52 @@ ruff check .               # 린트
 
 `.env.example`을 복사해 `.env`로 만들고 값을 채웁니다. **`.env`는 절대 커밋하지 않습니다.**
 
-| 변수명 | 설명 | 담당 |
+### 백엔드: 루트 `.env`
+
+| 변수명 | 필요 범위 | 설명·미설정 시 동작 |
 |---|---|---|
-| `UPSTAGE_API_KEY` | Upstage API 키 (3종 공통) | A |
-| `OPENAI_API_KEY` | GPT 근거 기반 맞춤 설명 계획에 사용하는 OpenAI API 키 | B |
-| `OPENAI_MODEL` | OpenAI 모델 별칭, 기본값 `gpt-5.6` | B |
-| `MODUSIGN_API_KEY` | 모두싸인 API 키 | C |
-| `MODUSIGN_WEBHOOK_SECRET` | 서명 완료 신호 검증용 | C |
-| `DATABASE_URL` | PostgreSQL 연결 문자열 | C |
-| `PUBLIC_DATA_API_KEY` | 공공데이터포털 키 (**사용 여부 미정**) | B |
+| `UPSTAGE_API_KEY` | 사진 추출·Solar 답변 | 미설정 시 계약서 사진 추출을 사용할 수 없음 |
+| `OPENAI_API_KEY` | 선택 | 근거 제한 설명 계획에 사용. 미설정·실패 시 Upstage, 이후 결정론적 답변으로 폴백 |
+| `OPENAI_MODEL` | 선택 | OpenAI 모델 별칭. 기본값 `gpt-5.6` |
+| `MODUSIGN_EMAIL` | 전자서명 | 모두싸인 계정 이메일 |
+| `MODUSIGN_API_KEY` | 전자서명 | 미설정 시 미리보기까지 가능하고 서명 요청은 비활성화 |
+| `WEBHOOK_PATH_TOKEN` | 배포 전자서명 | 웹훅 URL 보호 토큰. `openssl rand -hex 16`으로 생성 |
+| `DATABASE_URL` | 영속 보관 | Supabase PostgreSQL URI. 미설정·연결 실패 시 메모리 저장소로 폴백하며 재시작 시 이력 소실 |
+| `CORS_ORIGINS` | 배포 | 허용할 프론트 주소를 쉼표로 구분. 비우면 localhost만 허용 |
+| `KAKAO_REST_API_KEY` | 로그인·보관함 | 카카오 REST API 키 |
+| `KAKAO_CLIENT_SECRET` | 로그인·보관함 | 카카오 Client Secret |
+| `KAKAO_REDIRECT_URI` | 로그인·보관함 | 카카오 콘솔 등록값과 완전히 같은 콜백 주소 하나 |
+| `JWT_SECRET` | 로그인·보관함 | 세션 서명 키. `openssl rand -hex 32`로 생성 |
+| `JWT_TTL_HOURS` | 선택 | 세션 유효 시간. 기본값 `12` |
+| `PUBLIC_DATA_API_KEY` | 미사용·선택 | 공공데이터 연동 검증용. 현재 핵심 흐름에서는 사용하지 않음 |
+| `TEST_WORKER_EMAIL` | 외부 연동 시험 | 모두싸인 스파이크용 테스트 이메일 |
+| `TEST_OWNER_EMAIL` | 외부 연동 시험 | 모두싸인 스파이크용 테스트 이메일 |
+
+`GET /health`는 비밀값을 노출하지 않고 각 연동의 설정 여부만 반환합니다.
+배포 환경에서는 `store=postgres`, `webhook_token=true`, 필요한 경우
+`modusign=true`, `upstage=true`, `kakao_login=true`인지 확인합니다.
+
+### 프론트엔드: `web/.env.local`
+
+| 변수명 | 로컬 예시 | 배포 예시 |
+|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | `http://localhost:8000` | `https://ai-builder-sprint-production.up.railway.app` |
+
+실제 값은 Vercel과 Railway의 환경변수 설정 화면에 등록하며 저장소에는 넣지 않습니다.
 
 ---
 
-## 팀 구성 및 역할
+## 기능별 책임 영역
 
-| 파트 | 담당자 | 역할 | 주요 산출물 |
-|---|---|---|---|
-| **A** | (미정) | AI 파이프라인 | 사진 → 항목 JSON, 정확도 평가셋 |
-| **B** | (미정) | 검증 엔진 | 항목 JSON → 판정 결과, 단위 테스트 |
-| **C** | (미정) | 서명·백엔드·배포 | PDF 생성, 모두싸인 연동, DB |
-| **D** | (미정) | 프론트·사용자 검증 | 화면 4종, 인터뷰, 발표자료 |
+| 영역 | 책임 | 주요 산출물·검증 |
+|---|---|---|
+| AI 파이프라인 | 계약서 문서 분석·조건 추출 | 추출 스키마, 신뢰도, 실패 시 수동 입력 경로 |
+| 검증 엔진 | 최저임금·주휴 시간요건·휴게·필수기재 판정 | 순수 함수, 경계값 테스트, 근거·계산식 |
+| 백엔드·서명 | API, PDF, 모두싸인, 로그인, DB | 상태 확인, 소유권 검사, 웹훅·PDF 진단 |
+| 프론트엔드 | 업로드·확인·결과·챗봇·서명·보관함 | Zod 응답 검증, 오류 처리, 모바일 UI |
 
-**협업 접점**
-
-- A ↔ B: `ai/schema` (추출 항목 형식) — Day 2 오전까지 확정
-- C ↔ D: API 엔드포인트 명세 — Day 3까지 확정
+AI 추출값은 Pydantic 스키마를 거쳐 검증 엔진으로 전달되고, 백엔드 응답은
+프론트엔드의 Zod 스키마를 통과해야 화면에 표시됩니다.
 
 ---
 
@@ -629,55 +749,26 @@ ruff check .               # 린트
 
 ---
 
-## 미정 사항
+## 구현 범위와 운영상 주의사항
 
-**팀에서 결정할 것**
-
-- 기술 스택 (후보 A vs B)
-- 담당자별 파트 배정
-- 로그인 유무 (현재는 없이 진행 가정)
-- 서비스명 최종 확정 ("페어사인"은 가안)
-
-**현재 구현의 한계 (숨기지 말 것)**
-
-- **저장소가 메모리 딕셔너리**(`app/routers/sign.py`의 `_store`)입니다.
-  서버를 재시작하면 계약 이력이 사라집니다. Supabase 연결 예정.
-  발송 경로는 `sign.remember_document()` 하나로 모았으므로 이 함수만 교체하면 됩니다.
-- **웹훅 호출자 검증이 켜져 있지 않습니다.** 모두싸인은 웹훅 서명(HMAC)을 제공하지
-  않으므로 URL 경로에 무작위 토큰을 넣는 방식(`WEBHOOK_PATH_TOKEN`)을 씁니다.
-  코드는 준비돼 있으나 **값이 비어 있어 검증이 건너뛰어집니다.**
-  `openssl rand -hex 16` 으로 만들어 `.env`와 배포 환경에 넣어야 활성화됩니다.
-  (옛 이름 `MODUSIGN_WEBHOOK_SECRET` 도 같은 값으로 읽습니다)
-  다만 상태는 `reconcile()`이 모두싸인 API에서 읽으므로, 웹훅을 위조해도
-  상태를 조작할 수는 없습니다. 토큰은 엔드포인트 남용을 막기 위한 것입니다.
-- **보관함이 없습니다.** 체결 문서를 다시 찾아보는 화면이 `web/app/archive/`에
-  안내 문구만 있는 상태입니다. 로그인이 없어 "내 문서"를 판별할 수단이 없습니다.
-- PDF 템플릿의 한글 폰트는 `Dockerfile`이 `fonts-noto-cjk`로 번들합니다.
-  배포 후 `GET /health/pdf`를 브라우저로 열어 육안 확인할 수 있습니다.
-
-**기술 검증 필요**
-
-- Information Extract의 실제 계약서 추출 정확도
-- ~~모두싸인 API 사용 가능 여부~~ → ✅ **승인 완료, 인증 성공** (2026-07-27)
-- 모두싸인 anchor 서명란 위치 (`SIGN_OFFSET_X` 실측 조정 필요)
-- 공공데이터포털에 사용 가능한 API 존재 여부 → **없으면 법정 기준값을 상수로 내장**
-
-**사용자 검증 필요**
-
-- 알바생이 "서명 전 확인" 수요를 실제로 갖는가
-- 사장 측 사용 의향
-- 계약서 사진 업로드에 대한 거부감
-- **경로 B의 현실성** — 알바생이 사장님께 먼저 "계약서 쓰자"고 말할 수 있는가
-  (심리적 장벽이 클 수 있음. Day 1 인터뷰에서 반드시 확인 → 부정적이면 경로 B는 **사장님이 시작하는 흐름**으로 재설계하거나 제외)
-
-**외부 조사 필요**
-
-- 고용노동부 표준근로계약서 최신 양식 (2026년판)
-- 근로기준법 제17조 필수 기재사항 정확한 목록, 제54조 휴게시간 조문 원문
-- 전자서명 근로계약의 교부 의무 충족 여부
-- 근무일 교환·대타 시 '소정근로일 개근' 인정 여부 행정해석 (**미확인 — 확인 전까지 코드에 반영 금지**)
-- 계약서 이미지 보관 기간 정책
-- 협력 가능한 지역 기관 (**현재 확정된 협력 기관 없음**)
+- **저장소**: `DATABASE_URL` 연결에 성공하면 Supabase PostgreSQL을 사용합니다.
+  미설정 또는 연결 실패 시 메모리로 폴백하며 재시작 시 계약 이력이 사라집니다.
+  현재 상태는 `/health`의 `store`에서 확인합니다.
+- **로그인·보관함**: 카카오·JWT 환경변수가 모두 설정된 경우에만 로그인이 켜집니다.
+  보관함은 로그인한 소유자의 계약만 조회합니다. 영속 보관 재현에는 카카오 설정과
+  PostgreSQL 연결이 모두 필요합니다.
+- **전자서명**: 모두싸인 계정과 API 키가 있어야 실제 서명 요청을 보낼 수 있습니다.
+  모두싸인은 웹훅 HMAC을 제공하지 않으므로 배포 환경에서는 `WEBHOOK_PATH_TOKEN`으로
+  URL을 보호합니다. 완료 상태는 모두싸인 API에서 다시 조회해 확정합니다.
+- **PDF**: `backend/Dockerfile`에 WeasyPrint 시스템 라이브러리와
+  `fonts-noto-cjk`를 포함합니다. 배포 후 `/health/pdf`에서 한글과 서명 anchor를
+  육안 확인합니다.
+- **외부 AI 폴백**: OpenAI 설명 생성 실패 시 Upstage, 이어서 검증된 결정론적
+  템플릿으로 폴백합니다. Upstage 키가 없으면 사진 추출은 사용할 수 없습니다.
+- **법률 판단 범위**: 개별 분쟁의 결론, 대타 근무 시 개근 여부, 실제 주휴수당
+  지급 자격처럼 추가 사실관계가 필요한 질문은 확정하지 않고 1350 상담을 안내합니다.
+- **데이터 운영**: 실계약서와 운영 키는 저장소에 넣지 않습니다. 대회 이후 테스트 키
+  폐기와 계약서 이미지 보관·삭제 정책은 실제 운영 주체가 별도로 확정해야 합니다.
 
 ---
 
