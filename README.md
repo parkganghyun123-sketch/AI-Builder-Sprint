@@ -11,12 +11,11 @@
 
 | 자료 | 링크 |
 |---|---|
-| **시연 영상 (3분)** | <!-- TODO: 촬영한 영상 URL을 붙여넣으세요 --> |
+| **시연 영상 (3분)** | [Google Drive에서 보기](https://drive.google.com/file/d/1mE3JA0zw8mDN2TCcGMa3qF3H_gZA12oD/view?usp=sharing) |
 | **배포 서비스** | https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/ |
 
 ### 화면
 
-<!-- TODO: 스크린샷 4장을 docs/screenshots/ 에 저장한 뒤 아래 주석을 해제하세요.
 | 메인 — 3가지 진입 경로 | 결과 — 법정 기준과 계산식 |
 |---|---|
 | ![메인 화면](docs/screenshots/01-main.png) | ![결과 화면](docs/screenshots/02-result.png) |
@@ -24,7 +23,6 @@
 | 말 꺼내기 문구 | 전자서명 요청 · 보관함 |
 |---|---|
 | ![말 꺼내기 문구](docs/screenshots/03-message.png) | ![서명 화면](docs/screenshots/04-sign.png) |
--->
 
 ### 테스트 계정
 
@@ -849,19 +847,11 @@ AI 추출값은 Pydantic 스키마를 거쳐 검증 엔진으로 전달되고, �
 
 | 이름 | 역할 | 담당 영역 |
 |---|---|---|
-| <!-- TODO: 이름 --> | 팀장 · <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
-| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
-| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
-| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
+| 박강현 | 팀장 · 백엔드| 서버·전자서명·PDF·배포 |
+| 이동원 | AI 검증 | 추출 정확도 평가·법정 판정 규칙 |
+| 강성주 | AI 대화 | 근거 기반 챗봇·API 스키마 |
+| 김도원 | 프론트엔드 | 화면·컴포넌트·사용자 흐름 |
 
-<!-- TODO: 커밋 히스토리에는 동일인의 복수 GitHub 계정이 포함되어 있습니다.
-     아래에 실제 팀원과 커밋 계정의 매핑을 적어 주세요.
-       예) 홍길동 — parkganghyun / parkganghyun123-sketch
-           김철수 — seongju0056 / kseongju0413
-           이영희 — Dowon Kim / 도원
-           박민수 — Eunji-5
-     기여자 식별자: parkganghyun, seongju0056, 도원, Dowon Kim, Eunji-5,
-     kseongju0413, leedongwon, parkganghyun123-sketch, 이태경, Spacegaeguri -->
 
 기능별 책임 영역은 [기능별 책임 영역](#기능별-책임-영역)을 참고하세요.
 
