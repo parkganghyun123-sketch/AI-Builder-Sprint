@@ -9,6 +9,7 @@ from app.chat.general_provider import (
     GeneralProviderError,
     GeneralResponsePlan,
 )
+from app.chat.models import NaturalAnswerRealization
 from app.routers.general_questions import router
 
 app = FastAPI()
@@ -784,3 +785,72 @@ def test_주요_일반_답변은_간결성_상한을_지킨다(question):
 
     assert len(body["answer"]) <= 220
     assert len(body["limitations"]) <= 220
+
+
+def test_일반_질문도_비식별_자연어_연결을_그대로_사용한다(monkeypatch):
+    templates = iter(
+        [
+            "{{FACT-ANSWER}} 핵심부터 안내드렸어요.",
+            "{{FACT-ANSWER}} 먼저 확인할 내용은 여기까지예요.",
+        ]
+    )
+    captured = []
+
+    async def fake_openai(context):
+        captured.append(context)
+        return NaturalAnswerRealization(
+            natural_answer_template=next(templates),
+            required_fact_ids=["FACT-ANSWER"],
+        )
+
+    monkeypatch.setattr(general.settings, "openai_api_key", "synthetic-key")
+    monkeypatch.setattr(general, "generate_openai_general_answer", fake_openai)
+    first = client.post(
+        "/questions/general", json={"question": "주휴수당 조건이 뭐야?"}
+    ).json()
+    second = client.post(
+        "/questions/general", json={"question": "주휴수당 조건이 뭐야?"}
+    ).json()
+
+    assert first["answer"] != second["answer"]
+    assert first["answer"].startswith("주요 조건은")
+    assert "해당 주까지 근로관계 유지" in first["limitations"]
+    assert first["limitations"] not in first["answer"]
+    assert first["limitations"] == second["limitations"]
+    serialized = captured[0].model_dump_json()
+    assert "주휴수당 조건이 뭐야?" not in serialized
+    assert first["limitations"] not in serialized
+    assert '"question_original_sent":false' in serialized
+
+
+@pytest.mark.parametrize(
+    "unsafe_connective",
+    [
+        " 그러므로 회사가 책임져야 합니다.",
+        " 하지만 앞 내용은 사실이 아닙니다.",
+        " 따라서 권리가 인정됩니다.",
+        " 확인할 필요가 없습니다.",
+        " 회사의 의무이며 근로자의 권리입니다.",
+    ],
+)
+def test_일반_질문의_미승인_연결문은_결정론_답변으로_복구한다(
+    monkeypatch,
+    unsafe_connective,
+):
+    async def fake_openai(_context):
+        return NaturalAnswerRealization(
+            natural_answer_template=f"{{{{FACT-ANSWER}}}}{unsafe_connective}",
+            required_fact_ids=["FACT-ANSWER"],
+        )
+
+    monkeypatch.setattr(general.settings, "openai_api_key", "synthetic-key")
+    monkeypatch.setattr(general, "generate_openai_general_answer", fake_openai)
+    body = client.post(
+        "/questions/general", json={"question": "주휴수당 조건이 뭐야?"}
+    ).json()
+
+    assert body["answer"] == (
+        "주요 조건은 4주 평균 주 소정근로시간 15시간 이상과 소정근로일 개근입니다."
+    )
+    assert unsafe_connective.strip() not in body["answer"]
+    assert "해당 주까지 근로관계 유지" in body["limitations"]
