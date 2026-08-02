@@ -112,10 +112,33 @@ SOCIAL_INSURANCE_SOURCE_IDS = (
     "SRC-IACI-COVERAGE",
 )
 
+# KB.md: SRC-LSA-50, SRC-LSA-56
+# 근로기준법 제50조(법정근로시간)·제56조(연장·야간·휴일근로 가산임금)
+#
+# ⚠️ 법정근로시간 초과를 **위반으로 판정하지 않는다.**
+#
+#    법정근로시간을 넘는 근로가 곧 위법인 것은 아니다. 당사자 합의에 따른
+#    연장근로가 가능하고, 그 합의 여부와 한도는 계약서만으로 확인되지 않는다.
+#    계약서에 적힌 소정근로시간만 보고 "위법"이라고 단정하면 오판이 난다.
+#
+#    그래서 이 항목은 장애 판정과 같은 취급이다 —
+#    **판정하지 않고 사실만 알린다.** 초과분이 연장근로에 해당하면
+#    제56조의 가산임금 대상이라는 점을 안내하고 확인을 유도한다.
+STATUTORY_DAILY_HOURS = 8.0  # 법정근로시간(1일) — 시간외근로 판단 기준
+STATUTORY_WEEKLY_HOURS = 40.0  # 법정근로시간(1주)
+STATUTORY_HOURS_SOURCE_IDS = ("SRC-LSA-50", "SRC-LSA-56")
+
+# 야간근로 시간대(22:00~06:00). 연소자 기준과 시각은 같지만 성격이 다르다.
+#   · 18세 미만  → 원칙적 금지 (제70조)      → check_minor_night_work
+#   · 성인       → 금지 아님, 가산임금 대상 (제56조) → check_night_work_allowance
+NIGHT_WORK_START = "22:00"
+NIGHT_WORK_END = "06:00"
+NIGHT_WORK_SOURCE_ID = "SRC-LSA-56"
+
 # KB.md: KB-PREGNANT-WORKER / SRC-LSA-74, SRC-LSA-70
 # 근로기준법 제74조제5항·제7항·제8항, 제70조제2항 (2026-07-31 확인)
-STATUTORY_DAILY_HOURS = 8.0  # 법정근로시간(1일) — 시간외근로 판단 기준
-PREGNANT_STATUTORY_WEEKLY_HOURS = 40.0  # 법정근로시간(1주) — 시간외근로 판단 기준
+# 법정근로시간(1주)은 위 STATUTORY_WEEKLY_HOURS 와 같은 값을 쓴다.
+PREGNANT_STATUTORY_WEEKLY_HOURS = STATUTORY_WEEKLY_HOURS
 PREGNANT_SHORTENED_EARLY_WEEK_MAX = 12  # 임신 12주 이내
 PREGNANT_SHORTENED_LATE_WEEK_MIN = 32  # 임신 32주 이후 (2025-02-23 시행 확대)
 PREGNANT_SHORTENED_DAILY_HOURS = 2

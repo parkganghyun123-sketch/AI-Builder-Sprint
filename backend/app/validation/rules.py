@@ -34,6 +34,9 @@ from app.validation.constants import (
     MINOR_NIGHT_START,
     MINOR_SOURCE_ID,
     MINOR_WEEKLY_HOURS,
+    NIGHT_WORK_END,
+    NIGHT_WORK_SOURCE_ID,
+    NIGHT_WORK_START,
     POSTPARTUM_DAILY_OVERTIME_LIMIT,
     POSTPARTUM_OVERTIME_SOURCE_ID,
     POSTPARTUM_WEEKLY_OVERTIME_LIMIT,
@@ -55,6 +58,8 @@ from app.validation.constants import (
     SOCIAL_INSURANCE_WEEKLY_HOURS,
     STANDARD_YEAR,
     STATUTORY_DAILY_HOURS,
+    STATUTORY_HOURS_SOURCE_IDS,
+    STATUTORY_WEEKLY_HOURS,
     WEEKLY_HOLIDAY_MIN_HOURS,
     WEEKLY_HOLIDAY_SOURCE_ID,
 )
@@ -64,6 +69,13 @@ MINIMUM_WAGE_BASIS = (
 )
 WEEKLY_HOLIDAY_BASIS = f"근로기준법 제18조제3항·제55조 ({WEEKLY_HOLIDAY_SOURCE_ID})"
 BREAK_TIME_BASIS = f"근로기준법 제54조 ({BREAK_SOURCE_ID})"
+# ⚠️ 출처 ID는 반드시 ", " 로 잇는다. "·" 로 붙이면 한 토큰이 되어
+#    숫자 검증(app/bridge/numbers.py)이 "5056" 같은 가짜 숫자를 정당한 값으로
+#    수집한다. PREGNANT_OVERTIME_BASIS 와 같은 형식을 유지한다.
+STATUTORY_WORKING_HOURS_BASIS = (
+    f"근로기준법 제50조·제56조 ({', '.join(STATUTORY_HOURS_SOURCE_IDS)})"
+)
+NIGHT_WORK_ALLOWANCE_BASIS = f"근로기준법 제56조 ({NIGHT_WORK_SOURCE_ID})"
 MINOR_WORKING_HOURS_BASIS = f"근로기준법 제69조·2026-07-29 확인 ({MINOR_SOURCE_ID})"
 MINOR_NIGHT_WORK_BASIS = f"근로기준법 제70조·2026-07-29 확인 ({MINOR_NIGHT_SOURCE_ID})"
 PREGNANT_OVERTIME_BASIS = (
@@ -1189,6 +1201,170 @@ def check_break_time(terms: ContractTerms) -> CheckResult:
     )
 
 
+def check_statutory_working_hours(terms: ContractTerms) -> CheckResult:
+    """계약상 소정근로시간과 법정근로시간(1일 8시간·1주 40시간)을 대조한다.
+
+    ⚠️ **초과해도 VIOLATION으로 판정하지 않는다.**
+
+       법정근로시간을 넘는 근로가 곧 위법인 것은 아니다. 당사자 합의에 따른
+       연장근로가 가능하고, 그 합의 여부와 한도는 계약서만으로 확인되지 않는다.
+       계약서에 적힌 숫자만 보고 "위법"이라고 단정하면 오판이 난다.
+       장애를 자동으로 위반 판정하지 않는 것과 같은 이유다.
+
+       대신 초과 사실과 그 크기를 보여주고, 초과분이 연장근로에 해당하면
+       제56조의 가산임금 대상이라는 점을 안내한다. 판단은 사용자가 한다.
+
+       그래서 초과 시 status 는 UNKNOWN(정보 부족)이다. OK 로 두면 큰 초록
+       체크 옆에 "주 48시간"이 떠서 문제없다는 뜻으로 읽힌다.
+    """
+
+    hours_per_day = _safe_hours_per_day(terms)
+    weekly_hours = _safe_weekly_hours(terms)
+
+    if hours_per_day is None and weekly_hours is None:
+        return CheckResult(
+            code="STATUTORY_WORKING_HOURS",
+            label="법정근로시간",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=STATUTORY_WORKING_HOURS_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation="소정근로시간 정보 없음 — 법정근로시간 비교 불가",
+            detail=(
+                "시업·종업 시각 또는 주 근무일 수를 확인할 수 없어 "
+                "법정근로시간과 비교하지 못했습니다."
+            ),
+        )
+
+    parts: list[str] = []
+    exceeded: list[str] = []
+
+    if hours_per_day is not None:
+        operator = "≤" if hours_per_day <= STATUTORY_DAILY_HOURS else ">"
+        parts.append(
+            f"1일 {_hours(hours_per_day)} {operator} {STATUTORY_DAILY_HOURS:g}시간"
+        )
+        if hours_per_day > STATUTORY_DAILY_HOURS:
+            exceeded.append(
+                f"1일 {_hours(hours_per_day - STATUTORY_DAILY_HOURS)} 초과"
+            )
+
+    if weekly_hours is not None:
+        operator = "≤" if weekly_hours <= STATUTORY_WEEKLY_HOURS else ">"
+        parts.append(
+            f"주 {_hours(weekly_hours)} {operator} {STATUTORY_WEEKLY_HOURS:g}시간"
+        )
+        if weekly_hours > STATUTORY_WEEKLY_HOURS:
+            exceeded.append(f"주 {_hours(weekly_hours - STATUTORY_WEEKLY_HOURS)} 초과")
+
+    calculation = " · ".join(parts)
+
+    if not exceeded:
+        return CheckResult(
+            code="STATUTORY_WORKING_HOURS",
+            label="법정근로시간",
+            status=CheckStatus.OK,
+            legal_basis=STATUTORY_WORKING_HOURS_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=calculation,
+            detail=(
+                "계약서에 기재된 소정근로시간이 법정근로시간(1일 8시간·주 40시간) "
+                "이내입니다. 실제 근무에서 발생하는 연장근로는 계약서만으로 "
+                "확인되지 않습니다."
+            ),
+        )
+
+    return CheckResult(
+        code="STATUTORY_WORKING_HOURS",
+        label="법정근로시간",
+        status=CheckStatus.UNKNOWN,
+        legal_basis=STATUTORY_WORKING_HOURS_BASIS,
+        standard_year=STANDARD_YEAR,
+        calculation=f"{calculation} — {' · '.join(exceeded)}",
+        detail=(
+            "계약서에 기재된 소정근로시간이 법정근로시간(1일 8시간·주 40시간)을 "
+            "넘습니다. 다만 법정근로시간을 넘는 계약이 곧 위법인 것은 아닙니다. "
+            "당사자 합의에 따른 연장근로가 가능하고, 합의 여부와 한도는 "
+            "계약서만으로 확인되지 않아 위반 여부를 판정하지 않았습니다. "
+            "법정근로시간을 넘는 시간이 연장근로에 해당하면 가산임금이 적용되므로"
+            "(근로기준법 제56조), 연장근로 합의와 가산임금 지급 방식을 "
+            "사업주에게 확인해 보세요."
+        ),
+    )
+
+
+def check_night_work_allowance(terms: ContractTerms) -> CheckResult:
+    """성인 기준 계약 시각과 야간근로 시간대(22:00~06:00)의 겹침을 확인한다.
+
+    ⚠️ 성인의 야간근로는 **금지 대상이 아니다.** 18세 미만(제70조)과 다르다.
+       겹치더라도 위반이 아니라 가산임금(제56조) 대상이라는 사실만 알린다.
+       연소자 판정과 섞이지 않도록 code 와 label 을 분리한다.
+    """
+
+    work_intervals = _minor_work_intervals(terms)
+    if work_intervals is None:
+        return CheckResult(
+            code="NIGHT_WORK_ALLOWANCE",
+            label="야간근로 가산임금",
+            status=CheckStatus.UNKNOWN,
+            legal_basis=NIGHT_WORK_ALLOWANCE_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation="근무 시각 정보 없음 — 야간 시간대 비교 불가",
+            detail=(
+                "시업·종업 시각을 해석할 수 없어 "
+                f"{NIGHT_WORK_START}~{NIGHT_WORK_END} 시간대와의 겹침을 "
+                "확인하지 못했습니다."
+            ),
+        )
+
+    night_start = _safe_time_minutes(NIGHT_WORK_START)
+    night_end = _safe_time_minutes(NIGHT_WORK_END)
+    assert night_start is not None and night_end is not None
+    overlaps_night = any(
+        _overlaps(start, end, 0, night_end)
+        or _overlaps(start, end, night_start, 24 * 60 + night_end)
+        for start, end in work_intervals
+    )
+
+    work_range = f"{terms.work_start_time.value}~{terms.work_end_time.value}"
+    night_range = f"{NIGHT_WORK_START}~{NIGHT_WORK_END}"
+
+    if not overlaps_night:
+        return CheckResult(
+            code="NIGHT_WORK_ALLOWANCE",
+            label="야간근로 가산임금",
+            status=CheckStatus.OK,
+            legal_basis=NIGHT_WORK_ALLOWANCE_BASIS,
+            standard_year=STANDARD_YEAR,
+            calculation=(
+                f"근무 {work_range}(기재된 휴게시간 제외)와 "
+                f"야간 {night_range} 시간대가 겹치지 않음"
+            ),
+            detail=(
+                "계약서에 기재된 근무 시각은 야간근로 시간대와 겹치지 않습니다. "
+                "실제 근무에서 발생하는 야간근로는 계약서만으로 확인되지 않습니다."
+            ),
+        )
+
+    return CheckResult(
+        code="NIGHT_WORK_ALLOWANCE",
+        label="야간근로 가산임금",
+        status=CheckStatus.UNKNOWN,
+        legal_basis=NIGHT_WORK_ALLOWANCE_BASIS,
+        standard_year=STANDARD_YEAR,
+        calculation=(
+            f"근무 {work_range}(기재된 휴게시간 제외)와 "
+            f"야간 {night_range} 시간대가 겹침"
+        ),
+        detail=(
+            "계약서에 기재된 근무 시각이 야간근로 시간대와 겹칩니다. "
+            "성인의 야간근로는 금지 대상이 아니지만 가산임금이 적용되므로"
+            "(근로기준법 제56조), 야간근로 가산임금이 시급에 어떻게 반영되는지 "
+            "사업주에게 확인해 보세요. 실제 지급액은 계약서만으로 판정하지 "
+            "않았습니다."
+        ),
+    )
+
+
 def _required_group_result(
     *,
     code: str,
@@ -1289,6 +1465,8 @@ def validate(
         check_minimum_wage(terms),
         check_weekly_holiday(terms),
         check_break_time(terms),
+        check_statutory_working_hours(terms),
+        check_night_work_allowance(terms),
         *(check for check in optional_checks if check is not None),
         *check_required_fields(terms),
     ]

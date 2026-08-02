@@ -126,4 +126,8 @@ export const CHECK_SOURCE_FIELD: Record<string, keyof ContractTerms> = {
   WEEKLY_HOLIDAY: "work_days_per_week",
   BREAK_TIME: "break_start_time",
   WEEKLY_HOLIDAY_DAY: "weekly_holiday_day",
+  // 법정근로시간은 "주 며칠"이 초과 여부를 가르는 값이라 근무일 수를 근거로 쓴다.
+  STATUTORY_WORKING_HOURS: "work_days_per_week",
+  // 야간근로는 시업 시각이 겹침 판단의 출발점이다.
+  NIGHT_WORK_ALLOWANCE: "work_start_time",
 };

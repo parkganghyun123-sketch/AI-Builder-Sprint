@@ -18,6 +18,7 @@ from app.validation.rules import (
     check_minimum_wage,
     check_minor_night_work,
     check_minor_working_hours,
+    check_night_work_allowance,
     check_postpartum_overtime_limit,
     check_pregnant_night_work,
     check_pregnant_overtime,
@@ -26,6 +27,7 @@ from app.validation.rules import (
     check_required_fields,
     check_severance_pay,
     check_social_insurance_indicators,
+    check_statutory_working_hours,
     check_weekly_holiday,
     validate,
 )
@@ -1050,3 +1052,227 @@ def test_low_confidence_detail_tells_user_to_verify() -> None:
         weekly_holiday_day=field("일요일", confidence=Confidence.LOW)
     )
     assert "확인" in (check.detail or "")
+
+
+# ============================================================
+# 법정근로시간 (근로기준법 제50조·제56조)
+# ============================================================
+#
+# ⚠️ 이 규칙의 핵심 계약은 "초과해도 위반으로 단정하지 않는다"이다.
+#    연장근로 합의 여부를 계약서로 알 수 없기 때문이다.
+#    아래 test_..._never_reports_violation 이 그 계약을 고정한다.
+
+
+def _statutory_hours_check(**overrides: ExtractedField):
+    return check_statutory_working_hours(terms(**overrides))
+
+
+@pytest.mark.parametrize(
+    ("start", "end", "break_start", "break_end", "days"),
+    [
+        ("09:00", "18:00", "12:00", "13:00", 5),  # 일 8시간 · 주 40시간 (경계)
+        ("09:00", "18:00", "12:00", "13:00", 4),  # 주 32시간
+        ("09:00", "13:00", None, None, 5),  # 일 4시간 · 주 20시간
+    ],
+)
+def test_statutory_hours_within_limit_is_ok(
+    start: str, end: str, break_start: str | None, break_end: str | None, days: int
+) -> None:
+    """법정근로시간 이내면 기준 충족으로 표시한다."""
+    check = _statutory_hours_check(
+        work_start_time=field(start),
+        work_end_time=field(end),
+        break_start_time=field(break_start),
+        break_end_time=field(break_end),
+        work_days_per_week=field(days),
+    )
+    assert check.status == CheckStatus.OK
+    assert check.code == "STATUTORY_WORKING_HOURS"
+
+
+def test_statutory_hours_weekly_boundary_forty_is_ok() -> None:
+    """주 40시간 정확히는 초과가 아니다."""
+    check = _statutory_hours_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("18:00"),
+        break_start_time=field("12:00"),
+        break_end_time=field("13:00"),
+        work_days_per_week=field(5),
+    )
+    assert check.status == CheckStatus.OK
+    assert "주 40시간 ≤ 40시간" in (check.calculation or "")
+
+
+def test_statutory_hours_weekly_exceeded_reports_shortfall() -> None:
+    """주 48시간이면 초과분 8시간을 계산식에 드러낸다."""
+    check = _statutory_hours_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("18:00"),
+        break_start_time=field("12:00"),
+        break_end_time=field("13:00"),
+        work_days_per_week=field(6),
+    )
+    assert check.status == CheckStatus.UNKNOWN
+    assert "주 48시간 > 40시간" in (check.calculation or "")
+    assert "주 8시간 초과" in (check.calculation or "")
+
+
+def test_statutory_hours_daily_exceeded_is_detected() -> None:
+    """1일 8시간 초과도 주 40시간 이내와 별개로 잡는다."""
+    check = _statutory_hours_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("19:00"),
+        break_start_time=field("12:00"),
+        break_end_time=field("13:00"),
+        work_days_per_week=field(4),  # 일 9시간 · 주 36시간
+    )
+    assert check.status == CheckStatus.UNKNOWN
+    assert "1일 9시간 > 8시간" in (check.calculation or "")
+    assert "주 36시간 ≤ 40시간" in (check.calculation or "")
+
+
+@pytest.mark.parametrize("days", [6, 7])
+def test_statutory_hours_exceeded_never_reports_violation(days: int) -> None:
+    """
+    ⚠️ 회귀 방지 — 초과를 위반으로 판정하면 안 된다.
+
+    연장근로 합의 여부가 계약서에 없으므로 위법이라고 단정할 수 없다.
+    누군가 status 를 VIOLATION 으로 바꾸면 여기서 막는다.
+    """
+    check = _statutory_hours_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("18:00"),
+        break_start_time=field("12:00"),
+        break_end_time=field("13:00"),
+        work_days_per_week=field(days),
+    )
+    assert check.status != CheckStatus.VIOLATION
+    assert "위법인 것은 아닙니다" in (check.detail or "")
+
+
+def test_statutory_hours_exceeded_mentions_extra_pay() -> None:
+    """초과 시 가산임금 확인을 안내해야 한다."""
+    check = _statutory_hours_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("18:00"),
+        break_start_time=field("12:00"),
+        break_end_time=field("13:00"),
+        work_days_per_week=field(6),
+    )
+    assert "가산임금" in (check.detail or "")
+    assert "제56조" in (check.detail or "")
+
+
+def test_statutory_hours_without_time_information_is_unknown() -> None:
+    """시각 정보가 없으면 판정하지 않는다."""
+    check = _statutory_hours_check(
+        work_start_time=field(None),
+        work_end_time=field(None),
+        work_days_per_week=field(None),
+    )
+    assert check.status == CheckStatus.UNKNOWN
+    assert "비교 불가" in (check.calculation or "")
+
+
+# ============================================================
+# 야간근로 가산임금 (근로기준법 제56조)
+# ============================================================
+#
+# ⚠️ 성인의 야간근로는 금지가 아니다. 18세 미만(제70조)과 섞지 않는다.
+
+
+def _night_allowance_check(**overrides: ExtractedField):
+    return check_night_work_allowance(terms(**overrides))
+
+
+def test_night_allowance_daytime_shift_is_ok() -> None:
+    """주간 근무는 야간 시간대와 겹치지 않는다."""
+    check = _night_allowance_check(
+        work_start_time=field("09:00"),
+        work_end_time=field("18:00"),
+    )
+    assert check.status == CheckStatus.OK
+    assert check.code == "NIGHT_WORK_ALLOWANCE"
+
+
+def test_night_allowance_boundary_ending_at_twenty_two_is_ok() -> None:
+    """22:00 종료는 야간 시간대에 걸치지 않는다(경계)."""
+    check = _night_allowance_check(
+        work_start_time=field("14:00"),
+        work_end_time=field("22:00"),
+        break_start_time=field(None),
+        break_end_time=field(None),
+    )
+    assert check.status == CheckStatus.OK
+
+
+@pytest.mark.parametrize(
+    ("start", "end"),
+    [
+        ("18:00", "23:00"),  # 22시 이후로 넘어감
+        ("22:00", "02:00"),  # 자정 넘김
+        ("05:00", "09:00"),  # 06시 이전 시작
+    ],
+)
+def test_night_allowance_overlapping_shift_is_flagged(start: str, end: str) -> None:
+    """야간 시간대와 겹치면 가산임금 확인을 안내한다."""
+    check = _night_allowance_check(
+        work_start_time=field(start),
+        work_end_time=field(end),
+        break_start_time=field(None),
+        break_end_time=field(None),
+    )
+    assert check.status == CheckStatus.UNKNOWN
+    assert "가산임금" in (check.detail or "")
+
+
+def test_night_allowance_overlap_never_reports_violation() -> None:
+    """
+    ⚠️ 회귀 방지 — 성인 야간근로를 위반으로 판정하면 안 된다.
+
+    금지 대상은 18세 미만이다(check_minor_night_work).
+    """
+    check = _night_allowance_check(
+        work_start_time=field("22:00"),
+        work_end_time=field("06:00"),
+        break_start_time=field(None),
+        break_end_time=field(None),
+    )
+    assert check.status != CheckStatus.VIOLATION
+    assert "금지 대상이 아니지만" in (check.detail or "")
+
+
+def test_night_allowance_without_time_information_is_unknown() -> None:
+    check = _night_allowance_check(
+        work_start_time=field(None),
+        work_end_time=field(None),
+    )
+    assert check.status == CheckStatus.UNKNOWN
+
+
+# ============================================================
+# validate() 등록 확인
+# ============================================================
+
+
+def test_validate_includes_new_working_hour_checks() -> None:
+    """두 규칙이 실제 보고서에 포함되어야 한다."""
+    codes = {check.code for check in validate(terms()).checks}
+    assert "STATUTORY_WORKING_HOURS" in codes
+    assert "NIGHT_WORK_ALLOWANCE" in codes
+
+
+def test_validate_separates_adult_and_minor_night_rules() -> None:
+    """성인 야간 안내와 연소자 야간 금지는 다른 항목이어야 한다."""
+    report = validate(
+        terms(
+            work_start_time=field("18:00"),
+            work_end_time=field("23:00"),
+            break_start_time=field(None),
+            break_end_time=field(None),
+        ),
+        worker_birth_date="2010-01-01",  # 만 16세
+    )
+    by_code = {check.code: check for check in report.checks}
+    assert by_code["NIGHT_WORK_ALLOWANCE"].status == CheckStatus.UNKNOWN
+    assert by_code["MINOR_NIGHT_WORK"].status == CheckStatus.VIOLATION
