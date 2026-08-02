@@ -33,6 +33,7 @@ const EVIDENCE_META: Record<
 };
 
 const TOPIC_LABELS: Record<string, string> = {
+  SMALL_TALK: "인사·일상대화",
   WEEKLY_HOLIDAY: "주휴수당",
   MINIMUM_WAGE: "최저임금",
   BREAK_TIME: "휴게시간",

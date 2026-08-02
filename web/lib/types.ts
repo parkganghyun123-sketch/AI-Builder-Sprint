@@ -112,6 +112,7 @@ export interface ValidationReport {
 // ============================================================
 
 export type ChatIntent =
+  | "SMALL_TALK"
   | "FIELD_LOOKUP"
   | "CALCULATION"
   | "MISSING_CLAUSE"
@@ -153,6 +154,7 @@ export interface ContractChatRequest {
 }
 
 export type GeneralQuestionTopic =
+  | "SMALL_TALK"
   | "WEEKLY_HOLIDAY"
   | "MINIMUM_WAGE"
   | "BREAK_TIME"
@@ -492,6 +494,7 @@ export interface ArchiveItem {
  * 타입을 분리한다.
  */
 export type GroundedChatIntent =
+  | "SMALL_TALK"
   | "FIELD_LOOKUP"
   | "CALCULATION"
   | "MISSING_CLAUSE"

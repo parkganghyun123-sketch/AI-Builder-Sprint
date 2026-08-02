@@ -246,6 +246,7 @@ class ChatIntent(str, Enum):
     LEGAL_STANDARD = "LEGAL_STANDARD"
     OUT_OF_SCOPE = "OUT_OF_SCOPE"
     NEEDS_CLARIFICATION = "NEEDS_CLARIFICATION"
+    SMALL_TALK = "SMALL_TALK"
 
 
 class ChatEvidenceKind(str, Enum):
@@ -287,6 +288,7 @@ class ContractChatResponse(BaseModel):
 
 
 class GeneralQuestionTopic(str, Enum):
+    SMALL_TALK = "SMALL_TALK"
     WEEKLY_HOLIDAY = "WEEKLY_HOLIDAY"
     MINIMUM_WAGE = "MINIMUM_WAGE"
     BREAK_TIME = "BREAK_TIME"

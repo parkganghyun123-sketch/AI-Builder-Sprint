@@ -5,6 +5,11 @@ ValidationReport만 검색한다. 따라서 답변의 사실·숫자·법정 기
 이미 검증된 값으로 역추적할 수 있다.
 """
 
+from app.chat.small_talk import (
+    SMALL_TALK_SUGGESTIONS,
+    classify_small_talk,
+    small_talk_answer,
+)
 from app.schemas import (
     ChatAction,
     ChatEvidence,
@@ -121,6 +126,8 @@ def classify(question: str) -> ChatIntent:
     normalized = question.strip().lower()
     if any(word in normalized for word in OUT_OF_SCOPE_WORDS):
         return ChatIntent.OUT_OF_SCOPE
+    if classify_small_talk(normalized) is not None:
+        return ChatIntent.SMALL_TALK
     if any(word in normalized for word in ("빠진", "누락", "안 적", "미기재", "빈칸")):
         return ChatIntent.MISSING_CLAUSE
     if any(word in normalized for word in ("얼마", "계산", "예상 월급", "월급")):
@@ -254,6 +261,19 @@ def _out_of_scope() -> ContractChatResponse:
     )
 
 
+def _small_talk(question: str) -> ContractChatResponse:
+    kind = classify_small_talk(question)
+    if kind is None:
+        return _clarification()
+    return ContractChatResponse(
+        intent=ChatIntent.SMALL_TALK,
+        answer=small_talk_answer(kind),
+        limitations="근로계약과 노동 기준 안내를 중심으로 도와드려요.",
+        evidence=[],
+        suggestions=SMALL_TALK_SUGGESTIONS,
+    )
+
+
 def _clarification() -> ContractChatResponse:
     return ContractChatResponse(
         intent=ChatIntent.NEEDS_CLARIFICATION,
@@ -271,6 +291,8 @@ def answer(
     intent = classify(question)
     if intent == ChatIntent.OUT_OF_SCOPE:
         return _out_of_scope()
+    if intent == ChatIntent.SMALL_TALK:
+        return _small_talk(question)
     if intent == ChatIntent.MISSING_CLAUSE:
         return _missing_clause(report)
     if intent == ChatIntent.CALCULATION:
