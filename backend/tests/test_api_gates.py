@@ -871,6 +871,20 @@ def test_계약서_없는_주휴_질문은_시간_요건과_한계를_함께_안
     assert body["action"]["href"] == "/upload"
 
 
+@pytest.mark.parametrize("question", ["소정근로일이 뭐야?", "소정근로일 뜻"])
+def test_소정근로일_정의는_범위밖_거절_대신_검증된_근거로_답한다(question):
+    res = client.post("/questions/general", json={"question": question})
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "미리 일하기로 정한 날" in body["answer"]
+    assert "추가로 출근한 날과는 구분" in body["answer"]
+    assert body["evidence"]
+    assert body["retrieved_kb_ids"] == ["KB-GLOSSARY-PRESCRIBED-WORKDAY"]
+    assert "SRC-MOEL-WEEKLY-HOLIDAY" in body["retrieved_source_ids"]
+
+
 @pytest.mark.parametrize(
     "question,expected,source_fragment",
     [

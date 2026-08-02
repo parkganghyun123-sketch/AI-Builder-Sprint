@@ -25,6 +25,7 @@ from app.chat.knowledge import (
     VERIFIED_KNOWLEDGE,
     GeneralKnowledgeMatch,
     retrieve_general_knowledge,
+    retrieve_glossary_knowledge,
 )
 from app.chat.models import (
     GenerationFactCard,
@@ -391,6 +392,60 @@ _KB_ID_BY_GENERAL_TOPIC = {
     topic: kb_id for kb_id, topic in _GENERAL_TOPIC_BY_KB_ID.items()
 }
 
+_GLOSSARY_TOPIC_BY_KB_ID = {
+    "KB-GLOSSARY-PRESCRIBED-WORKDAY": GeneralQuestionTopic.WEEKLY_HOLIDAY,
+    "KB-GLOSSARY-PRESCRIBED-HOURS": GeneralQuestionTopic.WRITTEN_CONTRACT,
+    "KB-GLOSSARY-FULL-ATTENDANCE": GeneralQuestionTopic.WEEKLY_HOLIDAY,
+    "KB-GLOSSARY-CONTINUOUS-SERVICE": GeneralQuestionTopic.SEVERANCE_PAY,
+    "KB-GLOSSARY-OVERTIME": GeneralQuestionTopic.EXTRA_WORK,
+    "KB-GLOSSARY-NIGHT-WORK": GeneralQuestionTopic.EXTRA_WORK,
+    "KB-GLOSSARY-HOLIDAY-WORK": GeneralQuestionTopic.EXTRA_WORK,
+    "KB-GLOSSARY-BREAK-TIME": GeneralQuestionTopic.BREAK_TIME,
+}
+
+_GLOSSARY_EVIDENCE = {
+    "KB-GLOSSARY-PRESCRIBED-WORKDAY": (
+        "소정근로일과 주휴 개근 기준",
+        "고용노동부 주휴수당 지급기준",
+        WEEKLY_HOLIDAY_URL,
+    ),
+    "KB-GLOSSARY-PRESCRIBED-HOURS": (
+        "소정근로시간",
+        "근로기준법 제2조·제17조",
+        LABOR_STANDARDS_ACT_URL,
+    ),
+    "KB-GLOSSARY-FULL-ATTENDANCE": (
+        "소정근로일 개근",
+        "고용노동부 주휴수당 지급기준",
+        WEEKLY_HOLIDAY_URL,
+    ),
+    "KB-GLOSSARY-CONTINUOUS-SERVICE": (
+        "계속근로기간",
+        "근로자퇴직급여 보장법 제4조",
+        ERBA_4_URL,
+    ),
+    "KB-GLOSSARY-OVERTIME": (
+        "연장근로",
+        "근로기준법 제50조·제56조",
+        LABOR_STANDARDS_ACT_URL,
+    ),
+    "KB-GLOSSARY-NIGHT-WORK": (
+        "야간근로",
+        "근로기준법 제56조",
+        LABOR_STANDARDS_ACT_URL,
+    ),
+    "KB-GLOSSARY-HOLIDAY-WORK": (
+        "휴일근로",
+        "근로기준법 제56조",
+        LABOR_STANDARDS_ACT_URL,
+    ),
+    "KB-GLOSSARY-BREAK-TIME": (
+        "휴게시간",
+        "근로기준법 제54조",
+        BREAK_TIME_URL,
+    ),
+}
+
 
 def _evidence(label: str, value: str, url: str) -> ChatEvidence:
     return ChatEvidence(
@@ -519,6 +574,22 @@ def _context_match(context: GeneralQuestionTopic) -> GeneralKnowledgeMatch | Non
     return GeneralKnowledgeMatch(entry=entry, score=0.75, matched_aliases=())
 
 
+def _glossary_response(match: GeneralKnowledgeMatch) -> GeneralQuestionResponse:
+    kb_id = match.entry.kb_id
+    label, value, url = _GLOSSARY_EVIDENCE[kb_id]
+    return GeneralQuestionResponse(
+        topic=_GLOSSARY_TOPIC_BY_KB_ID[kb_id],
+        answer=match.entry.text,
+        limitations=(
+            "이 답변은 용어의 뜻이며, 개인별 적용 여부는 계약 내용과 실제 근무기록을 "
+            "함께 확인해야 합니다."
+        ),
+        evidence=[_evidence(label, value, url)],
+        action=_upload_action(),
+        suggestions=SUGGESTIONS,
+    )
+
+
 def _route_general_question(
     question: str,
     context: GeneralQuestionTopic | None,
@@ -545,6 +616,10 @@ def _route_general_question(
         )
     ):
         return GeneralQuestionTopic.OUT_OF_SCOPE, None
+
+    glossary_match = retrieve_glossary_knowledge(question)
+    if glossary_match is not None:
+        return _GLOSSARY_TOPIC_BY_KB_ID[glossary_match.entry.kb_id], glossary_match
 
     matches = retrieve_general_knowledge(question, top_k=3)
     if matches and matches[0].score >= 0.74:
@@ -1484,6 +1559,12 @@ async def answer_general_question(
 ) -> GeneralQuestionResponse:
     normalized = question.strip().lower()
     topic, match = _route_general_question(normalized, context)
+    if match is not None and match.entry.kb_id in _GLOSSARY_TOPIC_BY_KB_ID:
+        deterministic = _attach_retrieval(_glossary_response(match), match)
+        return await _naturalize_general_response(
+            deterministic,
+            _question_intents(normalized),
+        )
     if topic == GeneralQuestionTopic.WRITTEN_CONTRACT:
         signals = _extract_written_contract_signals(normalized)
         plan_context = _build_plan_context(signals)

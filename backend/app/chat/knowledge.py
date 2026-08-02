@@ -230,7 +230,122 @@ VERIFIED_KNOWLEDGE: tuple[KnowledgeEntry, ...] = (
             "경우에는 당사자 사이의 합의로 지급기일을 연장할 수 있다."
         ),
     ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-PRESCRIBED-WORKDAY",
+        title="소정근로일 뜻",
+        topics=frozenset({ChatTopic.WEEKLY_HOLIDAY}),
+        source_ids=("SRC-MOEL-WEEKLY-HOLIDAY", "SRC-LSA-18"),
+        text=(
+            "소정근로일은 근로자와 사용자가 근로계약이나 근무표로 미리 일하기로 "
+            "정한 날입니다. 갑자기 추가로 출근한 날과는 구분하며, 주휴 관련 개근 "
+            "여부를 확인할 때 기준이 됩니다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-PRESCRIBED-HOURS",
+        title="소정근로시간 뜻",
+        topics=frozenset({ChatTopic.WORKING_HOURS}),
+        source_ids=("SRC-LSA-FULL", "SRC-LSA-17"),
+        text=(
+            "소정근로시간은 근로자와 사용자가 법정근로시간 범위에서 미리 일하기로 "
+            "정한 근로시간입니다. 실제로 추가 근무한 시간과는 구분합니다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-FULL-ATTENDANCE",
+        title="개근 뜻",
+        topics=frozenset({ChatTopic.WEEKLY_HOLIDAY}),
+        source_ids=("SRC-MOEL-WEEKLY-HOLIDAY",),
+        text=(
+            "개근은 근로제공 의무가 있는 소정근로일에 결근하지 않은 상태를 말합니다. "
+            "지각, 조퇴, 휴가, 대타 또는 근무일 변경이 있었다면 그 사실관계와 적용 "
+            "기준을 별도로 확인해야 합니다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-CONTINUOUS-SERVICE",
+        title="계속근로기간 뜻",
+        topics=frozenset({ChatTopic.SEVERANCE_PAY}),
+        source_ids=("SRC-ERBA-4", "SRC-MOEL-SEVERANCE-2025"),
+        text=(
+            "계속근로기간은 근로관계가 이어진 기간입니다. 계약서의 예정 기간과 실제 "
+            "계속근로기간은 다를 수 있어 실제 입·퇴사일, 계약 갱신과 근무 중단 "
+            "여부를 함께 확인합니다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-OVERTIME",
+        title="연장근로 뜻",
+        topics=frozenset({ChatTopic.EXTRA_WORK}),
+        source_ids=("SRC-LSA-50", "SRC-LSA-56"),
+        text="연장근로는 근로기준법의 법정근로시간을 넘겨 일한 시간입니다.",
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-NIGHT-WORK",
+        title="야간근로 뜻",
+        topics=frozenset({ChatTopic.EXTRA_WORK}),
+        source_ids=("SRC-LSA-56",),
+        text="야간근로는 22:00부터 다음 날 06:00 사이에 한 근로입니다.",
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-HOLIDAY-WORK",
+        title="휴일근로 뜻",
+        topics=frozenset({ChatTopic.EXTRA_WORK}),
+        source_ids=("SRC-LSA-56",),
+        text=(
+            "휴일근로는 근로기준법 제56조가 가산임금 대상으로 규정하는 휴일의 "
+            "근로입니다. 어떤 날이 해당 휴일인지는 적용 규정과 계약을 별도로 "
+            "확인합니다."
+        ),
+    ),
+    KnowledgeEntry(
+        kb_id="KB-GLOSSARY-BREAK-TIME",
+        title="휴게시간 뜻",
+        topics=frozenset({ChatTopic.BREAK_TIME}),
+        source_ids=("SRC-LSA-54-CURRENT",),
+        text="휴게시간은 근로시간 도중에 일을 멈추고 근로자가 자유롭게 이용하는 시간입니다.",
+    ),
 )
+
+
+_GLOSSARY_ALIASES: dict[str, tuple[str, ...]] = {
+    "KB-GLOSSARY-PRESCRIBED-WORKDAY": ("소정근로일",),
+    "KB-GLOSSARY-PRESCRIBED-HOURS": ("소정근로시간",),
+    "KB-GLOSSARY-FULL-ATTENDANCE": ("개근",),
+    "KB-GLOSSARY-CONTINUOUS-SERVICE": ("계속근로기간",),
+    "KB-GLOSSARY-OVERTIME": ("연장근로",),
+    "KB-GLOSSARY-NIGHT-WORK": ("야간근로",),
+    "KB-GLOSSARY-HOLIDAY-WORK": ("휴일근로",),
+    "KB-GLOSSARY-BREAK-TIME": ("휴게시간",),
+}
+
+
+def retrieve_glossary_knowledge(question: str) -> GeneralKnowledgeMatch | None:
+    """직접적인 용어 정의 질문만 검증된 초보자 사전으로 연결한다."""
+
+    compact = _compact(question)
+    entries = {entry.kb_id: entry for entry in VERIFIED_KNOWLEDGE}
+    definition_suffix = (
+        r"(?:이|가|은|는)?(?:뭐야|무엇이야|무슨뜻이야|무슨의미야|"
+        r"뜻|뜻이뭐야|뜻을알려줘|의미야|의미가뭐야|정의|정의가뭐야|"
+        r"정의해줘|설명해|설명해줘)"
+    )
+    candidates = []
+    for kb_id, aliases in _GLOSSARY_ALIASES.items():
+        for alias in aliases:
+            normalized_alias = _compact(alias)
+            if re.fullmatch(
+                rf"{re.escape(normalized_alias)}{definition_suffix}", compact
+            ):
+                candidates.append((len(normalized_alias), kb_id, alias))
+    if not candidates:
+        return None
+    _, kb_id, alias = max(candidates)
+    return GeneralKnowledgeMatch(
+        entry=entries[kb_id],
+        score=1.0,
+        matched_aliases=(alias,),
+    )
 
 
 # 사용자 표현을 법률 용어로 바꾸기 위한 로컬 검색 사전이다. 이 문구 자체는 답변에
@@ -486,6 +601,8 @@ def retrieve_general_knowledge(
     query_terms = _terms(question)
     matches: list[GeneralKnowledgeMatch] = []
     for entry in VERIFIED_KNOWLEDGE:
+        if entry.kb_id.startswith("KB-GLOSSARY-"):
+            continue
         aliases = _GENERAL_ALIASES.get(entry.kb_id, ())
         matched_aliases = tuple(
             alias for alias in aliases if _compact(alias) in compact
@@ -610,6 +727,8 @@ def retrieve_knowledge(
 
     ranked: list[tuple[float, KnowledgeEntry]] = []
     for entry in VERIFIED_KNOWLEDGE:
+        if entry.kb_id.startswith("KB-GLOSSARY-"):
+            continue
         if topic not in entry.topics:
             continue
         if (

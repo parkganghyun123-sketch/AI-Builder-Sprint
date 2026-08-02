@@ -854,3 +854,123 @@ def test_일반_질문의_미승인_연결문은_결정론_답변으로_복구�
     )
     assert unsafe_connective.strip() not in body["answer"]
     assert "해당 주까지 근로관계 유지" in body["limitations"]
+
+
+@pytest.mark.parametrize(
+    "question,topic,kb_id,source_id,expected",
+    [
+        (
+            "소정근로일이 뭐야?",
+            "WEEKLY_HOLIDAY",
+            "KB-GLOSSARY-PRESCRIBED-WORKDAY",
+            "SRC-MOEL-WEEKLY-HOLIDAY",
+            "미리 일하기로 정한 날",
+        ),
+        (
+            "소정근로일 뜻",
+            "WEEKLY_HOLIDAY",
+            "KB-GLOSSARY-PRESCRIBED-WORKDAY",
+            "SRC-LSA-18",
+            "추가로 출근한 날과는 구분",
+        ),
+        (
+            "소정근로시간이 뭐야?",
+            "WRITTEN_CONTRACT",
+            "KB-GLOSSARY-PRESCRIBED-HOURS",
+            "SRC-LSA-17",
+            "미리 일하기로 정한 근로시간",
+        ),
+        (
+            "개근 뜻이 뭐야?",
+            "WEEKLY_HOLIDAY",
+            "KB-GLOSSARY-FULL-ATTENDANCE",
+            "SRC-MOEL-WEEKLY-HOLIDAY",
+            "소정근로일에 결근하지 않은 상태",
+        ),
+        (
+            "계속근로기간 뜻",
+            "SEVERANCE_PAY",
+            "KB-GLOSSARY-CONTINUOUS-SERVICE",
+            "SRC-ERBA-4",
+            "근로관계가 이어진 기간",
+        ),
+        (
+            "연장근로가 뭐야?",
+            "EXTRA_WORK",
+            "KB-GLOSSARY-OVERTIME",
+            "SRC-LSA-56",
+            "법정근로시간을 넘겨",
+        ),
+        (
+            "야간근로 뜻",
+            "EXTRA_WORK",
+            "KB-GLOSSARY-NIGHT-WORK",
+            "SRC-LSA-56",
+            "22:00부터 다음 날 06:00",
+        ),
+        (
+            "휴일근로가 무슨 의미야?",
+            "EXTRA_WORK",
+            "KB-GLOSSARY-HOLIDAY-WORK",
+            "SRC-LSA-56",
+            "가산임금 대상으로 규정하는 휴일",
+        ),
+        (
+            "휴게시간이 뭐야?",
+            "BREAK_TIME",
+            "KB-GLOSSARY-BREAK-TIME",
+            "SRC-LSA-54-CURRENT",
+            "자유롭게 이용하는 시간",
+        ),
+    ],
+)
+def test_초보자_용어_질문은_검증된_사전과_출처로_답한다(
+    question, topic, kb_id, source_id, expected
+):
+    body = client.post("/questions/general", json={"question": question}).json()
+
+    assert body["topic"] == topic
+    assert expected in body["answer"]
+    assert body["evidence"]
+    assert body["retrieved_kb_ids"] == [kb_id]
+    assert source_id in body["retrieved_source_ids"]
+    assert len(body["answer"]) <= 220
+
+
+def test_용어_사전_추가_후에도_주휴_조건_질문은_기존_답변을_유지한다():
+    body = client.post(
+        "/questions/general", json={"question": "주휴수당 조건이 뭐야?"}
+    ).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "4주 평균 주 소정근로시간 15시간 이상" in body["answer"]
+    assert "소정근로일 개근" in body["answer"]
+    assert body["retrieved_kb_ids"] == ["KB-WEEKLY-HOLIDAY-TIME"]
+
+
+@pytest.mark.parametrize(
+    "question,topic",
+    [
+        ("소정근로일 개근하면 주휴수당 받을 수 있다는 뜻이야?", "WEEKLY_HOLIDAY"),
+        ("야간근로하면 수당이 뭐야?", "EXTRA_WORK"),
+        ("휴게시간은 몇 분이라는 뜻이야?", "BREAK_TIME"),
+        ("연장근로 수당이 뭐야?", "EXTRA_WORK"),
+        ("계속근로기간 1년이면 퇴직금 받을 수 있다는 뜻이야?", "SEVERANCE_PAY"),
+    ],
+)
+def test_권리와_금액을_묻는_문장은_용어_정의로_가로채지_않는다(question, topic):
+    body = client.post("/questions/general", json={"question": question}).json()
+
+    assert body["topic"] == topic
+    assert all(
+        not kb_id.startswith("KB-GLOSSARY-") for kb_id in body["retrieved_kb_ids"]
+    )
+
+
+def test_일반_퇴직금_검색에는_용어사전_항목이_섞이지_않는다():
+    body = client.post(
+        "/questions/general", json={"question": "퇴직금 받을 수 있어?"}
+    ).json()
+
+    assert body["topic"] == "SEVERANCE_PAY"
+    assert body["retrieved_kb_ids"] == ["KB-SEVERANCE-ELIGIBILITY"]

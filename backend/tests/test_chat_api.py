@@ -950,6 +950,7 @@ def test_chat_requires_contract_terms(client) -> None:
 def test_rag_corpus_is_closed_over_verified_kb_sources() -> None:
     allowed = {
         "SRC-MINWAGE-2026",
+        "SRC-LSA-FULL",
         "SRC-LSA-17",
         "SRC-MOEL-CONTRACT-FORMS",
         "SRC-LSA-54-CURRENT",
@@ -976,6 +977,7 @@ def test_rag_corpus_is_closed_over_verified_kb_sources() -> None:
         "SRC-LSA-36",
         "SRC-LSA-43",
         "SRC-LSA-48",
+        "SRC-LSA-50",
         "SRC-LSA-66",
         "SRC-LSA-67",
         "SRC-LSA-68",
