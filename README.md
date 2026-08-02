@@ -498,11 +498,43 @@ AI가 읽은 값을 그대로 판정에 쓰지 않습니다.
 | 측정 스크립트 | [`backend/app/evaluation/evaluate.py`](./backend/app/evaluation/evaluate.py) | 핵심 4필드 기준 정확도 산출 |
 | 평가 정답셋 | [`backend/app/evaluation/specs.py`](./backend/app/evaluation/specs.py) | 합성 계약서 사양과 정답값 |
 | 촬영 조건 시뮬레이션 | [`backend/app/evaluation/photo_sim.py`](./backend/app/evaluation/photo_sim.py) | 기울어짐·조명 변형 재현 |
+| 손글씨 반복 측정 스크립트 | [`spikes/check_extract.py`](./spikes/check_extract.py) | 실제 사진 3회 반복 · 실패 원인 분류 |
+| 손글씨 정답 라벨 | [`spikes/fixtures/handwritten_01.json`](./spikes/fixtures/handwritten_01.json) · [`_02.json`](./spikes/fixtures/handwritten_02.json) | 사람이 눈으로 읽어 작성 |
 | 실제 API 응답 픽스처 | [`spikes/fixtures/`](./spikes/fixtures) | Document Parse · Extract 원본 응답 |
 
-> ⚠️ 이 평가셋은 실제 계약서 사진이 아니라 **합성 벤치마크**입니다.
-> "Upstage 추출 파이프라인이 정해진 형식을 얼마나 정확히 복원하는가"를 측정하며,
-> 실제 촬영 조건에서의 정확도로 과장하지 않습니다.
+### 실측 결과
+
+| 평가셋 | 결과 | 측정하는 것 |
+|---|---|---|
+| 합성 벤치마크 10장 | **230/230 (100%)** | 정해진 형식을 정확히 복원하는가 |
+| 실제 손글씨 2장 · 3회 반복 | **115/138 (83%)** | 촬영·필기 조건에서도 읽히는가 |
+
+> ⚠️ 합성 100%는 **파이프라인이 형식을 복원한다**는 뜻일 뿐, 실제 사진 정확도가
+> 아닙니다. `specs.py`로 그린 계약서를 같은 `specs.py`의 정답과 대조하기 때문입니다.
+> 실제 촬영 조건의 정확도는 아래 손글씨 실측 83%가 답합니다.
+
+손글씨 실패 8건을 원인별로 나누면 대응이 갈립니다.
+
+| 원인 | 건수 | 대응 |
+|---|---|---|
+| **오독** | 4 | 코드로 고칠 수 없음 → **사용자 확인 관문** |
+| **누락** | 2 | 확인 관문에서 직접 입력 |
+| **형식** | 2 | 정규화로 흡수 가능 (`010 8985 -2595`, `50000원`) |
+
+가장 위험한 사례는 시급을 `10,000` → `0000`으로 읽은 것입니다.
+**시급 1만원이 0원이 되어 최저임금 판정이 통째로 뒤집힙니다.**
+`2`를 `7`로 읽어 계약 시작일이 5일 밀린 사례도 있습니다.
+
+이래서 추출 결과를 판정에 바로 넣지 않고 **사람이 확정한 값만** 사용합니다.
+이 실측이 [`backend/app/review/fields.py`](./backend/app/review/fields.py)의
+확인 항목 순서를 결정했습니다.
+
+정규화로 흡수 가능한 2건도 점수에 그대로 반영했습니다. 채점 기준을 느슨하게 바꾸면
+숫자는 89%로 오르지만, 그건 측정이 아니라 포장입니다.
+
+```bash
+python3 spikes/check_extract.py spikes/fixtures --runs 3
+```
 
 ### 챗봇 안전성 검증
 

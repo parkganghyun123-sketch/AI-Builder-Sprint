@@ -87,6 +87,36 @@ def _matches(field: str, expected, actual) -> bool:
     return _norm_text(expected) == _norm_text(actual)
 
 
+# 구두점·공백을 모두 뺀 형태. 실패 원인을 가르는 데만 쓴다.
+_SYMBOLS = re.compile(r"[^0-9A-Za-z가-힣]")
+
+
+def _strip_symbols(value) -> str:
+    return _SYMBOLS.sub("", str(value)) if value is not None else ""
+
+
+def _failure_kind(field: str, expected, actual) -> str:
+    """
+    실패를 세 가지로 나눈다.
+
+    ⚠️ 점수는 바꾸지 않는다. 채점은 _matches 그대로 엄격하게 두고,
+       **무엇을 고쳐야 하는지**만 구분한다. 대응이 완전히 다르기 때문이다.
+
+      · 누락 — 값을 아예 못 읽음.        → 확인 관문에서 사람이 입력
+      · 오독 — 글자를 다르게 읽음.        → 확인 관문이 필요한 진짜 이유.
+                                          코드로 고칠 수 없다.
+      · 형식 — 내용은 맞고 표기만 다름.   → 정규화로 코드가 흡수할 수 있다.
+                                          (예: '010 8985 -2595', '50000원')
+
+    이 둘을 한 숫자에 섞으면 "정확도 84%" 가 무엇을 뜻하는지 알 수 없다.
+    """
+    if actual is None:
+        return "누락"
+    if _strip_symbols(expected) == _strip_symbols(actual):
+        return "형식"
+    return "오독"
+
+
 def labels_path_for(image_path: Path) -> Path:
     return image_path.with_suffix(".json")
 
@@ -165,13 +195,34 @@ def check_image(image_path: Path, runs: int) -> dict | None:
                 wrong_by_run.append(f"    {i}회차 오답: {', '.join(wrong)}")
         print("\n".join(wrong_by_run))
 
+    # 실패 원인 분류. 1회차 기준으로 필드마다 한 번씩만 보여준다.
+    kinds: dict[str, str] = {}
+    for field, ok in run_scores[0].items():
+        if not ok:
+            kinds[field] = _failure_kind(field, labels[field], run_results[0][field])
+    if kinds:
+        print("  → 실패 원인:")
+        for kind in ("오독", "누락", "형식"):
+            fields = [f for f, k in kinds.items() if k == kind]
+            if fields:
+                print(f"      {kind} {len(fields)}건: {', '.join(fields)}")
+
     out_path = image_path.with_name(f"{image_path.stem}_runs.json")
     out_path.write_text(
-        json.dumps({"labels": labels, "runs": run_results}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {"labels": labels, "runs": run_results, "failure_kinds": kinds},
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
 
-    return {"image": image_path.name, "run_scores": run_scores, "unstable_fields": unstable_fields}
+    return {
+        "image": image_path.name,
+        "run_scores": run_scores,
+        "unstable_fields": unstable_fields,
+        "failure_kinds": kinds,
+    }
 
 
 def resolve_images(path: Path) -> list[Path]:
@@ -184,12 +235,35 @@ def print_overall(all_reports: list[dict]) -> None:
     if len(all_reports) <= 1:
         return
     print(f"\n=== 전체 ({len(all_reports)}장) ===")
+    grand_correct = grand_total = 0
+    all_kinds: dict[str, list[str]] = {"오독": [], "누락": [], "형식": []}
     for report in all_reports:
         total_correct = sum(sum(s.values()) for s in report["run_scores"])
         total_fields = len(FIELDS) * len(report["run_scores"])
+        grand_correct += total_correct
+        grand_total += total_fields
         print(
             f"  {report['image']}: {total_correct}/{total_fields}, "
             f"흔들림 {len(report['unstable_fields'])}개 필드"
+        )
+        for field, kind in report.get("failure_kinds", {}).items():
+            all_kinds[kind].append(f"{report['image'].split('.')[0]}:{field}")
+
+    if grand_total:
+        print(f"\n  합계 {grand_correct}/{grand_total} = {grand_correct / grand_total * 100:.0f}%")
+
+    # ⚠️ 이 분류가 이 스크립트의 결론이다.
+    #    "오독"은 코드로 못 고친다 → 사용자 확인 관문이 필요한 근거.
+    #    "형식"은 정규화로 흡수 가능 → 코드가 할 일.
+    if any(all_kinds.values()):
+        print("\n  실패 원인 (1회차 기준):")
+        for kind in ("오독", "누락", "형식"):
+            if all_kinds[kind]:
+                print(f"    {kind} {len(all_kinds[kind])}건: {', '.join(all_kinds[kind])}")
+        misread = len(all_kinds["오독"]) + len(all_kinds["누락"])
+        print(
+            f"\n  → 사람이 확인해야 하는 실패 {misread}건, "
+            f"정규화로 흡수 가능한 실패 {len(all_kinds['형식'])}건"
         )
 
 
