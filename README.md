@@ -7,7 +7,37 @@
 
 ---
 
-## 3분 시연 방법
+## 데모
+
+| 자료 | 링크 |
+|---|---|
+| **시연 영상 (3분)** | <!-- TODO: 촬영한 영상 URL을 붙여넣으세요 --> |
+| **배포 서비스** | https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/ |
+
+### 화면
+
+<!-- TODO: 스크린샷 4장을 docs/screenshots/ 에 저장한 뒤 아래 주석을 해제하세요.
+| 메인 — 3가지 진입 경로 | 결과 — 법정 기준과 계산식 |
+|---|---|
+| ![메인 화면](docs/screenshots/01-main.png) | ![결과 화면](docs/screenshots/02-result.png) |
+
+| 말 꺼내기 문구 | 전자서명 요청 · 보관함 |
+|---|---|
+| ![말 꺼내기 문구](docs/screenshots/03-message.png) | ![서명 화면](docs/screenshots/04-sign.png) |
+-->
+
+### 테스트 계정
+
+로그인은 **전자서명 단계에서만** 필요합니다.
+사진 추출 · 법정 기준 판정 · 말 꺼내기 문구 복사는 **로그인 없이** 확인할 수 있습니다.
+
+| 확인 범위 | 방법 |
+|---|---|
+| 로그인 없이 | 메인 → **계약서를 못 받았어요** → 조건 입력 → 결과 확인 |
+| 서명까지 | 카카오 계정으로 로그인 (별도 테스트 계정 불필요) |
+| 서명 수신 | 심사위원 본인 이메일 입력 — **실제 서명 요청 메일이 발송됩니다** |
+
+### 3분 시연 순서
 
 1. 메인 화면 우측 하단 챗봇을 열고 `1주일에 12시간 일하면 주휴수당을 받나요?`를 질문합니다.
 2. 메인 화면에서 **계약서를 못 받았어요**를 선택하고 근무 요일·시간·임금을 직접 입력합니다.
@@ -27,7 +57,6 @@
 | 구분 | 주소 | 확인 내용 |
 |---|---|---|
 | 프론트엔드 | [ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app](https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/) | 전체 사용자 흐름 |
-| 프론트엔드 별칭 | [ai-builder-sprint-ten.vercel.app](https://ai-builder-sprint-ten.vercel.app/) | 기본 주소 접속 실패 시 사용 |
 | 백엔드 상태 | [Railway `/health`](https://ai-builder-sprint-production.up.railway.app/health) | 배포 버전과 외부 연동 설정 여부 |
 | API 문서 | [Railway `/docs`](https://ai-builder-sprint-production.up.railway.app/docs) | FastAPI OpenAPI 문서 |
 | PDF 글꼴 점검 | [Railway `/health/pdf`](https://ai-builder-sprint-production.up.railway.app/health/pdf) | 한글 계약서 렌더링 |
@@ -36,51 +65,13 @@
 Upstage, OpenAI, 모두싸인, 카카오 로그인을 외부 API로 사용하며 각 기능은 환경변수
 설정 상태에 따라 안전하게 비활성화되거나 제한된 방식으로 폴백합니다.
 
-> 제출 전 새 시크릿 창과 모바일 네트워크에서 프론트 주소, `/health`, `/health/pdf`를
-> 각각 확인합니다. 심사 기간에는 프론트·백엔드·DB 배포를 중지하지 않습니다.
-
-### 제출용 키 보안
-
-- 실제 운영 키나 `.env` 파일은 Git에 커밋하지 않습니다.
-- 외부 API 키가 필요한 경우 권한과 사용량을 제한한 **테스트 전용 키**를 별도로 전달하고,
-  대회 종료 직후 폐기합니다.
-- 테스트 키 전달처: `minsuk4820@gmail.com`
-- Upstage API 키는 주최 측이 보유하므로 별도 제출 대상이 아닙니다.
-
-로컬 실행 절차와 전체 환경변수는 아래 [시작하기](#시작하기),
-[환경 변수](#환경-변수)에서 확인할 수 있습니다.
-
----
-
-## 서비스 실행 및 배포
-
-### 공개 배포 주소
-
-| 구분 | 주소 | 확인 내용 |
-|---|---|---|
-| 프론트엔드 | [ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app](https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/) | 전체 사용자 흐름 |
-| 프론트엔드 별칭 | [ai-builder-sprint-ten.vercel.app](https://ai-builder-sprint-ten.vercel.app/) | 기본 주소 접속 실패 시 사용 |
-| 백엔드 상태 | [Railway `/health`](https://ai-builder-sprint-production.up.railway.app/health) | 배포 버전과 외부 연동 설정 여부 |
-| API 문서 | [Railway `/docs`](https://ai-builder-sprint-production.up.railway.app/docs) | FastAPI OpenAPI 문서 |
-| PDF 글꼴 점검 | [Railway `/health/pdf`](https://ai-builder-sprint-production.up.railway.app/health/pdf) | 한글 계약서 렌더링 |
-
-배포 구성은 **Vercel(Next.js) + Railway(FastAPI Docker) + Supabase(PostgreSQL)**입니다.
-Upstage, OpenAI, 모두싸인, 카카오 로그인을 외부 API로 사용하며 각 기능은 환경변수
-설정 상태에 따라 안전하게 비활성화되거나 제한된 방식으로 폴백합니다.
+> **위 프론트엔드 주소 하나만 사용해 주세요.**
+> 백엔드 CORS 허용 목록과 카카오 로그인 Redirect URI가 이 주소 기준으로 등록되어 있어,
+> 다른 Vercel 별칭 주소로 접속하면 화면은 열리지만 API 호출과 로그인이 모두 차단됩니다.
 
 > 제출 전 새 시크릿 창과 모바일 네트워크에서 프론트 주소, `/health`, `/health/pdf`를
 > 각각 확인합니다. 심사 기간에는 프론트·백엔드·DB 배포를 중지하지 않습니다.
-
-### 계약서 없이 재현하는 3분 시나리오
-
-1. 메인 화면 우측 하단 챗봇을 열고 `1주일에 12시간 일하면 주휴수당을 받나요?`를 질문합니다.
-2. 메인 화면에서 **계약서를 못 받았어요**를 선택하고 근무 요일·시간·임금을 직접 입력합니다.
-3. 확인 화면에서 입력값을 검토한 뒤 결과 화면의 법정 기준, 계산식, 말 꺼내기 문구를 확인합니다.
-4. 결과 화면 챗봇에서 `계약서에 휴게시간이 안 적혀 있어요`처럼 이어서 질문합니다.
-5. 모두싸인 테스트 설정이 있는 경우에만 수정 계약서 미리보기와 전자서명 요청까지 진행합니다.
-
-사진 추출을 재현하려면 JPG·PNG·PDF 형식의 근로계약서를 `/upload`에서 올립니다.
-실제 개인정보가 포함된 계약서는 테스트에 사용하지 않습니다.
+> `/health`의 `commit` 값이 저장소 최신 커밋과 일치하는지도 함께 확인합니다.
 
 ### 제출용 키 보안
 
@@ -484,6 +475,40 @@ AI가 읽은 값을 그대로 판정에 쓰지 않습니다.
 | 항목을 잘못 뽑음 | 사용자가 화면에서 수정 (기본 흐름에 포함) |
 | 설명이 이상함 | 근거 조문·계산식을 항상 함께 표시 |
 
+### AI 품질 검증 산출물
+
+| 산출물 | 경로 | 내용 |
+|---|---|---|
+| 추출 정확도 측정 결과 | [`backend/app/evaluation/results.json`](./backend/app/evaluation/results.json) | 필드별 정확도 실측값 |
+| 측정 스크립트 | [`backend/app/evaluation/evaluate.py`](./backend/app/evaluation/evaluate.py) | 핵심 4필드 기준 정확도 산출 |
+| 평가 정답셋 | [`backend/app/evaluation/specs.py`](./backend/app/evaluation/specs.py) | 합성 계약서 사양과 정답값 |
+| 촬영 조건 시뮬레이션 | [`backend/app/evaluation/photo_sim.py`](./backend/app/evaluation/photo_sim.py) | 기울어짐·조명 변형 재현 |
+| 실제 API 응답 픽스처 | [`spikes/fixtures/`](./spikes/fixtures) | Document Parse · Extract 원본 응답 |
+
+> ⚠️ 이 평가셋은 실제 계약서 사진이 아니라 **합성 벤치마크**입니다.
+> "Upstage 추출 파이프라인이 정해진 형식을 얼마나 정확히 복원하는가"를 측정하며,
+> 실제 촬영 조건에서의 정확도로 과장하지 않습니다.
+
+### 챗봇 안전성 검증
+
+[`backend/tests/test_chat_api.py`](./backend/tests/test_chat_api.py)가 다음을 검증합니다.
+
+| 방어 | 내용 |
+|---|---|
+| 개인정보 차단 | 질문 원문·계약서를 외부 LLM에 보내지 않고 개인정보 없는 폐쇄형 특징으로 축약 |
+| 자유생성 차단 | 승인된 ID 외 자유 문장을 반환하면 거부 |
+| 환각 차단 | 근거 없는 단정·미승인 링크 감지 시 결정론적 템플릿으로 폴백 |
+| 숫자 조작 차단 | 법정 기준 숫자는 서버 상수에서만 생성 |
+| 프롬프트 인젝션 차단 | "이전 지시 무시" 류 입력을 차단 |
+
+실행:
+
+```bash
+cd backend
+python -m pytest -v      # 621 passed
+ruff check .
+```
+
 ---
 
 ## 기술 스택
@@ -596,6 +621,11 @@ python -m uvicorn app.main:app --reload
   `webhook_token`, `kakao_login`, `cors_origins` 확인
 - http://localhost:8000/docs → API 문서
 
+> ⚠️ **백엔드는 반드시 `backend/` 디렉터리에서 실행합니다.**
+> `app/config.py`가 `.env`를 상대 경로(`../.env`)로 읽기 때문에, 저장소 루트에서
+> 실행하면 환경변수가 **조용히 무시**되어 Upstage·모두싸인·로그인이 모두 꺼진 채
+> 서버가 뜹니다. 정상 로딩 여부는 `/health`의 `upstage`·`modusign` 값으로 확인하세요.
+
 ### 3. 프론트엔드 실행
 
 새 터미널에서 실행합니다.
@@ -682,6 +712,7 @@ npm run build
 | `PUBLIC_DATA_API_KEY` | 미사용·선택 | 공공데이터 연동 검증용. 현재 핵심 흐름에서는 사용하지 않음 |
 | `TEST_WORKER_EMAIL` | 외부 연동 시험 | 모두싸인 스파이크용 테스트 이메일 |
 | `TEST_OWNER_EMAIL` | 외부 연동 시험 | 모두싸인 스파이크용 테스트 이메일 |
+| `TEST_PDF` | 외부 연동 시험 | 스파이크에 넣을 PDF 경로. 기본값 `spikes/sample_contract.pdf`. 핵심 흐름에는 영향 없음 |
 
 `GET /health`는 비밀값을 노출하지 않고 각 연동의 설정 여부만 반환합니다.
 배포 환경에서는 `store=postgres`, `webhook_token=true`, 필요한 경우
@@ -778,11 +809,14 @@ AI 추출값은 Pydantic 스키마를 거쳐 검증 엔진으로 전달되고, �
 
 ### 제출물 체크리스트
 
-- [ ] 발표 자료 (문제 정의 · 사용자 · 핵심 기능 · AI 활용 방식 · 기대 효과)
-- [ ] 코드 저장소 (README · 실행 방법 · 커밋 내역)
-- [ ] `.claude/` · `AGENTS.md` 등 코딩 에이전트 설정·지침 파일
-- [ ] 배포 링크 또는 데모 영상 + 스크린샷 + 테스트 계정
-- [ ] AI 활용 증빙 (모델 · API 사용 위치 · 프롬프트 · **검증 산출물**)
+- [x] **발표 자료** — [`FairSign_발표자료.pdf`](./FairSign_발표자료.pdf)
+      (문제 정의 · 사용자 · 핵심 기능 · AI 활용 방식 · 기대 효과)
+- [x] **코드 저장소** — README · [실행 방법](#시작하기) · 커밋 129건
+- [x] **코딩 에이전트 설정·지침 파일** — [`AGENTS.md`](./AGENTS.md) · [`CLAUDE.md`](./CLAUDE.md) ·
+      [`agents/`](./agents) (lead · implementation · contract-safety · qa-demo)
+- [x] **배포 링크 + 데모 영상 + 테스트 계정** — [데모](#데모) 섹션 참조
+- [x] **AI 활용 증빙** — [AI 사용 위치](#ai-사용-위치) ·
+      [AI 품질 검증 산출물](#ai-품질-검증-산출물)
 
 ---
 
@@ -806,6 +840,41 @@ AI 추출값은 Pydantic 스키마를 거쳐 검증 엔진으로 전달되고, �
   지급 자격처럼 추가 사실관계가 필요한 질문은 확정하지 않고 1350 상담을 안내합니다.
 - **데이터 운영**: 실계약서와 운영 키는 저장소에 넣지 않습니다. 대회 이후 테스트 키
   폐기와 계약서 이미지 보관·삭제 정책은 실제 운영 주체가 별도로 확정해야 합니다.
+
+---
+
+## 팀 구성
+
+**팀명: 복학생아저씨들**
+
+| 이름 | 역할 | 담당 영역 |
+|---|---|---|
+| <!-- TODO: 이름 --> | 팀장 · <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
+| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
+| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
+| <!-- TODO: 이름 --> | <!-- TODO: 역할 --> | <!-- TODO: 담당 --> |
+
+<!-- TODO: 커밋 히스토리에는 동일인의 복수 GitHub 계정이 포함되어 있습니다.
+     아래에 실제 팀원과 커밋 계정의 매핑을 적어 주세요.
+       예) 홍길동 — parkganghyun / parkganghyun123-sketch
+           김철수 — seongju0056 / kseongju0413
+           이영희 — Dowon Kim / 도원
+           박민수 — Eunji-5
+     기여자 식별자: parkganghyun, seongju0056, 도원, Dowon Kim, Eunji-5,
+     kseongju0413, leedongwon, parkganghyun123-sketch, 이태경, Spacegaeguri -->
+
+기능별 책임 영역은 [기능별 책임 영역](#기능별-책임-영역)을 참고하세요.
+
+---
+
+## 라이선스 및 외부 자산
+
+| 항목 | 출처 |
+|---|---|
+| 법정 기준 데이터 | [`KB.md`](./KB.md) — 검토된 법령 사실과 출처 상태 |
+| 통계 인용 | 알바천국 조사 (만 15~18세 292명, 2026.05) · 전자신문 2026.05.26 보도 |
+| 로고 `페어사인-로고.jpeg` | 팀 자체 제작 |
+| 계약서 양식 | 고용노동부 표준근로계약서 기반 |
 
 ---
 
