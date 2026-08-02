@@ -35,13 +35,15 @@
 
 ### 화면
 
-| 메인 — 3가지 진입 경로 | 결과 — 법정 기준과 계산식 |
-|---|---|
-| ![메인 화면](docs/screenshots/01-main.png) | ![결과 화면](docs/screenshots/02-result.png) |
+| 결과 — 법 조항·판정·계산식·원문 근거 | 말 꺼내기 문구 |
+|:---:|:---:|
+| <img src="docs/screenshots/02-result.png" width="300" alt="결과 화면"> | <img src="docs/screenshots/03-message.png" width="300" alt="말 꺼내기 문구"> |
+| 결론이 아니라 **근거**를 먼저 보여줍니다 | 숫자는 전부 **검증 코드가 계산한 값**입니다 |
 
-| 말 꺼내기 문구 | 전자서명 요청 · 보관함 |
-|---|---|
-| ![말 꺼내기 문구](docs/screenshots/03-message.png) | ![서명 화면](docs/screenshots/04-sign.png) |
+| 메인 — 3가지 진입 경로 | 전자서명 요청 · 보관함 |
+|:---:|:---:|
+| <img src="docs/screenshots/01-main.png" width="300" alt="메인 화면"> | <img src="docs/screenshots/04-sign.png" width="300" alt="서명 화면"> |
+| 계약서 유무·고용 여부와 무관하게 진입 | 양쪽 서명이 확인되기 전엔 **체결 완료로 표시하지 않습니다** |
 
 ### 테스트 계정
 
