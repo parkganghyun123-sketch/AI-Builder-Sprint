@@ -730,18 +730,40 @@ def test_다른_금액_질문도_일반론_대신_계산에_필요한_값을_답
     assert "계산할 수 없습니다" in body["answer"]
 
 
-def test_주휴수당_일반_답변은_조건부터_짧게_안내한다():
+def test_주휴수당_개인자격_질문은_확정하지_않고_조건을_안내한다():
     body = client.post(
         "/questions/general", json={"question": "나 지금 주휴수당 받을 수 있어?"}
     ).json()
 
-    assert body["answer"] == (
-        "주요 조건은 4주 평균 주 소정근로시간 15시간 이상과 소정근로일 개근입니다."
-    )
+    assert "현재 질문만으로는 주휴수당 지급 여부를 확정할 수 없습니다" in body["answer"]
+    assert "4주 평균 주 소정근로시간" in body["answer"]
+    assert "소정근로일 개근" in body["answer"]
     assert "해당 주까지 근로관계 유지" in body["limitations"]
     assert "질문에 적은 실제 근무시간" not in body["answer"]
     assert "판단하지 않습니다" not in body["answer"]
     assert len(body["answer"]) <= 220
+
+
+@pytest.mark.parametrize(
+    "question",
+    [
+        "지금 내 조건으로 주휴수당이 가능해?",
+        "내가 주휴수당 받을 수 있나?",
+        "주휴수당 대상이 되는지 궁금해",
+        "나는 주휴수당 받을 수 있을까?",
+    ],
+)
+def test_정보가_없는_주휴_개인자격_질문에도_확인조건을_답한다(question):
+    body = client.post("/questions/general", json={"question": question}).json()
+
+    assert body["topic"] == "WEEKLY_HOLIDAY"
+    assert "현재 질문만으로는 주휴수당 지급 여부를 확정할 수 없습니다" in body["answer"]
+    assert "4주 평균 주 소정근로시간" in body["answer"]
+    assert "소정근로일 개근" in body["answer"]
+    assert "해당 주까지 근로관계 유지" in body["answer"]
+    assert "지급 대상입니다" not in body["answer"]
+    assert body["retrieved_kb_ids"] == ["KB-WEEKLY-HOLIDAY-TIME"]
+    assert body["retrieved_source_ids"]
     assert len(body["limitations"]) <= 220
 
 

@@ -494,7 +494,10 @@ def _question_intents(question: str) -> tuple[GeneralQuestionIntent, ...]:
     ):
         intents.append(GeneralQuestionIntent.AMOUNT)
     markers = (
-        (GeneralQuestionIntent.ELIGIBILITY, ("받을수", "대상", "해당", "가능")),
+        (
+            GeneralQuestionIntent.ELIGIBILITY,
+            ("받을수", "대상", "해당", "가능", "될까", "되나요", "되는지"),
+        ),
         (GeneralQuestionIntent.METHOD, ("계산법", "산식", "어떻게계산", "방법")),
         (GeneralQuestionIntent.REQUIREMENTS, ("조건", "요건", "기준")),
         (GeneralQuestionIntent.DOCUMENTS, ("서류", "준비물", "필요한것")),
@@ -732,6 +735,12 @@ def _weekly_holiday(question: str) -> GeneralQuestionResponse:
         answer = (
             f"입력한 주 {hours:g}시간이 4주 평균 소정근로시간이면 시간 요건을 "
             "충족합니다. 소정근로일 개근도 주요 조건입니다."
+        )
+    elif GeneralQuestionIntent.ELIGIBILITY in intents:
+        answer = (
+            "현재 질문만으로는 주휴수당 지급 여부를 확정할 수 없습니다. 먼저 4주 평균 "
+            "주 소정근로시간이 15시간 이상인지 확인하세요. 소정근로일 개근과 해당 "
+            "주까지 근로관계 유지 여부도 함께 확인해야 합니다."
         )
     else:
         answer = (
