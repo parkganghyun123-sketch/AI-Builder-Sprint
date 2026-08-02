@@ -9,6 +9,25 @@
 
 ## 데모
 
+### ▶ 30초 만에 직접 해보기
+
+**로그인·회원가입 없이** 아래 두 단계면 핵심 기능을 전부 보실 수 있습니다.
+
+> **1단계** — [배포 서비스](https://ai-builder-sprint-parkganghyun123-sketchs-projects.vercel.app/)를 열고 **계약서를 받았어요** 선택
+>
+> **2단계** — 저장소의 계약서 사진을 올립니다 (내려받아 그대로 업로드)
+
+| 올릴 파일 | 나오는 결과 |
+|---|---|
+| 🟢 [**`docs/samples/sample_compliant.png`**](./docs/samples/sample_compliant.png) | 확인 항목 **14개 전부 ✅** — 문제없는 계약서 |
+| 🔴 [**`spikes/fixtures/handwritten_02.png`**](./spikes/fixtures/handwritten_02.png) | **손글씨 사진** · 최저임금 미달 ⚠️ + 법정근로시간 초과 🔍 |
+
+두 장을 **번갈아 올려보시면** 판정 엔진이 실제로 값에 반응한다는 걸
+바로 확인하실 수 있습니다. 둘 다 가상 계약·가상 인물이라 개인정보가 없습니다.
+
+전체 순서는 아래 [3분 시연 순서](#3분-시연-순서),
+계약서 42장의 목록은 [테스트할 계약서](#바로-올려서-테스트할-계약서-저장소에-포함)에 있습니다.
+
 | 자료 | 링크 |
 |---|---|
 | **시연 영상 (3분)** | [Google Drive에서 보기](https://drive.google.com/file/d/1mE3JA0zw8mDN2TCcGMa3qF3H_gZA12oD/view) |
