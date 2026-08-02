@@ -610,7 +610,13 @@ async def analyze_and_sign(
             employer_first=employer_first,
         )
     except modusign.ModusignError as e:
-        log.error("서명 요청 실패: error_type=%s", type(e).__name__)
+        # ⚠️ 예외 메시지에는 HTTP 상태 코드까지만 담긴다(modusign._raise_for_status
+        #    참고). 응답 본문은 들어오지 않으므로 그대로 남겨도 개인정보가 새지 않는다.
+        #
+        #    예전에는 type(e).__name__ 만 남겼다. 그래서 실제 배포에서 서명 발송이
+        #    실패했을 때 "ModusignError" 라는 것 말고는 아무것도 알 수 없었고,
+        #    인증 문제인지·요청 형식 문제인지·제공자 장애인지 구분하지 못했다.
+        log.error("서명 요청 실패: error_type=%s reason=%s", type(e).__name__, e)
         raise HTTPException(
             status_code=502,
             detail="지금은 서명 요청을 보낼 수 없어요. 잠시 뒤 다시 시도해 주세요.",
